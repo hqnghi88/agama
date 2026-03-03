@@ -7,8 +7,10 @@ on:
   workflow_dispatch:
 
 jobs:
-  release:
+  build:
     runs-on: ubuntu-latest
+    outputs:
+      tag_name: ${{ steps.set_tag.outputs.tag }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -27,12 +29,40 @@ jobs:
         env:
           MAVEN_OPTS: "-Xmx15g"
 
-      - name: Create Release and Upload Assets
-        uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Set Release Tag
+        id: set_tag
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=draft-$(date +'%Y%m%d%H%M%S')" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
         with:
-          files: |
+          name: gama-compiled-archive
+          path: |
             gama.product/target/products/gama.application-linux.gtk.aarch64.tar.gz
             gama.product/target/products/gama.headless-linux.gtk.aarch64.tar.gz
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: gama-compiled-archive
+          path: release-assets
+
+      - name: Create Draft Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*
           generate_release_notes: true
+          draft: true
           fail_on_unmatched_files: true
+          tag_name: ${{ needs.build.outputs.tag_name }}
+          name: "Release ${{ needs.build.outputs.tag_name }}"
