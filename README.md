@@ -12,4 +12,7 @@ git clone https://github.com/hqnghi88/agama.git
 
 chmod +x a.sh b.sh
 ./a.sh
+
+in ubuntu:
+cd /data/data/com.termux/files/home/agama
 ./b.sh
