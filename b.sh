@@ -1,7 +1,6 @@
+#pkg install termux-x11-shell
 
-export DISPLAY=: 0
-pkg install termux-x11-shell
-
+apt update && apt install openjdk-21-jdk libgtk-3-0 libx11-6 libxtst6 libxrender1 libfontconfig1
 termux-x11 :0 &
 cd /path/to/agama/gama.product/target/products/gama.ui.application.product/linux/gtk/aarch64
  
