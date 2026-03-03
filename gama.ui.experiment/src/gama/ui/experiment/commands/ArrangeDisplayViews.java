@@ -1,0 +1,294 @@
+/*******************************************************************************************************
+ *
+ * ArrangeDisplayViews.java, in gama.ui.experiment, is part of the source code of the GAMA modeling and simulation
+ * platform (v.2025-03).
+ *
+ * (c) 2007-2025 UMI 209 UMMISCO IRD/SU & Partners (IRIT, MIAT, ESPACE-DEV, CTU)
+ *
+ * Visit https://github.com/gama-platform/gama for license information and contacts.
+ *
+ ********************************************************************************************************/
+package gama.ui.experiment.commands;
+
+import static gama.gaml.operators.Displays.HORIZONTAL;
+import static gama.gaml.operators.Displays.VERTICAL;
+import static org.eclipse.e4.ui.model.application.ui.basic.MBasicFactory.INSTANCE;
+import static org.eclipse.e4.ui.workbench.modeling.EModelService.IN_ACTIVE_PERSPECTIVE;
+
+import java.util.List;
+
+import org.eclipse.core.commands.AbstractHandler;
+import org.eclipse.core.commands.ExecutionEvent;
+import org.eclipse.e4.ui.model.application.MApplication;
+import org.eclipse.e4.ui.model.application.ui.MElementContainer;
+import org.eclipse.e4.ui.model.application.ui.advanced.MPlaceholder;
+import org.eclipse.e4.ui.model.application.ui.basic.MPart;
+import org.eclipse.e4.ui.model.application.ui.basic.MPartSashContainer;
+import org.eclipse.e4.ui.model.application.ui.basic.MPartStack;
+import org.eclipse.e4.ui.workbench.modeling.EModelService;
+import org.eclipse.e4.ui.workbench.modeling.EPartService;
+import org.eclipse.e4.ui.workbench.modeling.EPartService.PartState;
+
+import com.google.common.collect.Iterables;
+
+import gama.core.common.interfaces.IGamaView;
+import gama.core.common.preferences.GamaPreferences;
+import gama.core.runtime.PlatformHelper;
+import gama.core.util.tree.GamaNode;
+import gama.core.util.tree.GamaTree;
+import gama.dev.DEBUG;
+import gama.ui.application.workbench.PerspectiveHelper;
+import gama.ui.application.workbench.ThemeHelper;
+import gama.ui.shared.utils.ViewsHelper;
+import gama.ui.shared.utils.WorkbenchHelper;
+
+/**
+ * The Class ArrangeDisplayViews.
+ */
+
+/**
+ * The Class ArrangeDisplayViews.
+ */
+
+/**
+ * The Class ArrangeDisplayViews.
+ */
+
+/**
+ * The Class ArrangeDisplayViews.
+ */
+@SuppressWarnings ({ "rawtypes" })
+public class ArrangeDisplayViews extends AbstractHandler {
+
+	/**
+	 * Gets the part service.
+	 *
+	 * @return the part service
+	 */
+	private static EPartService getPartService() { return WorkbenchHelper.getService(EPartService.class); }
+
+	/**
+	 * Gets the application.
+	 *
+	 * @return the application
+	 */
+	private static MApplication getApplication() { return WorkbenchHelper.getService(MApplication.class); }
+
+	/**
+	 * Gets the model service.
+	 *
+	 * @return the model service
+	 */
+	private static EModelService getModelService() { return WorkbenchHelper.getService(EModelService.class); }
+
+	static {
+		DEBUG.OFF();
+	}
+
+	/** The Constant LAYOUT_KEY. */
+	public static final String LAYOUT_KEY = "gama.displays.layout";
+
+	/** The Constant DISPLAY_INDEX_KEY. */
+	static final String DISPLAY_INDEX_KEY = "GamaIndex";
+
+	@Override
+	public Object execute(final ExecutionEvent e) {
+		execute(GamaPreferences.Displays.LAYOUTS.indexOf(e.getParameter(LAYOUT_KEY)));
+		return true;
+	}
+
+	/**
+	 * Execute.
+	 *
+	 * @param layout
+	 *            the layout
+	 */
+	@SuppressWarnings ("unchecked")
+	public static void execute(final Object layout) {
+		switch (layout) {
+			case Integer i -> execute(LayoutTreeConverter.convert(i));
+			case GamaTree t -> execute(t);
+			case GamaNode n -> {
+				final GamaTree<String> tree = LayoutTreeConverter.newLayoutTree();
+				n.attachTo(tree.getRoot());
+				execute(tree);
+			}
+			case null, default -> {
+			}
+		}
+	}
+
+	/**
+	 * Execute.
+	 *
+	 * @param tree
+	 *            the tree
+	 */
+	public static void execute(final GamaTree<String> tree) {
+		try {
+			final List<MPlaceholder> holders = collectAndPrepareDisplayViews();
+			if (tree != null && tree.getRoot().hasChildren()) { layoutDisplays(tree, holders); }
+			decorateDisplays();
+
+		} catch (Exception e) {
+			DEBUG.ERR(e);
+		}
+	}
+
+	/**
+	 * Layout displays.
+	 *
+	 * @param tree
+	 *            the tree
+	 * @param holders
+	 *            the holders
+	 */
+	private static void layoutDisplays(final GamaTree<String> tree, final List<MPlaceholder> holders) {
+		GamaNode<String> child = tree.getRoot().getChildren().get(0);
+		// DEBUG.LOG("Tree root = " + child.getData() + " weight " +
+		// child.getWeight());
+		if (child.getWeight() == null) { child.setWeight(5000); }
+		final MPartStack displayStack = getDisplaysPlaceholder();
+		if (displayStack == null) return;
+		final MElementContainer<?> root = displayStack.getParent();
+		// displayStack.getChildren().addAll(holders);
+		process(root, child, holders);
+		showDisplays(root, holders);
+	}
+
+	/**
+	 * Gets the displays placeholder.
+	 *
+	 * @return the displays placeholder
+	 */
+	public static MPartStack getDisplaysPlaceholder() {
+		final Object displayStack = getModelService().find("displays", getApplication());
+		// DEBUG.OUT("Element displays found : " + displayStack);
+		return displayStack instanceof MPartStack ? (MPartStack) displayStack : null;
+	}
+
+	/**
+	 * Show displays.
+	 *
+	 * @param root
+	 *            the root
+	 * @param holders
+	 *            the holders
+	 */
+	private static void showDisplays(final MElementContainer<?> root, final List<MPlaceholder> holders) {
+		root.setVisible(false);
+		try {
+			holders.forEach(ph -> {
+				if (ph.getRef() instanceof MPart part) { getPartService().showPart(part, PartState.VISIBLE); }
+			});
+		} finally {
+			root.setVisible(true);
+		}
+	}
+
+	/**
+	 * Decorate displays.
+	 */
+	public static void decorateDisplays() {
+		List<IGamaView.Display> displays = ViewsHelper.getDisplayViews(null);
+		displays.forEach(v -> {
+			final Boolean tb = PerspectiveHelper.keepToolbars();
+			if (tb != null) { v.showToolbar(tb); }
+			v.showOverlay(PerspectiveHelper.showOverlays());
+		});
+		if (PerspectiveHelper.getBackground() != null) {
+			ThemeHelper.changeSashBackground(PerspectiveHelper.getBackground());
+			PerspectiveHelper.getActiveSimulationPerspective().setRestoreBackground(ThemeHelper::restoreSashBackground);
+		}
+		// Attempt to solve the problem expressed in #3587 and #667 by forcing the focus
+		// on the canvases at least once. Modified to only target 2d displays as it was creating a problem on macOS
+		// (perspective not able to go back to modeling and forth)
+
+		if (PlatformHelper.isWindows() || PlatformHelper.isMac()) {
+			displays.forEach(d -> { if (d.is2D()) { d.focusCanvas(); } });
+		}
+
+	}
+
+	/**
+	 * Process.
+	 *
+	 * @param uiRoot
+	 *            the ui root
+	 * @param treeRoot
+	 *            the tree root
+	 * @param holders
+	 *            the holders
+	 */
+	public static void process(final MElementContainer uiRoot, final GamaNode<String> treeRoot,
+			final List<MPlaceholder> holders) {
+		final String data = treeRoot.getData();
+		final String weight = String.valueOf(treeRoot.getWeight());
+		// DEBUG.OUT("Processing " + data + " with weight " + weight);
+		final Boolean dir = !HORIZONTAL.equals(data) && !VERTICAL.equals(data) ? null : HORIZONTAL.equals(data);
+
+		MPlaceholder holder = Iterables.find(holders, h -> {
+			Object s = h.getTransientData().get(DISPLAY_INDEX_KEY);
+			return s != null && s.equals(data);
+		}, null);
+		final MElementContainer container = create(uiRoot, weight, dir);
+		if (holder != null) {
+			if (container.equals(uiRoot)) { holder.setContainerData(weight); }
+			container.getChildren().add(holder);
+		} else {
+			for (final GamaNode<String> node : treeRoot.getChildren()) { process(container, node, holders); }
+		}
+	}
+
+	/**
+	 * List display views.
+	 *
+	 * @return the list
+	 */
+	static final List<MPlaceholder> collectAndPrepareDisplayViews() {
+		final List<MPlaceholder> holders = getModelService().findElements(getApplication(), MPlaceholder.class,
+				IN_ACTIVE_PERSPECTIVE, e -> ViewsHelper.isDisplay(e.getElementId()));
+		/// Issue #2680
+		int currentIndex = 0;
+		for (final MPlaceholder h : holders) {
+			final IGamaView.Display display = ViewsHelper.findDisplay(h.getElementId());
+			if (display != null) {
+				display.setIndex(currentIndex);
+				h.getTransientData().put(DISPLAY_INDEX_KEY, String.valueOf(currentIndex));
+				currentIndex++;
+			}
+		}
+		return holders;
+	}
+
+	/**
+	 * Creates the.
+	 *
+	 * @param root
+	 *            the root
+	 * @param weight
+	 *            the weight
+	 * @param dir
+	 *            the dir
+	 * @return the m element container
+	 */
+	static MElementContainer create(final MElementContainer root, final String weight, final Boolean dir) {
+		if (dir == null && root instanceof MPartStack) return root;
+		final MElementContainer c;
+		if (dir == null) {
+			if (!PerspectiveHelper.keepTabs()) {
+				c = INSTANCE.createPartSashContainer();
+			} else {
+				c = INSTANCE.createPartStack();
+			}
+		} else {
+			c = INSTANCE.createPartSashContainer();
+			((MPartSashContainer) c).setHorizontal(dir);
+		}
+
+		c.setContainerData(weight);
+		if (root != null) { root.getChildren().add(c); }
+		return c;
+	}
+
+}
