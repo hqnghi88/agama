@@ -1,5 +1,5 @@
 #pkg install termux-x11-shell
-
+cd /data/data/com.termux/files/home/
 service dbus start
 export DISPLAY=: 0
 termux-x11 :0 & 
