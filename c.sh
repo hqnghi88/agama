@@ -1,8 +1,7 @@
 #pkg install termux-x11-shell
-cd /data/data/com.termux/files/home/
+cd /data/data/com.termux/files/home/gama
 service dbus start
 export DISPLAY=: 0
-termux-x11 :0 & 
  
  
 
@@ -13,6 +12,8 @@ chmod 777 $SHARED_MEMORY_DIR
 export LIBGL_ALWAYS_SOFTWARE=1
 export GDK_ BACKEND=x11
 export SHARED_MEMORY_DIR=/dev/shm
+termux-x11 :0 & 
+
 # Run openbox if not already running
 pgrep openbox | openbox &
 
