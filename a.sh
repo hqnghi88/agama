@@ -1,4 +1,5 @@
 
+termux-setup-storage
 pkg update
 pkg install proot-distro -y
 pkg install x11-repo -y
