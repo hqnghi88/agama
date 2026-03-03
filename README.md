@@ -4,6 +4,7 @@ termux-x11:
 https://github.com/termux/termux-x11/releases/tag/nightly
 
 in termux:
+
 curl -sL https://raw.githubusercontent.com/hqnghi88/agama/main/a.sh | bash
 
 
