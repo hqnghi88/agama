@@ -11,11 +11,11 @@ https://github.com/termux/termux-x11/releases/tag/nightly
 curl -sL https://raw.githubusercontent.com/hqnghi88/agama/main/a.sh | bash
 
 
-2. in ubuntu (already logged in after a.sh, if it is not, run this: proot-distro login ubuntu) :
+2. in termux:
+   
+proot-distro login ubuntu -- bash -c "curl -sL https://raw.githubusercontent.com/hqnghi88/agama/main/b.sh | bash"
 
-curl -sL https://raw.githubusercontent.com/hqnghi88/agama/main/b.sh | bash
-
-3. run Gama (then go to x11 app to interact with Gama)
+4. run Gama (then go to x11 app to interact with Gama)
 
 proot-distro login ubuntu -- bash -c "curl -sL https://raw.githubusercontent.com/hqnghi88/agama/main/c.sh | bash"
 
