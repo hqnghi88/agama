@@ -17,8 +17,6 @@ curl -sL https://raw.githubusercontent.com/hqnghi88/agama/main/b.sh | bash
 
 3. run Gama (then go to x11 app to interact with Gama)
 
-curl -sL https://raw.githubusercontent.com/hqnghi88/agama/main/c.sh | bash
-
-
+proot-distro login ubuntu -- bash -c "curl -sL https://raw.githubusercontent.com/hqnghi88/agama/main/c.sh | bash"
 
 
