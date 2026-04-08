@@ -1,29 +1,27 @@
 # goal
-- Setup a GitHub Action workflow to produce a release for the `agama` repository.
-- Build process: `bash travis/build.sh`.
-- Target platform: **Linux aarch64 only** (disable all other platforms to avoid errors).
-- Release binaries location: `gama.product/target`.
+- Setup an Android project to "envelop and run" the ARM (aarch64) build of GAMA.
+- Current build location: `gama.product/target/products/gama.ui.application.product/linux/gtk/aarch64`.
+- The Android project should build an APK that packages these binaries and provides a way to execute them.
 
 # constraints/assumptions
-- Use Java 21 (based on existing workflows).
-- Build requires significant memory (MAVEN_OPTS).
-- Binaries are in `gama.product/target`.
-- Trigger on manual dispatch and/or tags.
+- GAMA is an Eclipse RCP app (requires GTK/X11 environment).
+- Directly executing GLibc binaries on Bionic (Android) requires a compatibility layer like Proot or a specialized environment.
+- The user has already built GAMA for aarch64.
+- Target platform: Android (ARMv8-A/aarch64).
 
 # key decisions
-- Create a new, simple workflow `.github/workflows/release.yml`.
-- Use `actions/setup-java` for environment.
-- Use `softprops/action-gh-release` for publishing assets.
+- Create a new Android project in `gama.android`.
+- Package GAMA binaries as a compressed asset.
+- Implement an extraction logic in the Android app.
+- Provide a simple Activity/Fragment skeleton for execution.
+- Use Gradle to automate the "bundling" of the Linux binaries into the APK.
 
 # state
-- Done: Investigated existing workflows and project structure.
-- Done: Created and refined `.github/workflows/release.yml`.
-- Done: Fixed `x86_64` vs `aarch64` path errors in existing CI.
-- Done: Disabled Windows and MacOS packaging as requested.
-- Done: Disabled redundant 'Testing built GAMA' and 'Testing Linux package' jobs that were failing due to hardcoded x86 paths.
-- Now: Completed setup and cleanup.
-- Next: User can test by pushing a tag.
+- Done: Identified current GAMA product structure.
+- Now: Creating Android project structure in `gama.android`.
+- Next: Implement shell script/task to sync Linux builds to Android assets.
 
 # working set
-- .github/workflows/release.yml
+- gama.android/
 - travis/build.sh
+- gama.product/target/products/gama.ui.application.product

@@ -1,0 +1,15 @@
+# Android/Gradle artifacts
+.gradle/
+build/
+app/build/
+*.hprof
+
+# Large PRoot/Linux Assets (fetched via build_apk.sh)
+app/src/main/assets/proot
+app/src/main/assets/gama_aarch64.bundle
+app/src/main/assets/ubuntu_rootfs.bundle
+
+# Local temporary files
+tmp/
+.proot_internal/
+.ubuntu_extracted/

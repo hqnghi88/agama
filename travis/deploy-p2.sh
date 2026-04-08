@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Increase JAXP entity size limits for large p2 repository metadata
+export MAVEN_OPTS="$MAVEN_OPTS -Djdk.xml.maxGeneralEntitySizeLimit=0 -Djdk.xml.totalEntitySizeLimit=0 -Djdk.xml.maxParameterEntitySizeLimit=0"
+
 echo "[I] Checking to add forgotten features to category =================="
 
 for file in $( dirname $( realpath "${BASH_SOURCE[0]}" ) )/../*"feature"*; do
