@@ -265,21 +265,22 @@ class BridgeServer:
             self.http_server.shutdown()
 
     async def _ws_client(self):
-        """WebSocket client that connects to GAMA headless"""
-        retry_count = 0
-        max_retries = 30
+        """WebSocket client that connects to GAMA headless with continuous retry"""
+        retry_delay = 2
+        max_delay = 30
 
-        while retry_count < max_retries and self.running.is_set():
+        while self.running.is_set():
             try:
                 async with websockets.connect(
                     GAMA_WS_URL,
                     ping_interval=10,
                     ping_timeout=5,
+                    open_timeout=10,
                 ) as ws:
                     simulation_state["connected"] = True
                     log.info("Connected to GAMA WebSocket server")
                     self.ws_connected.set()
-                    retry_count = 0
+                    retry_delay = 2
 
                     async for message in ws:
                         self._handle_ws_message(message)
@@ -288,12 +289,9 @@ class BridgeServer:
                     ConnectionRefusedError,
                     OSError) as e:
                 simulation_state["connected"] = False
-                retry_count += 1
-                log.debug("WS connection attempt %d/%d: %s",
-                          retry_count, max_retries, e)
-                await asyncio.sleep(2)
-
-        log.warning("WebSocket connection failed after %d retries", max_retries)
+                log.debug("WS reconnect in %ds: %s", retry_delay, e)
+                await asyncio.sleep(retry_delay)
+                retry_delay = min(retry_delay * 1.5, max_delay)
 
     def _handle_ws_message(self, message):
         """Process incoming WebSocket messages from GAMA"""

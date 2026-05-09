@@ -27,7 +27,7 @@ jobs:
           chmod +x travis/build.sh
           bash travis/build.sh
         env:
-          MAVEN_OPTS: "-Xmx15g"
+          MAVEN_OPTS: "-Xmx15g -Djdk.xml.maxGeneralEntitySizeLimit=0 -Djdk.xml.totalEntitySizeLimit=0 -Djdk.xml.maxParameterEntitySizeLimit=0"
 
       - name: Set Release Tag
         id: set_tag

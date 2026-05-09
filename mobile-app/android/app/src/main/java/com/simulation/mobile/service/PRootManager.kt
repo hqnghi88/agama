@@ -212,32 +212,106 @@ class PRootManager(private val context: Context) {
         |#!/bin/bash
         |set -euo pipefail
         |
+        |# GAMA Mobile startup - runs inside PRoot Linux container
+        |
         |export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-arm64
         |export PATH=${'$'}JAVA_HOME/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         |export HOME=/data
         |export TMPDIR=/tmp
+        |export GAMA_HOME=/opt/gama
+        |export BACKEND_PORT=${'$'}{BACKEND_PORT:-8080}
+        |export GAMA_WS_PORT=${'$'}{GAMA_WS_PORT:-6868}
         |
         |echo "[startup] GAMA Mobile backend starting"
-        |BACKEND_PORT=${'$'}{BACKEND_PORT:-8080}
+        |echo "[startup] Java: ${'$'}(java -version 2>&1 | head -1)"
+        |echo "[startup] Backend port: ${'$'}BACKEND_PORT"
+        |echo "[startup] GAMA WS port: ${'$'}GAMA_WS_PORT"
         |
         |mkdir -p /tmp /data /workspace /opt/gama/logs
         |
-        |if [ -f "/opt/gama/gama-backend.jar" ]; then
-        |  echo "[startup] Starting Java backend on port ${'$'}BACKEND_PORT"
-        |  java -jar /opt/gama/gama-backend.jar --port=${'$'}BACKEND_PORT --workspace=/workspace &
-        |  BACKEND_PID=${'$'}!
-        |  echo "[startup] PID: ${'$'}BACKEND_PID"
-        |  
-        |  for i in $(seq 1 30); do
-        |    if curl -s http://127.0.0.1:${'$'}BACKEND_PORT/api/health > /dev/null 2>&1; then
-        |      echo "[startup] Backend ready!"
+        |# Source environment
+        |if [ -f /etc/profile.d/gama-env.sh ]; then
+        |  source /etc/profile.d/gama-env.sh
+        |fi
+        |
+        |# ─── Start GAMA Headless (if available) ───────────────────────
+        |GAMA_AVAILABLE=false
+        |if [ -f "${'$'}GAMA_HOME/gama-launcher.sh" ] && \
+        |   ls "${'$'}GAMA_HOME/headless/plugins/org.eclipse.equinox.launcher_"*.jar &>/dev/null 2>&1; then
+        |  GAMA_AVAILABLE=true
+        |  echo "[startup] GAMA headless product detected, starting on port ${'$'}GAMA_WS_PORT..."
+        |  ${'$'}GAMA_HOME/gama-launcher.sh \
+        |    > /opt/gama/logs/gama-stdout.log 2> /opt/gama/logs/gama-stderr.log &
+        |  GAMA_PID=${'$'}!
+        |  echo "[startup] GAMA PID: ${'$'}GAMA_PID"
+        |
+        |  for i in $(seq 1 60); do
+        |    if nc -z 127.0.0.1 ${'$'}GAMA_WS_PORT 2>/dev/null; then
+        |      echo "[startup] GAMA WebSocket ready on port ${'$'}GAMA_WS_PORT (attempt ${'$'}i)"
         |      break
+        |    fi
+        |    if [ ${'$'}i -eq 60 ]; then
+        |      echo "[startup] WARNING: GAMA WebSocket may not have started"
         |    fi
         |    sleep 1
         |  done
+        |else
+        |  echo "[startup] GAMA headless not found"
         |fi
         |
-        |wait
+        |# ─── Start Bridge Server ──────────────────────────────────────
+        |if [ -f "${'$'}GAMA_HOME/bridge-server.py" ]; then
+        |  echo "[startup] Starting Python bridge server on port ${'$'}BACKEND_PORT..."
+        |  python3 "${'$'}GAMA_HOME/bridge-server.py" \
+        |    > /opt/gama/logs/bridge.log 2>&1 &
+        |  BRIDGE_PID=${'$'}!
+        |  echo "[startup] Bridge PID: ${'$'}BRIDGE_PID"
+        |elif [ -f "${'$'}GAMA_HOME/gama-backend.jar" ]; then
+        |  echo "[startup] Starting Java backend on port ${'$'}BACKEND_PORT..."
+        |  java -jar "${'$'}GAMA_HOME/gama-backend.jar" --port=${'$'}BACKEND_PORT --workspace=/workspace &
+        |  BRIDGE_PID=${'$'}!
+        |  echo "[startup] Backend PID: ${'$'}BRIDGE_PID"
+        |else
+        |  echo "[startup] WARNING: No bridge server found"
+        |  echo "[startup] Starting minimal HTTP health endpoint..."
+        |  python3 -c "
+        |import http.server, json
+        |class H(http.server.BaseHTTPRequestHandler):
+        |  def do_GET(self):
+        |    self.send_response(200)
+        |    self.send_header('Content-Type', 'application/json')
+        |    self.end_headers()
+        |    self.wfile.write(json.dumps({'status': 'ok', 'mode': 'minimal'}).encode())
+        |  def log_message(self, *a): pass
+        |http.server.HTTPServer(('127.0.0.1', ${'$'}BACKEND_PORT), H).serve_forever()
+        |" &
+        |  BRIDGE_PID=${'$'}!
+        |  echo "[startup] Minimal health PID: ${'$'}BRIDGE_PID"
+        |fi
+        |
+        |# Wait for bridge
+        |for i in $(seq 1 10); do
+        |  if nc -z 127.0.0.1 ${'$'}BACKEND_PORT 2>/dev/null; then
+        |    echo "[startup] Bridge server ready!"
+        |    break
+        |  fi
+        |  sleep 1
+        |done
+        |
+        |echo "[startup] Backend initialization complete"
+        |echo "[startup] REST API: http://127.0.0.1:${'$'}BACKEND_PORT"
+        |echo "[startup] Logs: /opt/gama/logs/"
+        |
+        |# Monitor processes
+        |while true; do
+        |  sleep 5
+        |  if [ -n "${'$'}{BRIDGE_PID:-}" ] && ! kill -0 ${'$'}BRIDGE_PID 2>/dev/null; then
+        |    echo "[startup] Bridge process died"
+        |  fi
+        |  if [ "${'$'}GAMA_AVAILABLE" = true ] && [ -n "${'$'}{GAMA_PID:-}" ] && ! kill -0 ${'$'}GAMA_PID 2>/dev/null; then
+        |    echo "[startup] GAMA process died"
+        |  fi
+        |done
         |""".trimMargin()
 
     private fun createJavaEnvScript(): String = """
