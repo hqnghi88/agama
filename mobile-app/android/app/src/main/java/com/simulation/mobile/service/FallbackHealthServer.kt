@@ -66,13 +66,42 @@ class FallbackHealthServer(private val listenPort: Int, private val backendPort:
 
     private fun handleClient(client: Socket) {
         try {
-            client.soTimeout = 10000
+            client.soTimeout = 15000
             val clientIn = client.getInputStream()
             val clientOut = client.getOutputStream()
 
-            // Parse request from client
-            val reader = BufferedReader(InputStreamReader(clientIn))
-            val requestLine = reader.readLine() ?: return
+            // Read entire raw request: read until we have headers + body
+            val rawBuf = ByteArray(8192)
+            var totalRead = 0
+            var headerEnd = -1
+            while (true) {
+                if (totalRead >= rawBuf.size) {
+                    // Buffer full, grow it
+                    break
+                }
+                val read = clientIn.read(rawBuf, totalRead, rawBuf.size - totalRead)
+                if (read < 0) break
+                totalRead += read
+                val rawStr = String(rawBuf, 0, totalRead, Charsets.UTF_8)
+                val idx = rawStr.indexOf("\r\n\r\n")
+                if (idx >= 0) {
+                    headerEnd = idx + 4
+                    // Check if we have all body bytes
+                    val contentLen = parseContentLength(rawStr.substring(0, idx))
+                    if (contentLen <= 0 || totalRead >= headerEnd + contentLen) {
+                        break  // Have all data
+                    }
+                }
+            }
+
+            val rawStr = String(rawBuf, 0, totalRead, Charsets.UTF_8)
+            if (headerEnd < 0) {
+                throw java.io.EOFException("Incomplete HTTP request")
+            }
+
+            val headerBlock = rawStr.substring(0, headerEnd - 4)
+            val headerLines = headerBlock.split("\r\n")
+            val requestLine = headerLines[0]
             val parts = requestLine.split(" ")
             if (parts.size < 2) return
             val method = parts[0]
@@ -80,14 +109,12 @@ class FallbackHealthServer(private val listenPort: Int, private val backendPort:
 
             val headers = mutableMapOf<String, String>()
             var contentLength = 0
-            var headerLine: String?
-            while (reader.readLine().also { headerLine = it } != null) {
-                val h = headerLine ?: break
-                if (h.isEmpty()) break
-                val colon = h.indexOf(":")
+            for (i in 1 until headerLines.size) {
+                val line = headerLines[i]
+                val colon = line.indexOf(":")
                 if (colon > 0) {
-                    val key = h.substring(0, colon).trim()
-                    val value = h.substring(colon + 1).trim()
+                    val key = line.substring(0, colon).trim()
+                    val value = line.substring(colon + 1).trim()
                     headers[key] = value
                     if (key.equals("Content-Length", ignoreCase = true)) {
                         contentLength = value.toIntOrNull() ?: 0
@@ -95,15 +122,8 @@ class FallbackHealthServer(private val listenPort: Int, private val backendPort:
                 }
             }
 
-            val body = if (contentLength > 0) {
-                val buf = ByteArray(contentLength)
-                var total = 0
-                while (total < contentLength) {
-                    val read = clientIn.read(buf, total, contentLength - total)
-                    if (read < 0) throw java.io.EOFException("Unexpected EOF")
-                    total += read
-                }
-                buf
+            val body = if (contentLength > 0 && totalRead >= headerEnd + contentLength) {
+                rawBuf.copyOfRange(headerEnd, headerEnd + contentLength)
             } else null
 
             // Try proxying to backend
@@ -154,58 +174,66 @@ class FallbackHealthServer(private val listenPort: Int, private val backendPort:
         headers: Map<String, String>,
         body: ByteArray?
     ): Triple<Int, Map<String, String>, ByteArray?> {
+        var backendSocket: Socket? = null
         try {
-            val url = URL("http://127.0.0.1:$backendPort$path")
-            val conn = url.openConnection() as HttpURLConnection
-            conn.connectTimeout = 5000
-            conn.readTimeout = 10000
-            conn.instanceFollowRedirects = false
-            conn.requestMethod = method
+            backendSocket = Socket("127.0.0.1", backendPort)
+            backendSocket.soTimeout = 10000
+            val backendOut = backendSocket.getOutputStream()
+            val backendIn = backendSocket.getInputStream()
 
+            val requestBuilder = StringBuilder()
+            requestBuilder.append("$method $path HTTP/1.1\r\n")
+            requestBuilder.append("Host: 127.0.0.1:$backendPort\r\n")
             for ((key, value) in headers) {
                 if (key.equals("Host", ignoreCase = true)) continue
                 if (key.equals("Connection", ignoreCase = true)) continue
                 if (key.equals("Content-Length", ignoreCase = true)) continue
-                conn.setRequestProperty(key, value)
+                if (key.equals("Transfer-Encoding", ignoreCase = true)) continue
+                requestBuilder.append("$key: $value\r\n")
             }
-
             if (body != null && body.isNotEmpty()) {
-                conn.doOutput = true
-                conn.setFixedLengthStreamingMode(body.size)
-                conn.outputStream.write(body)
+                requestBuilder.append("Content-Length: ${body.size}\r\n")
             }
+            requestBuilder.append("Connection: close\r\n")
+            requestBuilder.append("\r\n")
 
-            val responseCode = conn.responseCode
+            backendOut.write(requestBuilder.toString().toByteArray(Charsets.UTF_8))
+            if (body != null && body.isNotEmpty()) {
+                backendOut.write(body)
+            }
+            backendOut.flush()
+
+            val responseBytes = backendIn.readBytes()
+            val responseStr = String(responseBytes, Charsets.UTF_8)
+
+            val headerEnd = responseStr.indexOf("\r\n\r\n")
+            val headerBlock = if (headerEnd >= 0) responseStr.substring(0, headerEnd) else responseStr
+            val respBodyStart = if (headerEnd >= 0) headerEnd + 4 else responseStr.length
+
+            val lines = headerBlock.split("\r\n")
+            val statusParts = lines[0].split(" ", limit = 3)
+            val statusCode = statusParts.getOrNull(1)?.toIntOrNull() ?: 502
+
             val respHeaders = mutableMapOf<String, String>()
-            var headerIdx = 0
-            while (true) {
-                val key = conn.getHeaderFieldKey(headerIdx) ?: break
-                val value = conn.getHeaderField(headerIdx) ?: ""
-                if (key.isNotEmpty()) {
+            for (i in 1 until lines.size) {
+                val colon = lines[i].indexOf(":")
+                if (colon > 0) {
+                    val key = lines[i].substring(0, colon).trim()
+                    val value = lines[i].substring(colon + 1).trim()
                     respHeaders[key] = value
                 }
-                headerIdx++
             }
 
-            val responseBody = try {
-                conn.inputStream?.readBytes()
-            } catch (e: Exception) {
-                try { conn.errorStream?.readBytes() } catch (_: Exception) { null }
-            }
+            val respBody = responseBytes.copyOfRange(
+                respBodyStart.coerceAtMost(responseBytes.size),
+                responseBytes.size
+            )
 
-            // Override Content-Length if body was read
-            if (responseBody != null) {
-                respHeaders["Content-Length"] = responseBody.size.toString()
-            }
-            // Remove transfer-encoding chunked since we dechunk
-            respHeaders.remove("Transfer-Encoding")
-
-            return Triple(responseCode, respHeaders, responseBody)
+            return Triple(statusCode, respHeaders, respBody)
 
         } catch (e: Exception) {
             Log.w(TAG, "Backend proxy failed for $method $path: ${e.message}")
 
-            // Fallback: serve health check locally
             if (path == "/api/health") {
                 val fbBody = """{"status":"ok","mode":"fallback"}"""
                 val fbHeaders = mapOf(
@@ -216,15 +244,26 @@ class FallbackHealthServer(private val listenPort: Int, private val backendPort:
                 return Triple(200, fbHeaders, fbBody.toByteArray(Charsets.UTF_8))
             }
 
-            // For other paths, return unavailable
-            val errBody = """{"status":"error","message":"Backend unavailable"}"""
+            val errBody = """{"status":"error","message":"${e.message?.replace("\"", "'") ?: "Backend unavailable"}"}"""
             val errHeaders = mapOf(
                 "Content-Type" to "application/json",
                 "Access-Control-Allow-Origin" to "*",
                 "Content-Length" to errBody.toByteArray(Charsets.UTF_8).size.toString()
             )
             return Triple(502, errHeaders, errBody.toByteArray(Charsets.UTF_8))
+        } finally {
+            try { backendSocket?.close() } catch (_: Exception) {}
         }
+    }
+
+    private fun parseContentLength(headerBlock: String): Int {
+        for (line in headerBlock.split("\r\n")) {
+            val colon = line.indexOf(":")
+            if (colon > 0 && line.substring(0, colon).trim().equals("Content-Length", ignoreCase = true)) {
+                return line.substring(colon + 1).trim().toIntOrNull() ?: 0
+            }
+        }
+        return 0
     }
 
     private fun buildHttpResponse(statusCode: Int, statusText: String, contentType: String, body: String): String {

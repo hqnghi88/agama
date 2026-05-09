@@ -161,7 +161,7 @@ class PRootManager(private val context: Context) {
                 "LD_LIBRARY_PATH" to libHelperDir.absolutePath,
                 "BACKEND_PORT" to port.toString(),
                 "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/bin",
-                "JAVA_HOME" to "/usr/lib/jvm/java-17-openjdk-arm64",
+                "JAVA_HOME" to "/usr/lib/jvm/java-25",
                 "TERM" to "xterm"
             )
 
@@ -265,7 +265,7 @@ class PRootManager(private val context: Context) {
         |
         |unset LD_PRELOAD
         |# PROOT_NO_SECCOMP is intentionally unset here (set by PRootManager env, not inside guest).
-        |export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-arm64
+        |export JAVA_HOME=/usr/lib/jvm/java-25
         |export PATH=${'$'}JAVA_HOME/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         |export HOME=/data
         |export TMPDIR=/tmp

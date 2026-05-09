@@ -2,7 +2,7 @@
 # Rootfs startup.sh - runs inside PRoot Linux container
 # Started by PRootManager's generated /opt/gama/startup.sh
 
-export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-arm64
+export JAVA_HOME=/usr/lib/jvm/java-25
 export PATH=$JAVA_HOME/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 export HOME=/data
 export TMPDIR=/tmp
@@ -49,6 +49,9 @@ if [ "${GAMA_AVAILABLE}" = true ]; then
         sleep 1
     done
 fi
+
+# Install websockets for bridge<->GAMA connectivity
+python3 -c "import websockets" 2>/dev/null || pip3 install -q websockets 2>/dev/null || true
 
 # Start bridge server (if port 8080 is free)
 if check_port 127.0.0.1 ${BACKEND_PORT}; then
