@@ -1,4 +1,4 @@
-const BASE_URL = 'http://127.0.0.1:8080';
+export const BASE_URL = 'http://127.0.0.1:8080';
 const REQUEST_TIMEOUT = 5000;
 
 interface ApiResponse {
@@ -80,6 +80,9 @@ export const api = {
 
   stopSimulation: (jobId?: string) =>
     request<ApiResponse>('POST', '/api/simulation/stop', {job_id: jobId}),
+
+  getFrameUrl: (jobId: string, ts?: number): string =>
+    `${BASE_URL}/api/simulation/frame/${jobId}?_=${ts ?? Date.now()}`,
 };
 
 export type {ApiResponse, SimulationStatus};

@@ -1,13 +1,15 @@
-import React, {useCallback, useEffect, useRef} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
+  Image,
   StyleSheet,
 } from 'react-native';
 import {useBackendHealth} from '../hooks/useBackendHealth';
 import {useSimulationStore} from '../store/useSimulationStore';
+import {api} from '../services/api';
 import StatusIndicator from '../components/StatusIndicator';
 import SimulationControls from '../components/SimulationControls';
 import LogViewer from '../components/LogViewer';
@@ -25,6 +27,9 @@ const DashboardScreen: React.FC = () => {
   const checkStatus = useSimulationStore(s => s.checkStatus);
   const addLog = useSimulationStore(s => s.addLog);
 
+  // Frame refresh counter (increment to force Image re-render)
+  const [frameTs, setFrameTs] = useState(0);
+
   // Poll simulation status every 2s while running
   const statusInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => {
@@ -41,6 +46,25 @@ const DashboardScreen: React.FC = () => {
       }
     };
   }, [running, checkStatus]);
+
+  // Poll simulation frame every 1.5s while running
+  const frameInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    if (running && !frameInterval.current) {
+      frameInterval.current = setInterval(() => {
+        setFrameTs(Date.now());
+      }, 1500);
+    } else if (!running && frameInterval.current) {
+      clearInterval(frameInterval.current);
+      frameInterval.current = null;
+    }
+    return () => {
+      if (frameInterval.current) {
+        clearInterval(frameInterval.current);
+        frameInterval.current = null;
+      }
+    };
+  }, [running]);
 
   const formatUptime = useCallback((ms: number): string => {
     const s = Math.floor(ms / 1000);
@@ -107,7 +131,9 @@ const DashboardScreen: React.FC = () => {
               : 'Simulation Results'
             }
           </Text>
-          {jobs.map(job => (
+          {jobs.map(job => {
+            const frameUrl = api.getFrameUrl(job.id, frameTs);
+            return (
             <View key={job.id} style={styles.jobBlock}>
               <View style={styles.jobRow}>
                 <Text style={styles.jobId}>{job.id}</Text>
@@ -131,6 +157,15 @@ const DashboardScreen: React.FC = () => {
                   job.state === 'stopped' && styles.progressStopped,
                 ]} />
               </View>
+              {job.has_frame && (
+                <View style={styles.frameContainer}>
+                  <Image
+                    source={{uri: frameUrl}}
+                    style={styles.simFrame}
+                    resizeMode="contain"
+                  />
+                </View>
+              )}
               {job.current_step != null && job.state !== 'completed' && (
                 <Text style={styles.jobStep}>Step {job.current_step}/{job.steps || 100}</Text>
               )}
@@ -140,8 +175,15 @@ const DashboardScreen: React.FC = () => {
               {job.state === 'stopped' && (
                 <Text style={styles.jobResult}>Simulation stopped by user</Text>
               )}
+              {!job.has_frame && job.state === 'running' && (
+                <Text style={styles.jobStep}>Waiting for display frame...</Text>
+              )}
+              {job.has_frame && (
+                <Text style={styles.jobStep}>Live display — refreshes every 1.5s</Text>
+              )}
             </View>
-          ))}
+            );
+          })}
           <Text style={styles.jobsSummary}>
             {jobs.filter(j => j.state === 'completed').length} completed,{' '}
             {jobs.filter(j => j.state === 'running' || j.state === 'starting').length} active
@@ -284,6 +326,19 @@ const styles = StyleSheet.create({
   },
   progressStopped: {
     backgroundColor: '#ef4444',
+  },
+  frameContainer: {
+    marginTop: 8,
+    backgroundColor: '#0f172a',
+    borderRadius: 8,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 120,
+  },
+  simFrame: {
+    width: '100%',
+    height: 200,
   },
   jobResult: {
     color: '#64748b',
