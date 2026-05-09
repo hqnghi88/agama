@@ -12,7 +12,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MOBILE_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 OUTPUT_DIR="${1:-${MOBILE_ROOT}/build/rootfs}"
-ROOTFS_TAR="${MOBILE_ROOT}/assets/rootfs.tar.gz"
+ROOTFS_TAR="${MOBILE_ROOT}/android/app/src/main/res/raw/rootfs_tar_gz"
+APK_ASSETS_DIR="${MOBILE_ROOT}/android/app/src/main/res/raw"
 DEBIAN_VERSION="bookworm"
 
 echo "╔═══════════════════════════════════════════════════════════╗"
@@ -57,13 +58,11 @@ FROM --platform=linux/arm64 debian:bookworm-slim AS rootfs
 ENV DEBIAN_FRONTEND=noninteractive
 ENV DEBCONF_NONINTERACTIVE_SEEN=true
 
-# Install core packages
+# Install core packages (openjdk-17-headless for system deps only, actual JRE is Temurin 25 below)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # Required runtime
     ca-certificates \
     curl \
-    # OpenJDK 17 (headless JRE is smaller)
-    openjdk-17-jdk-headless \
     # System utilities
     procps \
     iproute2 \
@@ -75,6 +74,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gpg \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+# Download and install Eclipse Temurin JDK 25 JRE (ARM64)
+RUN TEMURIN_URL="https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.3+9/OpenJDK25U-jre_aarch64_linux_hotspot_25.0.3_9.tar.gz" && \
+    echo "[rootfs] Downloading Temurin JDK 25 JRE..." && \
+    curl -fsSL -o /tmp/jdk.tar.gz "$TEMURIN_URL" && \
+    mkdir -p /usr/lib/jvm/java-25 && \
+    tar xzf /tmp/jdk.tar.gz -C /usr/lib/jvm/java-25 --strip-components=1 && \
+    rm /tmp/jdk.tar.gz && \
+    ln -sf /usr/lib/jvm/java-25/bin/java /usr/bin/java && \
+    echo "[rootfs] Temurin JDK 25 installed"
 
 # Install Python websockets library for the bridge
 RUN pip3 install --no-cache-dir websockets
@@ -91,7 +100,7 @@ RUN echo "=== Verification ===" && \
     echo "pip:" && pip3 --version
 
 # Set up environment
-RUN echo 'export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-arm64' >> /etc/profile.d/gama-env.sh && \
+RUN echo 'export JAVA_HOME=/usr/lib/jvm/java-25' >> /etc/profile.d/gama-env.sh && \
     echo 'export PATH=$JAVA_HOME/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' >> /etc/profile.d/gama-env.sh && \
     echo 'export _JAVA_OPTIONS="-Xms64m -Xmx512m -XX:+UseG1GC -Djava.awt.headless=true"' >> /etc/profile.d/gama-env.sh && \
     chmod +x /etc/profile.d/gama-env.sh
@@ -163,31 +172,12 @@ for script in gama-launcher.sh bridge-server.py java-env.sh; do
 done
 
 # ─── Set up Java alternatives ─────────────────────────────────────────
-# Ensure java is in PATH properly
-if [ -d "${OUTPUT_DIR}/usr/lib/jvm" ]; then
-    # Pick the first JDK that actually has bin/java
-    JDK_DIR=""
-    for candidate in "${OUTPUT_DIR}/usr/lib/jvm/"*java*; do
-        if [ -f "${candidate}/bin/java" ] || [ -f "${candidate}/bin/java" ]; then
-            JDK_DIR="${candidate}"
-            break
-        fi
-    done
-    if [ -z "${JDK_DIR}" ]; then
-        # Fallback: grab the first *java* entry anyway
-        JDK_DIR=$(ls -d "${OUTPUT_DIR}/usr/lib/jvm/"*java* 2>/dev/null | head -1)
-    fi
-    if [ -n "${JDK_DIR}" ]; then
-        echo "[rootfs] Found JDK: $(basename ${JDK_DIR})"
-        # Ensure java-17-openjdk-arm64 symlink points to a valid JDK
-        REAL_JDK="${JDK_DIR}"
-        if [ -L "${JDK_DIR}" ]; then
-            REAL_JDK=$(readlink -f "${JDK_DIR}")
-        fi
-        # Always create /usr/bin/java symlink pointing to the real JDK
-        if [ -f "${REAL_JDK}/bin/java" ]; then
-            ln -sf "${REAL_JDK}/bin/java" "${OUTPUT_DIR}/usr/bin/java"
-        fi
+# Ensure java-25 symlink and /usr/bin/java point to the Temurin JDK
+if [ -d "${OUTPUT_DIR}/usr/lib/jvm/java-25" ]; then
+    echo "[rootfs] Found Temurin JDK 25 at /usr/lib/jvm/java-25"
+    if [ -f "${OUTPUT_DIR}/usr/lib/jvm/java-25/bin/java" ]; then
+        ln -sf /usr/lib/jvm/java-25/bin/java "${OUTPUT_DIR}/usr/bin/java"
+        echo "[rootfs] Java symlink: /usr/bin/java -> /usr/lib/jvm/java-25/bin/java"
     fi
 fi
 
@@ -247,6 +237,7 @@ echo "  Size:    $(du -sh "${ROOTFS_TAR}" | cut -f1)"
 echo "  Content: $(tar tzf "${ROOTFS_TAR}" 2>/dev/null | wc -l) files"
 echo ""
 echo "To deploy:"
-echo "  1. Copy assets/rootfs.tar.gz to Android app resources"
-echo "  2. Build the APK"
+echo "  1. Rootfs archive is already at: ${ROOTFS_TAR}"
+echo "  2. It is bundled into the APK at compile time"
+echo "  3. Run 'make build-android' or './scripts/build.sh' to build the APK"
 echo ""
