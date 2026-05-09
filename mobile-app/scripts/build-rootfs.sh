@@ -43,16 +43,12 @@ else
     HAS_GAMA=false
 fi
 
-# ─── Set up QEMU multi-arch support ───────────────────────────────────
-echo "[rootfs] Setting up QEMU multi-arch..."
-docker run --rm --privileged multiarch/qemu-user-static --reset -p yes 2>/dev/null || true
-
 # ─── Build rootfs via Docker ──────────────────────────────────────────
 echo "[rootfs] Building rootfs (this may take a few minutes)..."
 
 # Create a Dockerfile for the rootfs build
 cat > /tmp/Dockerfile.gama-rootfs << 'DOCKEREOF'
-FROM --platform=linux/arm64 debian:bookworm-slim AS rootfs
+FROM arm64v8/debian:bookworm-slim AS rootfs
 
 # Avoid interactive debconf
 ENV DEBIAN_FRONTEND=noninteractive
@@ -86,7 +82,7 @@ RUN TEMURIN_URL="https://github.com/adoptium/temurin25-binaries/releases/downloa
     echo "[rootfs] Temurin JDK 25 installed"
 
 # Install Python websockets library for the bridge
-RUN pip3 install --no-cache-dir websockets
+RUN pip3 install --no-cache-dir --break-system-packages websockets
 
 # Create required directories
 RUN mkdir -p /tmp /data /workspace /opt/gama/logs && \
@@ -108,20 +104,32 @@ RUN echo 'export JAVA_HOME=/usr/lib/jvm/java-25' >> /etc/profile.d/gama-env.sh &
 CMD ["/bin/bash"]
 DOCKEREOF
 
-# Build the Docker image
-docker build \
+# Build the Docker image (with fallback to pre-built archive)
+if docker build \
     --platform linux/arm64 \
     -t gama-mobile-rootfs:latest \
     -f /tmp/Dockerfile.gama-rootfs \
-    /tmp/
+    /tmp/; then
 
-# Extract the rootfs filesystem
-echo "[rootfs] Extracting filesystem..."
-ROOTFS_CONTAINER=$(docker create --platform linux/arm64 gama-mobile-rootfs:latest)
-docker export "${ROOTFS_CONTAINER}" | tar xf - -C "${OUTPUT_DIR}/" --no-same-owner --no-same-permissions 2>/dev/null || true
-docker rm "${ROOTFS_CONTAINER}" > /dev/null
-
-echo "[rootfs] Base filesystem extracted to ${OUTPUT_DIR}"
+    # Extract the rootfs filesystem
+    echo "[rootfs] Extracting filesystem..."
+    ROOTFS_CONTAINER=$(docker create --platform linux/arm64 gama-mobile-rootfs:latest)
+    docker export "${ROOTFS_CONTAINER}" | tar xf - -C "${OUTPUT_DIR}/" --no-same-owner --no-same-permissions 2>/dev/null || true
+    docker rm "${ROOTFS_CONTAINER}" > /dev/null
+    echo "[rootfs] Base filesystem extracted to ${OUTPUT_DIR}"
+else
+    echo "[rootfs] WARNING: Docker build failed."
+    echo "[rootfs] This is often a Docker Desktop + ARM64 cross-build issue on macOS."
+    echo "[rootfs] Using pre-built archive from git (already at ${ROOTFS_TAR})."
+    echo "[rootfs] If you need to rebuild, ensure QEMU is properly configured:"
+    echo "[rootfs]   docker run --rm --privileged tonistiigi/binfmt --install arm64"
+    echo "[rootfs] Then re-run this script."
+    echo ""
+    echo "[rootfs] Falling back: APK will use the pre-built rootfs from git."
+    echo "[rootfs] The existing archive at ${ROOTFS_TAR} will not be modified."
+    # Skip remaining build steps — we keep the pre-built archive
+    return 0 2>/dev/null || exit 0
+fi
 
 # ─── Copy GAMA product (if available) ─────────────────────────────────
 GAMA_SOURCE_DIR="$(cd "${MOBILE_ROOT}/../gama.product/target/products/gama.headless.product/linux/gtk/aarch64" 2>/dev/null && pwd)"
@@ -223,7 +231,6 @@ tar czf "${ROOTFS_TAR}" \
     --exclude='./mnt' \
     --exclude='./media' \
     --exclude='./lost+found' \
-    -C "${OUTPUT_DIR}" \
     .
 cd - > /dev/null
 
