@@ -26,8 +26,16 @@ echo "[gama-launcher] Equinox launcher: $(basename ${GAMA_LAUNCHER})"
 # Mobile memory is set via GAMA_JAVA_OPTS or java-env.sh instead
 JVM_ARGS=()
 while IFS= read -r line; do
-    line=$(echo "$line" | xargs)
+    line="${line#"${line%%[![:space:]]*}"}"
+    line="${line%"${line##*[![:space:]]}"}"
     [ -z "$line" ] && continue
+    # Handle --add-modules with value on next line (e.g. --add-modules\njdk.incubator.vector)
+    if [[ "$line" == "--add-modules" ]]; then
+        IFS= read -r next_line
+        next_line="${next_line#"${next_line%%[![:space:]]*}"}"
+        next_line="${next_line%"${next_line##*[![:space:]]}"}"
+        line="--add-modules=${next_line}"
+    fi
     [[ "$line" == -* ]] || continue
     [[ "$line" == "-server" ]] && continue
     [[ "$line" == "--launcher."* ]] && continue
@@ -37,6 +45,7 @@ while IFS= read -r line; do
     [[ "$line" == "-showsplash" ]] && continue
     [[ "$line" == -Xms* ]] && continue
     [[ "$line" == -Xmx* ]] && continue
+    [[ "$line" == "--sun-misc-unsafe-memory-access="* ]] && continue
     JVM_ARGS+=("$line")
 done < "${GAMA_HOME}/eclipse.ini"
 
@@ -63,17 +72,19 @@ FINAL_JVM_ARGS=("${MOBILE_JVM_ARGS[@]}" "${JVM_ARGS[@]}")
 
 echo "[gama-launcher] Final JVM args: ${FINAL_JVM_ARGS[*]}"
 
-# Ensure workspace exists
-mkdir -p "${GAMA_WORKSPACE}"
-mkdir -p "${GAMA_LOG}"
+# Ensure workspace exists (ignore mkdir failures - seccomp ENOSYS)
+mkdir -p "${GAMA_WORKSPACE}" 2>/dev/null || true
+mkdir -p "${GAMA_LOG}" 2>/dev/null || true
 
 # Build classpath from all plugins
 # Use the equinox launcher as the main entry point
 CLASSPATH="${GAMA_LAUNCHER}"
 
 echo "[gama-launcher] Launching GAMA..."
+echo "[gama-launcher] Working directory: $(pwd 2>&1)"
 echo "[gama-launcher] Command: java -cp ${CLASSPATH} ${FINAL_JVM_ARGS[*]} org.eclipse.equinox.launcher.Main -configuration ${GAMA_HOME}/configuration -application gama.headless.product -data ${GAMA_WORKSPACE} -socket ${GAMA_WS_PORT}"
 
+unset _JAVA_OPTIONS
 exec java \
     -cp "${CLASSPATH}" \
     "${FINAL_JVM_ARGS[@]}" \

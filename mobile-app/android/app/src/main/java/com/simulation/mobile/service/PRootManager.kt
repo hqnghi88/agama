@@ -116,11 +116,30 @@ class PRootManager(private val context: Context) {
 
         try {
             val nativeLibDir = context.applicationInfo.nativeLibraryDir
-            val prootBin = File(nativeLibDir, PROOT_BINARY).absolutePath
+            val prootBin = File(nativeLibDir, "libproot.so").absolutePath
+            val loaderBin = File(nativeLibDir, "libproot_loader.so").absolutePath
+            val loader32Bin = File(nativeLibDir, "libproot_loader32.so").absolutePath
             if (!File(prootBin).exists()) {
                 Log.e(TAG, "PRoot binary not found at $prootBin")
                 isRunning.set(false)
                 return
+            }
+
+            // The Termux proot binary needs libtalloc.so.2 at runtime.
+            // We bundle it as libtalloc.so in nativeLibDir (Android only extracts *.so).
+            // Create a symlink libtalloc.so.2 -> libtalloc.so in our cache dir
+            // and add that dir to LD_LIBRARY_PATH so the linker finds it.
+            val libHelperDir = File(context.cacheDir, "libhelper").also { it.mkdirs() }
+            val tallocSrc = File(nativeLibDir, "libtalloc.so")
+            val tallocLink = File(libHelperDir, "libtalloc.so.2")
+            if (tallocSrc.exists() && !tallocLink.exists()) {
+                try {
+                    Runtime.getRuntime().exec(arrayOf("ln", "-sf", tallocSrc.absolutePath, tallocLink.absolutePath)).waitFor()
+                    Log.i(TAG, "Created libtalloc symlink at ${tallocLink.absolutePath}")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to create symlink, trying copy", e)
+                    tallocSrc.copyTo(tallocLink, overwrite = true)
+                }
             }
 
             // Use guest path - PRoot translates it to the host path
@@ -133,10 +152,16 @@ class PRootManager(private val context: Context) {
                 "HOME" to "/data",
                 "TMPDIR" to "/tmp",
                 "PROOT_TMP_DIR" to prootTmpDir,
+                "PROOT_LOADER" to loaderBin,
+                "PROOT_LOADER_32" to loader32Bin,
+                // PROOT_NO_SECCOMP disabled: seccomp intercepts only syscalls needing path translation.
+                // getcwd passes through seccomp correctly (ptrace mode breaks getcwd for Java).
+                // mkdir failures are handled in gama-launcher.sh with || true.
+                // "PROOT_NO_SECCOMP" to "1",
+                "LD_LIBRARY_PATH" to libHelperDir.absolutePath,
                 "BACKEND_PORT" to port.toString(),
                 "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/bin",
                 "JAVA_HOME" to "/usr/lib/jvm/java-17-openjdk-arm64",
-                "PROOT_NO_SECCOMP" to "1",
                 "TERM" to "xterm"
             )
 
@@ -149,6 +174,8 @@ class PRootManager(private val context: Context) {
                 "-b", "/sys",
                 "-b", "${workspaceDir.absolutePath}:/workspace",
                 "-b", "/sdcard:/sdcard",
+                "-b", "/system:/system",
+                "-b", "/apex:/apex",
                 "-w", "/",
                 "--kill-on-exit",
                 "/usr/bin/bash", guestStartup
@@ -237,7 +264,7 @@ class PRootManager(private val context: Context) {
         |# GAMA Mobile startup - runs inside PRoot Linux container
         |
         |unset LD_PRELOAD
-        |export PROOT_NO_SECCOMP=1
+        |# PROOT_NO_SECCOMP is intentionally unset here (set by PRootManager env, not inside guest).
         |export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-arm64
         |export PATH=${'$'}JAVA_HOME/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         |export HOME=/data

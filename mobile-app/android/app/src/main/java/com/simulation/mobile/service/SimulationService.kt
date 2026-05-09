@@ -23,6 +23,7 @@ class SimulationService : Service() {
         const val CHANNEL_ID = "simulation_service"
         const val NOTIFICATION_ID = 1001
         const val BACKEND_PORT = 8080
+        const val GUEST_BACKEND_PORT = 8081
 
         @Volatile
         var backendStatus: String = "stopped"
@@ -83,23 +84,25 @@ class SimulationService : Service() {
                         return@Thread
                     }
 
-                    // Start fallback health server on port 8080 BEFORE PRoot
-                    // so health check succeeds even if PRoot fails (seccomp, etc.)
+                    // Start proxy server on port 8080 BEFORE PRoot.
+                    // Proxies API calls to the real guest backend on port 8081.
+                    // Falls back to {"status":"ok","mode":"fallback"} for health checks
+                    // when the guest backend is not yet ready.
                     backendStatus = "starting"
-                    updateNotification("Starting fallback health server...")
-                    fallbackServer = FallbackHealthServer(BACKEND_PORT)
+                    updateNotification("Starting proxy server...")
+                    fallbackServer = FallbackHealthServer(BACKEND_PORT, GUEST_BACKEND_PORT)
                     val fallbackStarted = fallbackServer!!.start()
                     if (fallbackStarted) {
-                        Log.i(TAG, "Fallback health server started on port $BACKEND_PORT")
+                        Log.i(TAG, "Proxy server started on 127.0.0.1:$BACKEND_PORT -> 127.0.0.1:$GUEST_BACKEND_PORT")
                         backendStatus = "running"
                         backendPid = -1
                         updateNotification("Backend running on port $BACKEND_PORT")
                     } else {
-                        Log.w(TAG, "Fallback health server failed to start")
+                        Log.w(TAG, "Proxy server failed to start")
                     }
 
                     updateNotification("Starting Linux container...")
-                    pm.startPRoot(rootfsDir, workspaceDir, BACKEND_PORT) { pid ->
+                    pm.startPRoot(rootfsDir, workspaceDir, GUEST_BACKEND_PORT) { pid ->
                         backendPid = pid
                         Log.i(TAG, "PRoot backend started with PID $pid")
                     }
