@@ -36,3 +36,5 @@ gama.dependencies/lib/
 *.heap
 heapdump*
 *.hprof.gz
+mobile-app/android/app/src/main/res/raw/rootfs_tar_gz
+ 
