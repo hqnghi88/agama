@@ -6,14 +6,14 @@ name: "Continuous project validation"
 on:
   # Triggers the workflow on push or pull request events but only for the master branch
   push:
-    branches: [main]
     paths-ignore:
-      - ".github/**"
-      - "travis/**"
+      - '.github/**'
+      - 'travis/**'
 
   workflow_dispatch: # For manual trigger
 
 jobs:
+
   ci-release:
     if: ${{ contains(github.event.head_commit.message, 'ci release') }}
     runs-on: ubuntu-latest
@@ -40,7 +40,7 @@ jobs:
       get_testing_compiled_archives: true
       get_all_archives_for_release: false
 
-#  testing-gama:
-#    name: Testing built GAMA
-#    needs: compiling-gama
-#    uses: ./.github/workflows/travis-build-test.yaml
+  testing-gama:
+    name: Testing built GAMA
+    needs: compiling-gama
+    uses: ./.github/workflows/travis-build-test.yaml

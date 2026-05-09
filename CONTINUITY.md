@@ -1,29 +1,32 @@
 # goal
-- Setup a GitHub Action workflow to produce a release for the `agama` repository.
-- Build process: `bash travis/build.sh`.
-- Target platform: **Linux aarch64 only** (disable all other platforms to avoid errors).
-- Release binaries location: `gama.product/target`.
+- Convert GAMA to a "pure Android" app (no PRoot/Termux).
+- Native Android 16 (API 36) support.
+- Headless first, with full UI planned for the future.
 
 # constraints/assumptions
-- Use Java 21 (based on existing workflows).
-- Build requires significant memory (MAVEN_OPTS).
-- Binaries are in `gama.product/target`.
-- Trigger on manual dispatch and/or tags.
+- GAMA engine will run directly on Android Runtime (ART).
+- Use `GamlStandaloneSetup` to bypass Equinox registry requirements.
+- Target architecture: arm64-v8a (native Android).
 
 # key decisions
-- Create a new, simple workflow `.github/workflows/release.yml`.
-- Use `actions/setup-java` for environment.
-- Use `softprops/action-gh-release` for publishing assets.
+- Created a fresh `gama.android` project as the previous PRoot-based version was deemed irrelevant for the "pure" goal.
+- Bundling GAMA core and dependency JARs into `libs/` for direct classpath access.
+- Implementing a `MainActivity` that boots the GAMA platform in a separate thread.
 
 # state
-- Done: Investigated existing workflows and project structure.
-- Done: Created and refined `.github/workflows/release.yml`.
-- Done: Fixed `x86_64` vs `aarch64` path errors in existing CI.
-- Done: Disabled Windows and MacOS packaging as requested.
-- Done: Disabled redundant 'Testing built GAMA' and 'Testing Linux package' jobs that were failing due to hardcoded x86 paths.
-- Now: Completed setup and cleanup.
-- Next: User can test by pushing a tag.
+- Done: Scaffolding for `gama.android` (Gradle, AndroidManifest, Resources).
+- Done: Implemented basic `MainActivity.java` with GAMA initialization logic.
+- Done: Copied ~150 JARs from GAMA Headless product to `libs/`.
+- Now: Building the initial native APK to verify dependency compatibility.
+- Next: Implement a simple headless simulation run within the app (e.g., a GAML "Hello World").
+- Next: Address any Java library incompatibilities (AWT, restricted APIs) on Android.
+
+# open questions (UNCONFIRMED)
+- Why are source files like `MainActivity.java` and `build.gradle` not visible in the local filesystem despite being in IDE metadata?
+- Does "native" imply move away from the Ubuntu/PRoot virtualized environment towards a pure Android (AAR/APK) lifecycle?
+- What specific feature of Android 16 is being targeted (e.g., the new security sandbox)?
 
 # working set
-- .github/workflows/release.yml
-- travis/build.sh
+- gama.android/app/src/main/java/org/gama/android/MainActivity.java (from metadata)
+- gama.android/app/build.gradle (from metadata)
+- gama.android/app/build/intermediates/merged_manifest/debug/processDebugMainManifest/AndroidManifest.xml

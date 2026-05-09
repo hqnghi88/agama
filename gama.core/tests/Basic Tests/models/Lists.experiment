@@ -33,8 +33,10 @@ experiment Lists  type:test {
 		assert mean(l1) = 5.5;
 		assert max(l1) = 10;
 		assert min(l1) = 1;
+		
 		assert any(l1) = 2; // tested with this seed, just for reference
 		assert 3 among l2 = ['this','of','list']; // same as above
+		
 		assert l1 contains 1 = true;
 		assert l1 contains_all [1,4,6] = true;
 		assert l1 contains_all [1,4,6, 14] = false;
@@ -250,7 +252,7 @@ experiment Lists  type:test {
 		assert l2 = ['dummy0','dummy1','dummy2','dummy3','dummy4'];
 
 		// Powerful filter expressions can be built by combining the various 'iterator' operators
-		let l3 <- list<string>(my_agents where even(int(each))) collect ("Agent " + each + " has an even id");
+		list<string> l3 <- list<string>(my_agents where even(int(each))) collect ("Agent " + each + " has an even id");
 		assert l3 = ['Agent dummy(0) has an even id','Agent dummy(2) has an even id','Agent dummy(4) has an even id'];
 	}
 	

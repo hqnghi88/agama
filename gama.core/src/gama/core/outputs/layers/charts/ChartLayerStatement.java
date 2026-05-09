@@ -3,49 +3,50 @@
  * ChartLayerStatement.java, in gama.core, is part of the source code of the GAMA modeling and simulation platform
  * (v.2025-03).
  *
- * (c) 2007-2025 UMI 209 UMMISCO IRD/SU & Partners (IRIT, MIAT, ESPACE-DEV, CTU)
+ * (c) 2007-2026 UMI 209 UMMISCO IRD/SU & Partners (IRIT, MIAT, ESPACE-DEV, CTU)
  *
  * Visit https://github.com/gama-platform/gama for license information and contacts.
  *
  ********************************************************************************************************/
 package gama.core.outputs.layers.charts;
 
-import static gama.core.common.interfaces.IKeyword.ANCHOR;
+import static gama.annotations.constants.IKeyword.ANCHOR;
 
-import java.awt.Color;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 import org.jfree.chart.JFreeChart;
 
-import gama.annotations.precompiler.GamlAnnotations.doc;
-import gama.annotations.precompiler.GamlAnnotations.example;
-import gama.annotations.precompiler.GamlAnnotations.facet;
-import gama.annotations.precompiler.GamlAnnotations.facets;
-import gama.annotations.precompiler.GamlAnnotations.inside;
-import gama.annotations.precompiler.GamlAnnotations.symbol;
-import gama.annotations.precompiler.GamlAnnotations.usage;
-import gama.annotations.precompiler.IConcept;
-import gama.annotations.precompiler.ISymbolKind;
-import gama.core.common.interfaces.IKeyword;
-import gama.core.common.preferences.GamaPreferences;
-import gama.core.metamodel.shape.GamaPoint;
-import gama.core.outputs.LayeredDisplayOutput;
+import gama.annotations.doc;
+import gama.annotations.example;
+import gama.annotations.facet;
+import gama.annotations.facets;
+import gama.annotations.inside;
+import gama.annotations.symbol;
+import gama.annotations.usage;
+import gama.annotations.constants.IKeyword;
+import gama.annotations.support.IConcept;
+import gama.annotations.support.ISymbolKind;
+import gama.api.GAMA;
+import gama.api.compilation.descriptions.IDescription;
+import gama.api.exceptions.GamaRuntimeException;
+import gama.api.gaml.expressions.IExpression;
+import gama.api.gaml.statements.AbstractStatementSequence;
+import gama.api.gaml.statements.IStatement;
+import gama.api.gaml.symbols.ISymbol;
+import gama.api.gaml.types.Cast;
+import gama.api.gaml.types.IType;
+import gama.api.gaml.types.Types;
+import gama.api.runtime.scope.IScope;
+import gama.api.types.color.GamaColorFactory;
+import gama.api.types.color.IColor;
+import gama.api.types.font.IFont;
+import gama.api.types.geometry.GamaPointFactory;
+import gama.api.types.geometry.IPoint;
+import gama.api.types.list.IList;
+import gama.api.ui.IOutput;
+import gama.api.utils.prefs.GamaPreferences;
 import gama.core.outputs.layers.AbstractLayerStatement;
-import gama.core.runtime.GAMA;
-import gama.core.runtime.IScope;
-import gama.core.runtime.exceptions.GamaRuntimeException;
-import gama.core.util.GamaColor;
-import gama.core.util.GamaFont;
-import gama.core.util.IList;
-import gama.gaml.compilation.ISymbol;
-import gama.gaml.descriptions.IDescription;
-import gama.gaml.expressions.IExpression;
-import gama.gaml.operators.Cast;
-import gama.gaml.statements.AbstractStatementSequence;
-import gama.gaml.statements.IStatement;
-import gama.gaml.types.IType;
-import gama.gaml.types.Types;
 
 /**
  * Written by drogoul Modified on 9 nov. 2009
@@ -76,6 +77,26 @@ import gama.gaml.types.Types;
 						type = { IType.FLOAT, IType.INT, IType.POINT, IType.LIST },
 						optional = true,
 						doc = @doc ("range of the second y-axis. Can be a number (which will set the axis total range) or a point (which will set the min and max of the axis).")),
+				@facet (
+						name = ChartLayerStatement.XMIN,
+						type = { IType.FLOAT, IType.INT },
+						optional = true,
+						doc = @doc ("minimum value for the x-axis. Only the lower bound of the axis is fixed; the upper bound is computed automatically from the data.")),
+				@facet (
+						name = ChartLayerStatement.XMAX,
+						type = { IType.FLOAT, IType.INT },
+						optional = true,
+						doc = @doc ("maximum value for the x-axis. Only the upper bound of the axis is fixed; the lower bound is computed automatically from the data.")),
+				@facet (
+						name = ChartLayerStatement.YMIN,
+						type = { IType.FLOAT, IType.INT },
+						optional = true,
+						doc = @doc ("minimum value for the y-axis. Only the lower bound of the axis is fixed; the upper bound is computed automatically from the data.")),
+				@facet (
+						name = ChartLayerStatement.YMAX,
+						type = { IType.FLOAT, IType.INT },
+						optional = true,
+						doc = @doc ("maximum value for the y-axis. Only the upper bound of the axis is fixed; the lower bound is computed automatically from the data.")),
 				@facet (
 						name = IKeyword.POSITION,
 						type = IType.POINT,
@@ -323,6 +344,18 @@ public class ChartLayerStatement extends AbstractLayerStatement {
 	/** The Constant Y2RANGE. */
 	public static final String Y2RANGE = "y2_range";
 
+	/** The Constant XMIN. */
+	public static final String XMIN = "x_min";
+
+	/** The Constant XMAX. */
+	public static final String XMAX = "x_max";
+
+	/** The Constant YMIN. */
+	public static final String YMIN = "y_min";
+
+	/** The Constant YMAX. */
+	public static final String YMAX = "y_max";
+
 	/** The Constant XLABEL. */
 	public static final String XLABEL = "x_label";
 
@@ -539,7 +572,7 @@ public class ChartLayerStatement extends AbstractLayerStatement {
 		// if (expr != null) { chartOutput.setSeriesLabelPosition(scope, Cast.asString(scope, expr.value(scope))); }
 		// expr = getFacet(IKeyword.ANCHOR);
 		// if (expr != null) {
-		// final GamaPoint pt = Cast.asPoint(scope, expr.value(scope));
+		// final IPoint pt = GamaPointFactory.toPoint(scope, expr.value(scope));
 		// chartOutput.setSeriesLabelAnchor(scope, pt);
 		// }
 
@@ -582,8 +615,8 @@ public class ChartLayerStatement extends AbstractLayerStatement {
 
 			if (range instanceof Number) {
 				chartOutput.setXRangeInterval(scope, ((Number) range).doubleValue());
-			} else if (range instanceof GamaPoint) {
-				chartOutput.setXRangeMinMax(scope, ((GamaPoint) range).getX(), ((GamaPoint) range).getY());
+			} else if (range instanceof IPoint) {
+				chartOutput.setXRangeMinMax(scope, ((IPoint) range).getX(), ((IPoint) range).getY());
 			} else if (range instanceof IList) {
 				chartOutput.setXRangeMinMax(scope, Cast.asFloat(scope, ((IList<?>) range).get(0)),
 						Cast.asFloat(scope, ((IList<?>) range).get(1)));
@@ -596,8 +629,8 @@ public class ChartLayerStatement extends AbstractLayerStatement {
 
 			if (range instanceof Number) {
 				chartOutput.setYRangeInterval(scope, ((Number) range).doubleValue());
-			} else if (range instanceof GamaPoint) {
-				chartOutput.setYRangeMinMax(scope, ((GamaPoint) range).getX(), ((GamaPoint) range).getY());
+			} else if (range instanceof IPoint) {
+				chartOutput.setYRangeMinMax(scope, ((IPoint) range).getX(), ((IPoint) range).getY());
 			} else if (range instanceof IList) {
 				chartOutput.setYRangeMinMax(scope, Cast.asFloat(scope, ((IList<?>) range).get(0)),
 						Cast.asFloat(scope, ((IList<?>) range).get(1)));
@@ -609,13 +642,22 @@ public class ChartLayerStatement extends AbstractLayerStatement {
 
 			if (range instanceof Number) {
 				chartOutput.setY2RangeInterval(scope, ((Number) range).doubleValue());
-			} else if (range instanceof GamaPoint) {
-				chartOutput.setY2RangeMinMax(scope, ((GamaPoint) range).getX(), ((GamaPoint) range).getY());
+			} else if (range instanceof IPoint) {
+				chartOutput.setY2RangeMinMax(scope, ((IPoint) range).getX(), ((IPoint) range).getY());
 			} else if (range instanceof IList) {
 				chartOutput.setY2RangeMinMax(scope, Cast.asFloat(scope, ((IList<?>) range).get(0)),
 						Cast.asFloat(scope, ((IList<?>) range).get(1)));
 			}
 		}
+
+		expr = getFacet(XMIN);
+		if (expr != null) { chartOutput.setXMin(scope, Cast.asFloat(scope, expr.value(scope))); }
+		expr = getFacet(XMAX);
+		if (expr != null) { chartOutput.setXMax(scope, Cast.asFloat(scope, expr.value(scope))); }
+		expr = getFacet(YMIN);
+		if (expr != null) { chartOutput.setYMin(scope, Cast.asFloat(scope, expr.value(scope))); }
+		expr = getFacet(YMAX);
+		if (expr != null) { chartOutput.setYMax(scope, Cast.asFloat(scope, expr.value(scope))); }
 		IExpression expr2 = getFacet(XTICKUNIT);
 		if (expr2 != null) {
 			final Object range = expr2.value(scope);
@@ -651,14 +693,14 @@ public class ChartLayerStatement extends AbstractLayerStatement {
 		}
 		// ((BarRenderer) plot.getRenderer()).setItemMargin(gap);
 
-		GamaColor colorvalue = GamaColor.get(Color.black);
+		IColor colorvalue = GamaColorFactory.BLACK;
 		IExpression color = getFacet(IKeyword.AXES);
-		if (color != null) { colorvalue = Cast.asColor(scope, color.value(scope)); }
+		if (color != null) { colorvalue = GamaColorFactory.castToColor(scope, color.value(scope)); }
 		chartOutput.setAxesColorValue(scope, colorvalue);
 
-		colorvalue = GamaColor.get(Color.black);
+		colorvalue = GamaColorFactory.BLACK;
 		color = getFacet(ChartLayerStatement.TICKLINECOLOR);
-		if (color != null) { colorvalue = Cast.asColor(scope, color.value(scope)); }
+		if (color != null) { colorvalue = GamaColorFactory.castToColor(scope, color.value(scope)); }
 		chartOutput.setTickColorValue(scope, colorvalue);
 
 		string1 = getFacet(ChartLayerStatement.XTICKVALUEVISIBLE);
@@ -683,42 +725,42 @@ public class ChartLayerStatement extends AbstractLayerStatement {
 		}
 		expr = getFacet(IKeyword.ANCHOR);
 		if (expr != null) {
-			final GamaPoint pt = Cast.asPoint(scope, expr.value(scope));
+			final IPoint pt = GamaPointFactory.castToPoint(scope, expr.value(scope));
 			chartOutput.setSeriesLabelAnchor(scope, pt);
 		}
 
 		color = getFacet(IKeyword.COLOR);
-		if (color != null) { colorvalue = Cast.asColor(scope, color.value(scope)); }
+		if (color != null) { colorvalue = GamaColorFactory.castToColor(scope, color.value(scope)); }
 		chartOutput.setColorValue(scope, colorvalue);
-		colorvalue = GamaColor.get(Color.white);
+		colorvalue = GamaColorFactory.WHITE;
 		color = getFacet(IKeyword.BACKGROUND);
-		if (color != null) { colorvalue = Cast.asColor(scope, color.value(scope)); }
+		if (color != null) { colorvalue = GamaColorFactory.castToColor(scope, color.value(scope)); }
 		chartOutput.setBackgroundColorValue(scope, colorvalue);
 
 		color = getFacet(LABELTEXTCOLOR);
 		if (color != null) {
-			colorvalue = Cast.asColor(scope, color.value(scope));
+			colorvalue = GamaColorFactory.castToColor(scope, color.value(scope));
 			chartOutput.setLabelTextColorValue(scope, colorvalue);
 		}
 
 		color = getFacet(LABELBACKGROUNDCOLOR);
 		if (color != null) {
-			colorvalue = Cast.asColor(scope, color.value(scope));
+			colorvalue = GamaColorFactory.castToColor(scope, color.value(scope));
 			chartOutput.setLabelBackgroundColorValue(scope, colorvalue);
 		}
 
 		color = getFacet(IKeyword.BACKGROUND);
 		if (color != null) {
-			colorvalue = Cast.asColor(scope, color.value(scope));
+			colorvalue = GamaColorFactory.castToColor(scope, color.value(scope));
 			chartOutput.setBackgroundColorValue(scope, colorvalue);
 		}
-		GamaFont font = null;
+		IFont font = null;
 		IExpression face = getFacet(TICKFONTFACE);
 		if (face != null) {
 			if (face.getGamlType() == Types.STRING) {
 				chartOutput.setTickFontFace(scope, Cast.asString(scope, face.value(scope)));
 			} else {
-				font = (GamaFont) Types.FONT.cast(scope, face.value(scope), null, false);
+				font = (IFont) Types.FONT.cast(scope, face.value(scope), null, false);
 				if (font != null) {
 					chartOutput.setTickFontFace(scope, font.getFontName());
 					chartOutput.setTickFontSize(scope, font.getSize());
@@ -732,7 +774,7 @@ public class ChartLayerStatement extends AbstractLayerStatement {
 			if (face.getGamlType() == Types.STRING) {
 				chartOutput.setLabelFontFace(scope, Cast.asString(scope, face.value(scope)));
 			} else {
-				font = (GamaFont) Types.FONT.cast(scope, face.value(scope), null, false);
+				font = (IFont) Types.FONT.cast(scope, face.value(scope), null, false);
 				if (font != null) {
 					chartOutput.setLabelFontFace(scope, font.getFontName());
 					chartOutput.setLabelFontSize(scope, font.getSize());
@@ -746,7 +788,7 @@ public class ChartLayerStatement extends AbstractLayerStatement {
 			if (face.getGamlType() == Types.STRING) {
 				chartOutput.setLegendFontFace(scope, Cast.asString(scope, face.value(scope)));
 			} else {
-				font = (GamaFont) Types.FONT.cast(scope, face.value(scope), null, false);
+				font = (IFont) Types.FONT.cast(scope, face.value(scope), null, false);
 				if (font != null) {
 					chartOutput.setLegendFontFace(scope, font.getFontName());
 					chartOutput.setLegendFontSize(scope, font.getSize());
@@ -760,7 +802,7 @@ public class ChartLayerStatement extends AbstractLayerStatement {
 			if (face.getGamlType() == Types.STRING) {
 				chartOutput.setTitleFontFace(scope, Cast.asString(scope, face.value(scope)));
 			} else {
-				font = (GamaFont) Types.FONT.cast(scope, face.value(scope), null, false);
+				font = (IFont) Types.FONT.cast(scope, face.value(scope), null, false);
 				if (font != null) {
 					chartOutput.setTitleFontFace(scope, font.getFontName());
 					chartOutput.setTitleFontSize(scope, font.getSize());
@@ -782,7 +824,7 @@ public class ChartLayerStatement extends AbstractLayerStatement {
 	}
 
 	@Override
-	public LayerType getType(final LayeredDisplayOutput output) {
+	public LayerType getType(final IOutput output) {
 		return LayerType.CHART;
 	}
 

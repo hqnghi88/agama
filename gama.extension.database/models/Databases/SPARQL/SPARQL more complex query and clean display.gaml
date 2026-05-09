@@ -1,8 +1,11 @@
 /**
-* Name: SimpleSPARQLquery
-* This model queries dbpedia to ask for a list of french philosophers then displays it in a "pretty" array
-* Author: baptiste lesquoy
-* Tags: 
+* Name: SPARQL More Complex Query and Clean Display
+* Author: Baptiste Lesquoy
+* Description: Queries DBpedia for a list of French philosophers using SPARQL and presents the results
+*   in a formatted tabular display within a GAMA experiment window. Demonstrates how to process multi-column
+*   SPARQL result sets, iterate over rows and columns, and render the data as a styled table. A practical
+*   reference for integrating semantic web data into user-facing GAMA experiment outputs.
+* Tags: database, SPARQL, linked_data, DBpedia, display, visualization, semantic_web, table
 */
 
 
@@ -22,7 +25,7 @@ global {
 	
 	init {
 		
-		write "Asking dbpedia for a list of all French philosophers:";
+		write "Asking dbpedia for a list of all French philosophers since the 15th century:";
 		
 		// Those variables will be used as variable names in the query and will be the keys of the returned map
 		// do not insert illegal characters into them, else the query will fail
@@ -30,19 +33,36 @@ global {
 		string headerBirthdateCol <- "birthDate";
 		
 		// Do not insert useless (double) spaces or new lines as it may result in invalid requests
-		map<string,list<string>> result <- sparql_query(
-			"PREFIX dbc:<http://dbpedia.org/resource/Category:>\n"
-		+ 	"PREFIX dct:<http://purl.org/dc/terms/>\n"
-		+	"PREFIX dbo:<http://dbpedia.org/ontology/>\n"
-		+	"PREFIX xsd:<http://www.w3.org/2001/XMLSchema#>\n"
-		+	"SELECT (replace(replace(STRAFTER(STR(?X), \"http://dbpedia.org/resource/\"), \"_\", \" \"), \",.*\", \"\") AS ?"+ headerNameCol +")\n"
-		+	"(STR(?birthdate) as ?" + headerBirthdateCol + ")\n"
-		+	"WHERE {?X dct:subject dbc:French_philosophers . ?X dbo:birthDate ?birthdate . FILTER(datatype(?birthdate) = xsd:date)}\n"
-		+	"ORDER BY ASC(?birthdate)", 
-		"https://dbpedia.org/sparql");
+		string query <- 'PREFIX dct: <http://purl.org/dc/terms/>
+PREFIX dbo: <http://dbpedia.org/ontology/>
+PREFIX dbc: <http://dbpedia.org/resource/Category:>
+
+SELECT 
+  (replace(replace(STRAFTER(STR(?X), "http://dbpedia.org/resource/"), "_", " "), ",.*", "") AS ?'+ headerNameCol+')
+  (STR(MIN(?birthdate)) AS ?'+headerBirthdateCol+')
+WHERE {
+  GRAPH <urn:dbpedia:live> {
+    ?X dbo:birthDate ?birthdate .
+    { ?X dct:subject dbc:15th-century_French_philosophers }
+    UNION { ?X dct:subject dbc:16th-century_French_philosophers }
+    UNION { ?X dct:subject dbc:17th-century_French_philosophers }
+    UNION { ?X dct:subject dbc:18th-century_French_philosophers }
+    UNION { ?X dct:subject dbc:19th-century_French_philosophers }
+    UNION { ?X dct:subject dbc:20th-century_French_philosophers }
+    UNION { ?X dct:subject dbc:21st-century_French_philosophers }
+  }
+}
+GROUP BY ?X
+ORDER BY ASC(MIN(?birthdate))';
+		write "Running query:\n" + query +"\n";
+		map<string,list<string>> result <- sparql_query(query, "https://dbpedia.org/sparql");
 
 		if empty(result) {
 			write "An error occured: " + #current_error color:#red;
+			return;
+		}
+		if empty(first(result)) {
+			write "No result found" color:#red;
 			return;
 		}
 
@@ -62,7 +82,7 @@ global {
 			string birthdate <- result[headerBirthdateCol][i];
 			
 			write "|" + centeredString(fullName, colNameWidth) +"|" + centeredString(birthdate, colBirthdateWidth) +"|";
-		}
+		}		
 		write concatenate(list_with(totalWidth, "-"));
 		
 		

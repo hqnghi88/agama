@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- "G" letter for GAMA -->
+    <path
+        android:fillColor="#22c55e"
+        android:pathData="M34,36c0,-4.4 3.6,-8 8,-8h24c4.4,0 8,3.6 8,8v8h-8v-6c0,-1.1 -0.9,-2 -2,-2h-20c-1.1,0 -2,0.9 -2,2v28c0,1.1 0.9,2 2,2h20c1.1,0 2,-0.9 2,-2v-6h8v8c0,4.4 -3.6,8 -8,8h-24c-4.4,0 -8,-3.6 -8,-8z"/>
+    <!-- Play triangle -->
+    <path
+        android:fillColor="#22c55e"
+        android:pathData="M60,76l16,-10l-16,-10z"/>
+</vector>

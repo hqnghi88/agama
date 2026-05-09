@@ -12,14 +12,19 @@ on:
         description: "The tag of the release to publish (YYYY.MM.0)"
         type: string
         required: true
-        default: 2025.05.0
+        default: 2026.04.0
       jdk:
         description: "Choose a JDK version to embed inside GAMA release"
         type: string
         required: true
-        default: 21.0.7+6
+        default: 25.0.2+10
       releaseGithubOnly:
         description: "Release only on Github (not on Microsoft Stores, else) ?"
+        type: boolean
+        required: true
+        default: false
+      skipTests:
+        description: "Skip all test workflows ?"
         type: boolean
         required: true
         default: false
@@ -36,6 +41,7 @@ jobs:
       new_release_tag: ${{ inputs.tag }}
       jdk_embedded_version: ${{ inputs.jdk }}
       IS_STABLE_RELEASE: ${{ inputs.IS_STABLE_RELEASE }}
+      DONT_PUBLISH_P2: ${{ inputs.releaseGithubOnly }}
     secrets:
       GAMA_KEYSTORE_BASE64: ${{ secrets.GAMA_KEYSTORE_BASE64 }}
       GAMA_KEYSTORE_STOREPASS: ${{ secrets.GAMA_KEYSTORE_STOREPASS }}
@@ -49,7 +55,14 @@ jobs:
     outputs:
       commit: ${{ steps.commit.outputs.commit }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: "temurin"
+          java-version: "25"
+          java-package: jdk
 
       - name: Prepare travis-script
         id: commit
@@ -64,7 +77,7 @@ jobs:
           commit=$(git rev-parse --short=7 HEAD)
           echo "commit=$commit" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: travis-scripts
           if-no-files-found: error
@@ -89,6 +102,7 @@ jobs:
     with:
       RELEASE_VERSION: ${{ inputs.tag }}
       jdk_embedded_version: ${{ inputs.jdk }}
+      SKIP_TESTS: ${{ inputs.skipTests }}
     secrets:
       # === MacOS needs ===
       MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}

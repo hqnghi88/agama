@@ -1,0 +1,15 @@
+node_modules/
+.gradle/
+build/
+*.apk
+*.aab
+*.keystore
+*.hprof
+*.log
+*.gz
+.DS_Store
+ios/
+.expo/
+dist/
+.env
+*.local

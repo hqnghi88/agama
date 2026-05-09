@@ -56,7 +56,7 @@ species player_intelligentTeam parent:base_player {
 		}
 	}
 	
-	action update_influence_area {
+	action update_influence_area() {
 		status <- wing + " " + role;
 		float y_ratio;
 		if (role = "defense") { // defense position from 0% to 70% from the own goal, multiplied by the percentage of advancement of the ball
@@ -81,13 +81,13 @@ species player_intelligentTeam parent:base_player {
 		influence_area <- circle(15,{getXPos(x_ratio),getYPos(y_ratio)});
 	}
 	
-	action defensive_behavior {	
-		do update_influence_area;
+	action defensive_behavior() {	
+		do update_influence_area();
 		// advanced defensive behavior
 		// run to the ball if the player is the closest player from the ball.
 		if ((self = team.closest_player_to_ball) or (self distance_to ball < 5)) {
 			status <- getStatus("run to ball");
-			do run_to_ball;
+			do run_to_ball();
 		}
 		else {
 			// if there is an ennemy player in the influence area, mark the player.
@@ -104,20 +104,20 @@ species player_intelligentTeam parent:base_player {
 		}
 	}
 	
-	action offensive_behavior {	
-		do update_influence_area;
+	action offensive_behavior() {	
+		do update_influence_area();
 		// advanced offensive behavior
 		if (possess_ball) {
 			// if the player has the ball and is close enough to the ennemy goal, shoot.
 			if (distance_to_goal < 35 and flip(1/(0.1+(self.distance_to_goal/10)^2))) {
 				status <- getStatus("shoot the ball");
-				do shoot;
+				do shoot();
 			}
 			// if the player has the ball and is in a safe position, run to the ennemy goal.
 			else if ( (position_mark = max( team.players collect (each.position_mark) )) or (distance_to_closest_ennemy_player > 2) )
 			{
 				status <- getStatus("run to ennemy goal");
-				do run_to_ennemy_goal;
+				do run_to_ennemy_goal();
 			}
 			// if the player has the ball but is in a dangerous situation, pass the ball to another player.
 			else {
@@ -129,7 +129,7 @@ species player_intelligentTeam parent:base_player {
 		// if the player has not the ball but is the called player, run to the ball.
 		else if (self = team.called_player) {
 			status <- getStatus("run to ball");
-			do run_to_ball;
+			do run_to_ball();
 			status <- "called player";
 		}
 		// else, run to influence area.

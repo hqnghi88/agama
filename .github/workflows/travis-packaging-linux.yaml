@@ -48,7 +48,7 @@ jobs:
           dpkg --build ${{ github.workspace }}/${{ matrix.zipName }}
           dpkg --info ${{ github.workspace }}/${{ matrix.zipName }}.deb
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: gama-linux-deb-${{ matrix.zipName }}
           path: |

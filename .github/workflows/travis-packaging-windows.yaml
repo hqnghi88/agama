@@ -35,7 +35,7 @@ jobs:
         with:
           path: windows_installer_script.iss
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: gama-windows-exe-${{ matrix.zipName }}
           path: |

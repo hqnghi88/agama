@@ -2,14 +2,12 @@
  *
  * Containers.java, in gama.core, is part of the source code of the GAMA modeling and simulation platform (v.2025-03).
  *
- * (c) 2007-2025 UMI 209 UMMISCO IRD/SU & Partners (IRIT, MIAT, ESPACE-DEV, CTU)
+ * (c) 2007-2026 UMI 209 UMMISCO IRD/SU & Partners (IRIT, MIAT, ESPACE-DEV, CTU)
  *
  * Visit https://github.com/gama-platform/gama for license information and contacts.
  *
  ********************************************************************************************************/
 package gama.gaml.operators;
-
-import static gama.gaml.compilation.GAML.notNull;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -21,6 +19,7 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -33,67 +32,149 @@ import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 
-import gama.annotations.precompiler.GamlAnnotations.doc;
-import gama.annotations.precompiler.GamlAnnotations.example;
-import gama.annotations.precompiler.GamlAnnotations.no_test;
-import gama.annotations.precompiler.GamlAnnotations.operator;
-import gama.annotations.precompiler.GamlAnnotations.test;
-import gama.annotations.precompiler.GamlAnnotations.usage;
-import gama.annotations.precompiler.IConcept;
-import gama.annotations.precompiler.IOperatorCategory;
-import gama.annotations.precompiler.ITypeProvider;
-import gama.core.common.interfaces.IKeyword;
-import gama.core.metamodel.agent.IAgent;
-import gama.core.metamodel.population.IPopulationSet;
-import gama.core.metamodel.population.MetaPopulation;
-import gama.core.metamodel.shape.GamaPoint;
-import gama.core.metamodel.shape.IShape;
-import gama.core.metamodel.topology.ITopology;
-import gama.core.metamodel.topology.grid.IGrid;
-import gama.core.runtime.GAMA;
-import gama.core.runtime.IScope;
-import gama.core.runtime.exceptions.GamaRuntimeException;
-import gama.core.util.GamaColor;
-import gama.core.util.GamaListFactory;
-import gama.core.util.GamaListFactory.GamaListSupplier;
-import gama.core.util.GamaMapFactory;
-import gama.core.util.GamaMapFactory.GamaMapSupplier;
-import gama.core.util.GamaPair;
-import gama.core.util.IContainer;
-import gama.core.util.IList;
-import gama.core.util.IMap;
-import gama.core.util.graph.IGraph;
-import gama.core.util.matrix.GamaField;
-import gama.core.util.matrix.GamaFloatMatrix;
-import gama.core.util.matrix.GamaIntMatrix;
-import gama.core.util.matrix.GamaObjectMatrix;
-import gama.core.util.matrix.IMatrix;
-import gama.gaml.compilation.GAML;
-import gama.gaml.compilation.IOperatorValidator;
-import gama.gaml.compilation.annotations.validator;
-import gama.gaml.descriptions.IDescription;
-import gama.gaml.expressions.IExpression;
-import gama.gaml.expressions.operators.BinaryOperator;
-import gama.gaml.interfaces.IGamlIssue;
-import gama.gaml.species.ISpecies;
-import gama.gaml.types.GamaFieldType;
-import gama.gaml.types.GamaMatrixType;
-import gama.gaml.types.GamaType;
-import gama.gaml.types.IType;
-import gama.gaml.types.Types;
+import gama.annotations.doc;
+import gama.annotations.example;
+import gama.annotations.no_test;
+import gama.annotations.operator;
+import gama.annotations.test;
+import gama.annotations.usage;
+import gama.annotations.constants.IKeyword;
+import gama.annotations.support.IConcept;
+import gama.annotations.support.IOperatorCategory;
+import gama.annotations.support.ITypeProvider;
+import gama.api.GAMA;
+import gama.api.annotations.validator;
+import gama.api.compilation.descriptions.IDescription;
+import gama.api.compilation.validation.IOperatorValidator;
+import gama.api.constants.IGamlIssue;
+import gama.api.exceptions.GamaRuntimeException;
+import gama.api.gaml.expressions.IExpression;
+import gama.api.gaml.expressions.IOperator;
+import gama.api.gaml.types.Cast;
+import gama.api.gaml.types.GamaType;
+import gama.api.gaml.types.IType;
+import gama.api.gaml.types.Types;
+import gama.api.kernel.agent.IAgent;
+import gama.api.kernel.agent.IPopulationSet;
+import gama.api.kernel.species.ISpecies;
+import gama.api.kernel.topology.IGrid;
+import gama.api.runtime.scope.IScope;
+import gama.api.types.color.GamaColorFactory;
+import gama.api.types.color.IColor;
+import gama.api.types.geometry.GamaPointFactory;
+import gama.api.types.geometry.IPoint;
+import gama.api.types.geometry.IShape;
+import gama.api.types.graph.IGraph;
+import gama.api.types.list.GamaListFactory;
+import gama.api.types.list.IList;
+import gama.api.types.map.GamaMapFactory;
+import gama.api.types.map.GamaMapSupplier;
+import gama.api.types.map.IMap;
+import gama.api.types.matrix.GamaMatrixFactory;
+import gama.api.types.matrix.IField;
+import gama.api.types.matrix.IMatrix;
+import gama.api.types.misc.IContainer;
+import gama.api.types.pair.GamaPairFactory;
+import gama.api.types.pair.IPair;
+import gama.api.types.topology.ITopology;
+import gama.core.population.MetaPopulation;
 import one.util.streamex.IntStreamEx;
 import one.util.streamex.StreamEx;
 
 /**
  * Written by drogoul Modified on 31 juil. 2010
  *
- * GAML operators dedicated to containers (list, matrix, graph, etc.)
+ * <p>
+ * Provides GAML operators for all container types: {@code list}, {@code map}, {@code matrix}, {@code graph}, species
+ * populations, and any other {@link IContainer} implementors.
+ * </p>
  *
- * @see also IMatrix, IContainer for other operators
+ * <h3>Operator Families</h3>
+ * <ul>
+ * <li><b>Access:</b> {@code at} ({@code []}), {@code first}, {@code last}, {@code copy_between}, {@code slice},
+ * {@code sublist}</li>
+ * <li><b>Arithmetic:</b> {@code +} (union/append), {@code -} (remove element), {@code inter} (intersection),
+ * {@code union}</li>
+ * <li><b>Predicates:</b> {@code contains}, {@code contains_any}, {@code contains_all}, {@code in}, {@code one_matches},
+ * {@code all_match}, {@code none_matches}</li>
+ * <li><b>Functional:</b> {@code collect}, {@code where}/{@code select}, {@code accumulate}, {@code first_with},
+ * {@code last_with}, {@code count}, {@code sort_by}, {@code group_by}, {@code index_by}</li>
+ * <li><b>Transformation:</b> {@code reverse}, {@code shuffle}, {@code distinct}/ {@code remove_duplicates},
+ * {@code interleave}</li>
+ * <li><b>Reduction:</b> {@code sum}, {@code mean}</li>
+ * <li><b>Construction:</b> {@code range}, {@code create_map}, {@code as_map}</li>
+ * <li><b>Graph:</b> {@code as_graph}, {@code as_spatial_graph}</li>
+ * </ul>
  *
+ * <h3>Indexing Convention</h3>
+ * <p>
+ * All container operators use <b>0-based indexing</b>. The first element of a list is at index {@code 0}, the last at
+ * index {@code length - 1}.
+ * </p>
+ *
+ * <h3>Nil and Empty Container Behavior</h3>
+ * <ul>
+ * <li>Passing a {@code nil} container to most operators raises a {@link gama.api.exceptions.GamaRuntimeException} at
+ * runtime.</li>
+ * <li>Empty containers return neutral values where applicable: an empty list ({@code []}), {@code 0} for numeric
+ * reductions, {@code false} for predicates.</li>
+ * <li>Operators such as {@code contains} and {@code at} accept {@code nil} as a valid element value when the container
+ * type permits it.</li>
+ * </ul>
+ *
+ * @author drogoul
+ * @see IContainer
+ * @see IList
+ * @see IMap
+ * @see IMatrix
  */
 @SuppressWarnings ({ "unchecked", "rawtypes" })
 public class Containers {
+
+	// Source - https://stackoverflow.com/a/32648397 - Posted by Emmanuel Touzery
+
+	/**
+	 * To map.
+	 *
+	 * @param <T>
+	 *            the generic type
+	 * @param <K>
+	 *            the key type
+	 * @param <U>
+	 *            the generic type
+	 * @param keyMapper
+	 *            the key mapper
+	 * @param valueMapper
+	 *            the value mapper
+	 * @return the collector
+	 */
+	public static <T, K, U> Collector<T, ?, IMap<K, U>> toIMap(final Function<? super T, ? extends K> keyMapper,
+			final Function<? super T, ? extends U> valueMapper, final IType keyType, final IType valueType) {
+		return Collectors.collectingAndThen(Collectors.toList(), list -> {
+			IMap<K, U> result = GamaMapFactory.create(keyType, valueType);
+			for (T item : list) { result.put(keyMapper.apply(item), valueMapper.apply(item)); }
+			return result;
+		});
+
+	}
+
+	/**
+	 * Not null.
+	 *
+	 * @param <T>
+	 *            the generic type
+	 * @param scope
+	 *            the scope
+	 * @param object
+	 *            the object
+	 * @param error
+	 *            the error
+	 * @return the t
+	 */
+	public static <T> T notNull(final IScope scope, final T object) {
+		if (object == null) throw GamaRuntimeException.error("Error: nil value detected", scope);
+		return object;
+	}
 
 	/**
 	 * The Class InterleavingIterator.
@@ -150,10 +231,11 @@ public class Containers {
 	 *            the filter
 	 * @return the function
 	 */
-	public static <T> Function<Object, T> with(final IScope scope, final String eachName, final IExpression filter) {
+	public static Function<Object, Object> buildFunctionWithEach(final IScope scope, final String eachName,
+			final IExpression filter) {
 		return t -> {
 			scope.setEach(eachName, t);
-			return (T) filter.value(scope);
+			return filter.value(scope);
 		};
 	}
 
@@ -168,7 +250,8 @@ public class Containers {
 	 *            the filter
 	 * @return the predicate
 	 */
-	public static <T> Predicate<T> by(final IScope scope, final String eachName, final IExpression filter) {
+	public static <T> Predicate<T> buildPredicateWithEach(final IScope scope, final String eachName,
+			final IExpression filter) {
 		return (final T t) -> {
 			scope.setEach(eachName, t);
 			return Cast.asBool(scope, filter.value(scope));
@@ -187,7 +270,7 @@ public class Containers {
 	 * @return the predicate
 	 */
 	public static <T> Predicate<T> inContainer(final IScope scope, final IContainer l) {
-		final IContainer c = GAML.notNull(scope, l);
+		final IContainer c = notNull(scope, l);
 		return t -> c.contains(scope, t);
 	}
 
@@ -215,8 +298,8 @@ public class Containers {
 	 *            the t
 	 * @return the gama list supplier
 	 */
-	public static GamaListSupplier listOf(final IType t) {
-		return new GamaListSupplier(t);
+	public static Supplier<IList> listOf(final IType t) {
+		return GamaListFactory.getSupplier(t);
 	}
 
 	/**
@@ -227,7 +310,7 @@ public class Containers {
 	 * @return the supplier
 	 */
 	public static Supplier<IList> listLike(final IContainer c) {
-		return new GamaListSupplier(c == null ? Types.NO_TYPE : c.getGamlType().getContentType());
+		return GamaListFactory.getSupplier(c == null ? Types.NO_TYPE : c.getGamlType().getContentType());
 	}
 
 	/**
@@ -279,17 +362,15 @@ public class Containers {
 				value = "builds a list of int representing all contiguous values from zero to the argument included. The range can be increasing or decreasing.",
 				masterDoc = true,
 				special_cases = "Passing 0 will return a singleton list with 0.",
-				examples = {
-						@example (
-								value = "range(2)",
-								equals = "[0,1,2]"),
+				examples = { @example (
+						value = "range(2)",
+						equals = "[0,1,2]"),
 						@example (
 								value = "range(-2)",
 								equals = "[0,-1,-2]"),
 						@example (
 								value = "range(1) collect(i: range(1) collect(j: i + j))",
-								equals = "[[0,1],[1,2]]")
-				})
+								equals = "[[0,1],[1,2]]") })
 		@test ("range(2) = [0,1,2]")
 		@test ("range(-2) = [0,-1,-2]")
 		@test ("range(1) collect(i: range(1) collect(j: i + j)) = [[0,1],[1,2]]")
@@ -318,17 +399,15 @@ public class Containers {
 				value = "the list of int representing all contiguous values from the first to the second argument included.",
 				usages = { @usage (
 						value = "When passing the same value for both arguments the operator will return a list containing only this value",
-						examples = { 
-							@example (
+						examples = { @example (
 								value = "range(0,2)",
 								equals = "[0,1,2]"),
-							@example (
-								value = "range(2,0)",
-								equals = "[2,1,0]"),
-							@example(
-								value = "range(0,0)",
-								equals = "[0]")		
-						}) })
+								@example (
+										value = "range(2,0)",
+										equals = "[2,1,0]"),
+								@example (
+										value = "range(0,0)",
+										equals = "[0]") }) })
 		@test ("range(0,2) = [0,1,2]")
 		@test ("range(2,0) = [2,1,0]")
 		@test ("range(0,0) = [0]")
@@ -390,7 +469,8 @@ public class Containers {
 				content_type = ITypeProvider.CONTENT_TYPE_AT_INDEX + 1,
 				category = { IOperatorCategory.CONTAINER },
 				can_be_const = true)
-		@doc (value = "Retrieves elements from the first argument every `step` (second argument) elements. Raises an error if the step is negative or equal to zero")
+		@doc (
+				value = "Retrieves elements from the first argument every `step` (second argument) elements. Raises an error if the step is negative or equal to zero")
 		@test ("[1,2,3,4,5] every 2 = [1,3,5]")
 		public static IList every(final IScope scope, final IList source, final Integer step) {
 			if (step <= 0)
@@ -426,8 +506,7 @@ public class Containers {
 				usages = { @usage ("If the first operand is empty, returns an empty object of the same type"),
 						@usage ("If the second operand is greater than or equal to the third operand, returns an empty object of the same type"),
 						@usage ("If the first operand is nil, raises an error") },
-				see = { "slice", "submatrix", "sublist" }
-				)
+				see = { "slice", "submatrix", "sublist" })
 		@test ("copy_between ([4, 1, 6, 9 ,7], 1, 3) = [1,6]")
 		public static IList copy_between(final IScope scope, final IList l1, final Integer begin, final Integer end) {
 			final int beginIndex = begin < 0 ? 0 : begin;
@@ -437,12 +516,10 @@ public class Containers {
 			if (beginIndex < endIndex) { result.addAll(l1.subList(beginIndex, endIndex)); }
 			return result;
 		}
-		
-		
+
 		/**
-		 * Makes sure a given index is valid for a list of given size.
-		 * Converts a possibly negative index into a positive one (-1 = size-1, -2 = size - 2 etc.). 
-		 * Checks for out of bound values and clamp if needed.
+		 * Makes sure a given index is valid for a list of given size. Converts a possibly negative index into a
+		 * positive one (-1 = size-1, -2 = size - 2 etc.). Checks for out of bound values and clamp if needed.
 		 *
 		 * @param idx
 		 *            the idx
@@ -452,12 +529,21 @@ public class Containers {
 		 */
 		protected static int convertToListIndex(final int idx, final int size) {
 			int i = idx;
-			if (idx < 0) {
-				i = size + idx;
-			}
-			return Math.max(Math.min(i, size - 1),0);
+			if (idx < 0) { i = size + idx; }
+			return Math.max(Math.min(i, size - 1), 0);
 		}
-		
+
+		/**
+		 * Sublist.
+		 *
+		 * @param scope
+		 *            the scope
+		 * @param l1
+		 *            the l 1
+		 * @param indices
+		 *            the indices
+		 * @return the i list
+		 */
 		@operator (
 				value = { "sublist" },
 				can_be_const = true,
@@ -469,28 +555,39 @@ public class Containers {
 				examples = { @example (
 						value = "sublist ([4, 1, 6, 9 ,7], [2, 2, 4])",
 						equals = "[6, 6, 7]") },
-				usages = { 
-						@usage ("If the first operand is empty, returns an empty object of the same type"),
+				usages = { @usage ("If the first operand is empty, returns an empty object of the same type"),
 						@usage ("If the first operand is nil, raises an error"),
 						@usage ("Indices in the second operand can be negative, in which case they are counted from the end of the list (-1 being the last element, -2 the one before last, etc.)"),
 						@usage ("If an index in the second operand is out of bounds (either > size of the first operand or < of - size) it will be clamped to 0 or size-1.") },
-				see = { "copy_between", "between", "submatrix", "slice" }
-				)
+				see = { "copy_between", "between", "submatrix", "slice" })
 		@test ("sublist ([4, 1, 6, 9 ,7], [2, 2, 4]) = [6, 6, 7]")
 		public static IList sublist(final IScope scope, final IList l1, final IList<Integer> indices) {
-			
+
 			final IList result = listLike(l1).get();
-			
-			if (l1.size() == 0) { return result; }
-			
-			for(int i : indices) {
-				result.add(l1.get(convertToListIndex(i, l1.size())));
-			}
+
+			if (l1.size() == 0) return result;
+
+			for (int i : indices) { result.add(l1.get(convertToListIndex(i, l1.size()))); }
 			return result;
 		}
-		
+
+		/**
+		 * Slice.
+		 *
+		 * @param scope
+		 *            the scope
+		 * @param l1
+		 *            the l 1
+		 * @param begin
+		 *            the begin
+		 * @param end
+		 *            the end
+		 * @param step
+		 *            the step
+		 * @return the i list
+		 */
 		@operator (
-				value = { "slice"},
+				value = { "slice" },
 				can_be_const = true,
 				content_type = ITypeProvider.CONTENT_TYPE_AT_INDEX + 1,
 				category = { IOperatorCategory.LIST },
@@ -503,65 +600,84 @@ public class Containers {
 				usages = { @usage ("If the first operand is empty, returns an empty object of the same type"),
 						@usage ("If the second or third operand is less than 0 it is considered as counting from the end of the list, -1 representing the last element, -2 the one before last, etc."),
 						@usage ("If the first operand is nil, raises an error") },
-				see = { "copy_between", "between", "sublist", "submatrix" }
-				)
+				see = { "copy_between", "between", "sublist", "submatrix" })
 		@test ("slice ([4, 1, 6, 9 ,7], 1, 5, 2) = [1,9]")
-		public static IList slice(final IScope scope, final IList l1, final Integer begin, final Integer end, final Integer step) {
-			//TODO: could generate the list of indices then call sublist but would do one more round of convertToListIndex and create a potentially big intermediate list
+		public static IList slice(final IScope scope, final IList l1, final Integer begin, final Integer end,
+				final Integer step) {
+			// TODO: could generate the list of indices then call sublist but would do one more round of
+			// convertToListIndex and create a potentially big intermediate list
 			final int size = notNull(scope, l1).size();
 			final IList result = listLike(l1).get();
 			final boolean positiveStep = step > 0;
 
-			if (step == 0)
-				return result;
-			
-			
+			if (step == 0) return result;
+
 			int beginIdx = convertToListIndex(begin, size);
 			int endIdx = convertToListIndex(end, size);
 
-			for (int i = beginIdx; positiveStep && i <= endIdx || !positiveStep && i >= endIdx; i += step) {
-				result.add(l1.get(i));
-			}
+			for (int i = beginIdx; positiveStep ? i <= endIdx : i >= endIdx; i += step) { result.add(l1.get(i)); }
 			return result;
 		}
-		
 
+		/**
+		 * Slice.
+		 *
+		 * @param scope
+		 *            the scope
+		 * @param l1
+		 *            the l 1
+		 * @param begin
+		 *            the begin
+		 * @param end
+		 *            the end
+		 * @return the i list
+		 */
 		@operator (
-				value = { "slice"},
+				value = { "slice" },
 				can_be_const = true,
 				content_type = ITypeProvider.CONTENT_TYPE_AT_INDEX + 1,
 				category = { IOperatorCategory.LIST },
 				concept = { IConcept.CONTAINER, IConcept.LIST })
 		@doc (
 				value = "Returns a copy of the first operand from the index determined by the second (inclusive) to the one determined by the third operand (inclusive).",
-				examples = { 
-						@example (
-							value = " slice ([4, 1, 6, 9 ,7], 1, 5)",
-							equals = "[1, 6, 9, 7]"),		
+				examples = { @example (
+						value = " slice ([4, 1, 6, 9 ,7], 1, 5)",
+						equals = "[1, 6, 9, 7]"),
 						@example (
 								value = " slice ([4, 1, 6, 9 ,7], 5, 1)",
-								equals = "[7, 9, 6, 1]")
-				},
-				usages = { @usage("If the second index is less than the first, the list is built in reverse order"),
+								equals = "[7, 9, 6, 1]") },
+				usages = { @usage ("If the second index is less than the first, the list is built in reverse order"),
 						@usage ("If the first operand is empty, returns an empty object of the same type"),
 						@usage ("If the second or third operand is less than 0 it is considered as counting from the end of the list, -1 representing the last element, -2 the one before last, etc."),
 						@usage ("If the first operand is nil, raises an error") },
-				see = { "copy_between", "between", "sublist", "submatrix" }
-				)
+				see = { "copy_between", "between", "sublist", "submatrix" })
 		@test ("slice ([4, 1, 6, 9 ,7], 1, 5) = [1, 6, 9, 7]")
 		@test ("slice ([4, 1, 6, 9 ,7], 5, 1) = [7, 9, 6, 1]")
-		public static IList slice(final IScope scope, final IList l1, final Integer begin, final Integer end) {			
+		public static IList slice(final IScope scope, final IList l1, final Integer begin, final Integer end) {
 			final int size = notNull(scope, l1).size();
 			int beginIdx = convertToListIndex(begin, size);
 			int endIdx = convertToListIndex(end, size);
-			return slice(scope, l1, beginIdx, endIdx, endIdx==beginIdx ? 1 : (int) Math.signum(endIdx-beginIdx));
+			return slice(scope, l1, beginIdx, endIdx, endIdx == beginIdx ? 1 : (int) Math.signum(endIdx - beginIdx));
 		}
-		
+
+		/**
+		 * Submatrix.
+		 *
+		 * @param scope
+		 *            the scope
+		 * @param m1
+		 *            the m 1
+		 * @param columns
+		 *            the columns
+		 * @param rows
+		 *            the rows
+		 * @return the i matrix
+		 */
 		@operator (
-				value = {  "slice", "submatrix" },
+				value = { "slice", "submatrix" },
 				can_be_const = true,
 				content_type = ITypeProvider.CONTENT_TYPE_AT_INDEX + 1,
-				category = { IOperatorCategory.MATRIX},
+				category = { IOperatorCategory.MATRIX },
 				concept = { IConcept.CONTAINER, IConcept.MATRIX })
 		@doc (
 				value = "Returns a submatrix of the matrix or field given as first operand for columns and rows with the indices given by the second and third operands, following their order in the lists",
@@ -573,26 +689,39 @@ public class Containers {
 						@usage ("If the first operand is nil, raises an error") },
 				see = { "copy_between", "between", "slice" })
 		@test ("submatrix (matrix([[1, 4, 7], [2, 5, 8], [3, 6, 9 ], [1, 1, 1]]), [2, 1, 3], [0, 1]) = matrix([[3, 6], [2, 5], [1, 1]])")
-		public static IMatrix submatrix(final IScope scope, final IMatrix m1, final List<Integer> columns, final List<Integer> rows) {
+		public static IMatrix submatrix(final IScope scope, final IMatrix m1, final IList<Integer> columns,
+				final IList<Integer> rows) {
 
-			final GamaPoint aimedDimensions = new GamaPoint(columns.size(), rows.size());
-			final IMatrix result = GamaMatrixType.matrixLike(scope, m1, aimedDimensions);
-			
-			for(int colIdx = 0; colIdx < columns.size(); colIdx ++) {
-				for(int rowIdx = 0; rowIdx < rows.size(); rowIdx ++) {
-					result.set(scope, colIdx, rowIdx, m1.get(scope, columns.get(colIdx), rows.get(rowIdx)) );
+			final IPoint aimedDimensions = GamaPointFactory.create(columns.size(), rows.size());
+			final IMatrix result = GamaMatrixFactory.createMatrixLike(scope, m1, aimedDimensions);
+
+			for (int colIdx = 0; colIdx < columns.size(); colIdx++) {
+				for (int rowIdx = 0; rowIdx < rows.size(); rowIdx++) {
+					result.set(scope, colIdx, rowIdx, m1.get(scope, columns.get(colIdx), rows.get(rowIdx)));
 				}
 			}
-			
+
 			return result;
 		}
-		
 
+		/**
+		 * Submatrix.
+		 *
+		 * @param scope
+		 *            the scope
+		 * @param f
+		 *            the f
+		 * @param columns
+		 *            the columns
+		 * @param rows
+		 *            the rows
+		 * @return the gama field
+		 */
 		@operator (
-				value = {  "slice", "submatrix" },
+				value = { "slice", "submatrix" },
 				can_be_const = true,
 				content_type = ITypeProvider.CONTENT_TYPE_AT_INDEX + 1,
-				category = { IOperatorCategory.MATRIX},
+				category = { IOperatorCategory.MATRIX },
 				concept = { IConcept.CONTAINER, IConcept.MATRIX })
 		@doc (
 				value = "Returns a subfield of the field given as first operand for columns and rows with the indices given by the second and third operands, following their order in the lists",
@@ -604,15 +733,31 @@ public class Containers {
 						@usage ("If the first operand is nil, raises an error") },
 				see = { "copy_between", "between", "slice" })
 		@test ("submatrix (field([[1, 4, 7], [2, 5, 8], [3, 6, 9 ], [1, 1, 1]]), [2, 1, 3], [0, 1]) = field([[3, 6], [2, 5], [1, 1]])")
-		public static GamaField submatrix(final IScope scope, final GamaField f, final List<Integer> columns, final List<Integer> rows) {
-			return (GamaField) submatrix(scope, (IMatrix)f, columns, rows);
+		public static IField submatrix(final IScope scope, final IField f, final IList<Integer> columns,
+				final IList<Integer> rows) {
+			return (IField) submatrix(scope, (IMatrix) f, columns, rows);
 		}
-		
+
+		/**
+		 * Submatrix.
+		 *
+		 * @param scope
+		 *            the scope
+		 * @param m1
+		 *            the m 1
+		 * @param columns
+		 *            the columns
+		 * @param rows
+		 *            the rows
+		 * @param steps
+		 *            the steps
+		 * @return the i matrix
+		 */
 		@operator (
-				value = {  "slice", "submatrix" },
+				value = { "slice", "submatrix" },
 				can_be_const = true,
 				content_type = ITypeProvider.CONTENT_TYPE_AT_INDEX + 1,
-				category = { IOperatorCategory.MATRIX},
+				category = { IOperatorCategory.MATRIX },
 				concept = { IConcept.CONTAINER, IConcept.MATRIX })
 		@doc (
 				value = "Returns a submatrix of the matrix or field given as first operand for columns between the indices determined by the second and rows between those determined by the third operands using the increment given by the fourth operand",
@@ -624,47 +769,56 @@ public class Containers {
 						@usage ("If the first operand is nil, raises an error") },
 				see = { "copy_between", "between", "slice" })
 		@test ("slice (matrix([[1, 4, 7], [2, 5, 8], [3, 6, 9 ], [1, 1, 1]]), 1::3, 0::1, 2::1) = matrix([[2, 5], [1, 1]])")
-		public static IMatrix submatrix(final IScope scope, final IMatrix m1, final GamaPair<Integer, Integer> columns, final GamaPair<Integer, Integer> rows, final GamaPair<Integer, Integer> steps) {
+		public static IMatrix submatrix(final IScope scope, final IMatrix m1, final IPair<Integer, Integer> columns,
+				final IPair<Integer, Integer> rows, final IPair<Integer, Integer> steps) {
 
-			//TODO: this definition relies on the submatrix that uses lists of indices, could be optimized to avoid creating the intermediate lists
-			final GamaPoint initialDimensions = notNull(scope, m1).getDimensions();
-			final int startCol = convertToListIndex(columns.key, (int)initialDimensions.x);
-			final int endCol = convertToListIndex(columns.value, (int)initialDimensions.x);
-			final int startRow = convertToListIndex(rows.key, (int)initialDimensions.y);
-			final int endRow = convertToListIndex(rows.value, (int)initialDimensions.y);
+			// TODO: this definition relies on the submatrix that uses lists of indices, could be optimized to avoid
+			// creating the intermediate lists
+			final IPoint initialDimensions = notNull(scope, m1).getDimensions();
+			final int startCol = convertToListIndex(columns.key(), (int) initialDimensions.getX());
+			final int endCol = convertToListIndex(columns.value(), (int) initialDimensions.getX());
+			final int startRow = convertToListIndex(rows.key(), (int) initialDimensions.getY());
+			final int endRow = convertToListIndex(rows.value(), (int) initialDimensions.getY());
 
-			final boolean positiveColStep = steps.key > 0;
-			final boolean positiveRowStep = steps.value > 0;
-			
+			final boolean positiveColStep = steps.key() > 0;
+			final boolean positiveRowStep = steps.value() > 0;
 			// Eliminating nonsensical cases
-			if (steps.key == 0 || steps.value == 0) {
-				return GamaMatrixType.matrixLike(scope, m1, new GamaPoint(0,0));
-			}
-			if (positiveColStep && startCol > endCol || !positiveColStep && startCol < endCol) {
-				return GamaMatrixType.matrixLike(scope, m1, new GamaPoint(0,0));
-			}
-			if (positiveRowStep && startRow > endRow || !positiveRowStep && startRow < endRow) {
-				return GamaMatrixType.matrixLike(scope, m1, new GamaPoint(0,0));
-			}
-			
-			
-			List<Integer> cols = new ArrayList<>();
-			List<Integer> rowsList = new ArrayList<>();
-			for(int col = startCol; positiveColStep && col <= endCol || !positiveColStep && col >= endCol ; col += steps.key) {
+			if (steps.key() == 0 || steps.value() == 0 || (positiveColStep ? startCol > endCol : startCol < endCol)
+					|| (positiveRowStep ? startRow > endRow : startRow < endRow))
+				return GamaMatrixFactory.createMatrixLike(scope, m1, GamaPointFactory.create(0, 0));
+
+			IList<Integer> cols = GamaListFactory.create(Types.INT);
+			IList<Integer> rowsList = GamaListFactory.create(Types.INT);
+			for (int col = startCol; positiveColStep ? col <= endCol : col >= endCol; col += steps.key()) {
 				cols.add(col);
 			}
-			for(int row = startRow; positiveRowStep && row <= endRow || !positiveRowStep && row >= endRow; row += steps.value) {
+			for (int row = startRow; positiveRowStep ? row <= endRow : row >= endRow; row += steps.value()) {
 				rowsList.add(row);
 			}
-			
+
 			return submatrix(scope, m1, cols, rowsList);
 		}
-		
+
+		/**
+		 * Submatrix.
+		 *
+		 * @param scope
+		 *            the scope
+		 * @param f
+		 *            the f
+		 * @param columns
+		 *            the columns
+		 * @param rows
+		 *            the rows
+		 * @param steps
+		 *            the steps
+		 * @return the gama field
+		 */
 		@operator (
-				value = {  "slice", "submatrix" },
+				value = { "slice", "submatrix" },
 				can_be_const = true,
 				content_type = ITypeProvider.CONTENT_TYPE_AT_INDEX + 1,
-				category = { IOperatorCategory.MATRIX},
+				category = { IOperatorCategory.MATRIX },
 				concept = { IConcept.CONTAINER, IConcept.MATRIX })
 		@doc (
 				value = "Returns a subfield of the field given as first operand for columns between the indices determined by the second and rows between those determined by the third operands using the increment given by the fourth operand",
@@ -676,15 +830,29 @@ public class Containers {
 						@usage ("If the first operand is nil, raises an error") },
 				see = { "copy_between", "between", "slice" })
 		@test ("slice (field([[1, 4, 7], [2, 5, 8], [3, 6, 9 ], [1, 1, 1]]), 1::3, 0::1, 2::1) = field([[2, 5], [1, 1]])")
-		public static GamaField submatrix(final IScope scope, final GamaField f, final GamaPair<Integer, Integer> columns, final GamaPair<Integer, Integer> rows, final GamaPair<Integer, Integer> steps) {	
-			return (GamaField) submatrix(scope, (IMatrix)f, columns, rows, steps);
+		public static IField submatrix(final IScope scope, final IField f, final IPair<Integer, Integer> columns,
+				final IPair<Integer, Integer> rows, final IPair<Integer, Integer> steps) {
+			return (IField) submatrix(scope, (IMatrix) f, columns, rows, steps);
 		}
-		
+
+		/**
+		 * Submatrix.
+		 *
+		 * @param scope
+		 *            the scope
+		 * @param m1
+		 *            the m 1
+		 * @param columns
+		 *            the columns
+		 * @param rows
+		 *            the rows
+		 * @return the i matrix
+		 */
 		@operator (
-				value = {  "slice", "submatrix" },
+				value = { "slice", "submatrix" },
 				can_be_const = true,
 				content_type = ITypeProvider.CONTENT_TYPE_AT_INDEX + 1,
-				category = { IOperatorCategory.MATRIX},
+				category = { IOperatorCategory.MATRIX },
 				concept = { IConcept.CONTAINER, IConcept.MATRIX })
 		@doc (
 				value = "Returns a submatrix of the matrix or field given as first operand for columns between the indices determined by the second and rows between those determined by the third operands.",
@@ -696,23 +864,36 @@ public class Containers {
 						@usage ("If the first operand is nil, raises an error") },
 				see = { "copy_between", "between", "slice" })
 		@test ("slice (matrix([[1, 4, 7], [2, 5, 8], [3, 6, 9 ], [1, 1, 1]]), 1::3, 0::1) = matrix([[2, 5], [3, 6], [1, 1]])")
-		public static IMatrix submatrix(final IScope scope, final IMatrix m1, final GamaPair<Integer, Integer> columns, final GamaPair<Integer, Integer> rows) {
-			final int firstCol = convertToListIndex(columns.key,(int) m1.getDimensions().x);
-			final int lastCol = convertToListIndex(columns.value,(int) m1.getDimensions().x);
-			final int firstRow = convertToListIndex(rows.key,(int) m1.getDimensions().y);
-			final int lastRow = convertToListIndex(rows.value,(int) m1.getDimensions().y);
-			GamaPair<Integer, Integer> steps = new GamaPair<>(	lastCol == firstCol ? 1 : (int) Math.signum(lastCol-firstCol), 
-																lastRow == firstRow ? 1 : (int) Math.signum(lastRow-firstRow), 
-																Types.INT, 
-																Types.INT);
+		public static IMatrix submatrix(final IScope scope, final IMatrix m1, final IPair<Integer, Integer> columns,
+				final IPair<Integer, Integer> rows) {
+			final int firstCol = convertToListIndex(columns.key(), (int) m1.getDimensions().getX());
+			final int lastCol = convertToListIndex(columns.value(), (int) m1.getDimensions().getX());
+			final int firstRow = convertToListIndex(rows.key(), (int) m1.getDimensions().getY());
+			final int lastRow = convertToListIndex(rows.value(), (int) m1.getDimensions().getY());
+			IPair<Integer, Integer> steps =
+					GamaPairFactory.createWith(lastCol == firstCol ? 1 : (int) Math.signum(lastCol - firstCol),
+							lastRow == firstRow ? 1 : (int) Math.signum(lastRow - firstRow), Types.INT, Types.INT);
 			return submatrix(scope, m1, columns, rows, steps);
 		}
-		
+
+		/**
+		 * Submatrix.
+		 *
+		 * @param scope
+		 *            the scope
+		 * @param f
+		 *            the f
+		 * @param columns
+		 *            the columns
+		 * @param rows
+		 *            the rows
+		 * @return the gama field
+		 */
 		@operator (
-				value = {  "slice", "submatrix" },
+				value = { "slice", "submatrix" },
 				can_be_const = true,
 				content_type = ITypeProvider.CONTENT_TYPE_AT_INDEX + 1,
-				category = { IOperatorCategory.MATRIX},
+				category = { IOperatorCategory.MATRIX },
 				concept = { IConcept.CONTAINER, IConcept.MATRIX })
 		@doc (
 				value = "Returns a subfield of the field given as first operand for columns between the indices determined by the second and rows between those determined by the third operands.",
@@ -724,10 +905,10 @@ public class Containers {
 						@usage ("If the first operand is nil, raises an error") },
 				see = { "copy_between", "between", "slice" })
 		@test ("slice (field([[1, 4, 7], [2, 5, 8], [3, 6, 9 ], [1, 1, 1]]), 1::3, 0::1) = field([[2, 5], [3, 6], [1, 1]])")
-		public static GamaField submatrix(final IScope scope, final GamaField f, final GamaPair<Integer, Integer> columns, final GamaPair<Integer, Integer> rows) {
-			return (GamaField) submatrix(scope, (IMatrix) f, columns, rows);
+		public static IField submatrix(final IScope scope, final IField f, final IPair<Integer, Integer> columns,
+				final IPair<Integer, Integer> rows) {
+			return (IField) submatrix(scope, (IMatrix) f, columns, rows);
 		}
-		
 
 		/**
 		 * Copy between.
@@ -750,8 +931,8 @@ public class Containers {
 		@doc (
 				value = "For internal use only. Corresponds to the implementation, for containers, of the access with [begin::end]",
 				masterDoc = true)
-		public static IList copy_between(final IScope scope, final IList l1, final GamaPair p) {
-			return copy_between(scope, l1, Cast.asInt(scope, p.key), Cast.asInt(scope, p.value));
+		public static IList copy_between(final IScope scope, final IList l1, final IPair p) {
+			return copy_between(scope, l1, Cast.asInt(scope, p.key()), Cast.asInt(scope, p.value()));
 		}
 
 	}
@@ -868,8 +1049,8 @@ public class Containers {
 	@validator (InternalAtValidator.class)
 	public static Object internal_at(final IScope scope, final IContainer container, final IList indices)
 			throws GamaRuntimeException {
-		if (container instanceof IContainer.Addressable)
-			return ((IContainer.Addressable) container).getFromIndicesList(scope, indices);
+		if (container instanceof IContainer.ToGet)
+			return ((IContainer.ToGet) container).getFromIndicesList(scope, indices);
 		throw GamaRuntimeException.error("" + container + " cannot be accessed using " + indices, scope);
 	}
 
@@ -897,6 +1078,9 @@ public class Containers {
 					The first element of the container is located at the index 0. \
 					In addition, if the user tries to get the element at an index higher or equals than the length of the container, he will get an IndexOutOfBoundException.\
 					The at operator behavior depends on the nature of the operand""",
+			special_cases = { "If the index is out of bounds (negative or >= length), raises a runtime error.",
+					"If the container is nil, raises a runtime error.",
+					"For an empty container, any index raises a runtime error." },
 			usages = { @usage (
 					value = "if it is a list or a matrix, at returns the element at the index specified by the right operand",
 					examples = { @example (
@@ -914,8 +1098,10 @@ public class Containers {
 					@usage ("if it is a graph and if the right operand is a pair node1::node2, at returns the edge from node1 to node2 in the graph") },
 			see = { "contains_all", "contains_any" })
 	@validator (AtValidator.class)
+	@test ("list<int> l <- [10,20,30]; l at 0 = 10")
+	@test ("list<int> l2 <- [10,20,30]; l at 2 = 30")
 	public static Object at(final IScope scope, final IContainer container, final Object key) {
-		if (container instanceof IContainer.Addressable) return ((IContainer.Addressable) container).get(scope, key);
+		if (container instanceof IContainer.ToGet) return ((IContainer.ToGet) container).get(scope, key);
 		throw GamaRuntimeException.error("" + container + " cannot be accessed using " + key, scope);
 	}
 
@@ -949,7 +1135,7 @@ public class Containers {
 		@Override
 		public boolean validate(final IDescription context, final EObject emfContext, final IExpression... arguments) {
 			// Used in remove, for instance
-			if (Types.isEmpty(arguments[1])) return true;
+			if (arguments[1].isEmpty()) return true;
 			IType type = arguments[0].getGamlType();
 			// It is normally a list with 1 or 2 indices
 			final IType indexType = arguments[1].getGamlType().getContentType();
@@ -1009,7 +1195,7 @@ public class Containers {
 			concept = { IConcept.CONTAINER })
 	@doc ("the element at the right (point) operand index of the matrix")
 	@no_test
-	public static Object at(final IScope scope, final IMatrix container, final GamaPoint key) {
+	public static Object at(final IScope scope, final IMatrix container, final IPoint key) {
 		return container.get(scope, key);
 	}
 
@@ -1063,8 +1249,7 @@ public class Containers {
 					equals = "the agent grid_cell with grid_x=1 and grid_y = 2",
 					isExecutable = false) })
 	@no_test
-	public static IAgent grid_at(final IScope scope, final ISpecies s, final GamaPoint val)
-			throws GamaRuntimeException {
+	public static IAgent grid_at(final IScope scope, final ISpecies s, final IPoint val) throws GamaRuntimeException {
 		final ITopology t = scope.getAgent().getPopulationFor(s).getTopology();
 		final IContainer<?, IShape> m = t.getPlaces();
 		if (m instanceof IGrid) {
@@ -1092,6 +1277,8 @@ public class Containers {
 			concept = { IConcept.CONTAINER })
 	@doc (
 			value = "produces a set from the elements of the operand (i.e. a list without duplicated elements)",
+			special_cases = { "If the container has no duplicates, returns an equivalent copy.",
+					"If the container is empty, returns an empty list.", "Order of first occurrences is preserved." },
 			usages = { @usage (
 					value = "if the operand is empty, remove_duplicates returns an empty list",
 					examples = { @example (
@@ -1114,6 +1301,8 @@ public class Containers {
 					value = "remove_duplicates([3,2,5,1,2,3,5,5,5])",
 					equals = "[3,2,5,1]") })
 	@test ("remove_duplicates([3,2,5,1,2,3,5,5,5]) = [3,2,5,1]")
+	@test ("distinct([1,2,1,3]) = [1,2,3]")
+	@test ("distinct([]) = []")
 	public static IList remove_duplicates(final IScope scope, final IContainer c) {
 		return (IList) stream(scope, c).distinct().toCollection(listLike(c));
 	}
@@ -1216,11 +1405,16 @@ public class Containers {
 			category = { IOperatorCategory.CONTAINER },
 			concept = { IConcept.CONTAINER })
 	@doc (
-			value = "Returns the nth first elements of the container. If n is greater than the list size, a translation of the container to a list is returned. If it is equal or less than zero, returns an empty list")
+			value = "Returns the nth first elements of the container. If n is greater than the list size, a translation of the container to a list is returned. If it is equal or less than zero, returns an empty list",
+			special_cases = { "If the container is empty, returns an empty list.",
+					"If the container is nil, raises a runtime error.",
+					"If n is greater than the container size, returns all elements as a list." })
 	@test ("first(3, [1,2,3,4,5,6]) = [1,2,3]")
 	@test ("first(0,[1,2,3,4,5,6]) = []")
 	@test ("first_of(3, [1,2,3,4,5,6]) = [1,2,3]")
 	@test ("first_of(0,[1,2,3,4,5,6]) = []")
+	@test ("first([1,2,3]) = 1")
+	@test ("first([]) = nil")
 	public static IList first(final IScope scope, final Integer number, final IContainer c) {
 		return (IList) stream(scope, c).limit(number < 0 ? 0 : number).toCollection(listLike(c));
 	}
@@ -1243,10 +1437,15 @@ public class Containers {
 			category = { IOperatorCategory.CONTAINER },
 			concept = { IConcept.CONTAINER })
 	@doc (
-			value = "Returns the nth last elements of the container. If n is greater than the list size,  returns the container cast as a list. If it is equal or less than zero, returns an empty list")
+			value = "Returns the nth last elements of the container. If n is greater than the list size,  returns the container cast as a list. If it is equal or less than zero, returns an empty list",
+			special_cases = { "If the container is empty, returns an empty list.",
+					"If the container is nil, raises a runtime error.",
+					"If n is greater than the container size, returns all elements as a list." })
 	@test ("last(3, [1,2,3,4,5,6]) = [4,5,6]")
 	@test ("last(0,[1,2,3,4,5,6]) = []")
 	@test ("last(10,[1::2, 3::4]) is list")
+	@test ("last([1,2,3]) = 3")
+	@test ("last([]) = nil")
 	public static IList last(final IScope scope, final Integer number, final IContainer c) {
 		int n = number < 0 ? 0 : number;
 		return (IList) stream(scope, c).skip(Math.max(0, c.length(scope) - n)).toCollection(listLike(c));
@@ -1403,9 +1602,11 @@ public class Containers {
 							value = "matrix([[1,2,3],[4,5,6]]) index_of 4",
 							equals = "{1.0,0.0}") }))
 	@test ("matrix([[1,2,3],[4,5,6]]) index_of 4 = {1.0,0.0}")
-	public static GamaPoint index_of(final IScope scope, final IMatrix c, final Object o) {
+	public static IPoint index_of(final IScope scope, final IMatrix c, final Object o) {
 		for (int i = 0; i < notNull(scope, c).getCols(scope); i++) {
-			for (int j = 0; j < c.getRows(scope); j++) { if (c.get(scope, i, j).equals(o)) return new GamaPoint(i, j); }
+			for (int j = 0; j < c.getRows(scope); j++) {
+				if (c.get(scope, i, j).equals(o)) return GamaPointFactory.create(i, j);
+			}
 		}
 		return null;
 	}
@@ -1533,10 +1734,10 @@ public class Containers {
 							value = "matrix([[1,2,3],[4,5,4]]) last_index_of 4",
 							equals = "{1.0,2.0}") }))
 	@test ("matrix([[1,2,3],[4,5,4]]) last_index_of 4 = {1.0,2.0}")
-	public static GamaPoint last_index_of(final IScope scope, final IMatrix c, final Object o) {
+	public static IPoint last_index_of(final IScope scope, final IMatrix c, final Object o) {
 		for (int i = notNull(scope, c).getCols(scope) - 1; i > -1; i--) {
 			for (int j = c.getRows(scope) - 1; j > -1; j--) {
-				if (c.get(scope, i, j).equals(o)) return new GamaPoint(i, j);
+				if (c.get(scope, i, j).equals(o)) return GamaPointFactory.create(i, j);
 			}
 		}
 		return null;
@@ -1692,8 +1893,12 @@ public class Containers {
 							@example (
 									value = "[1,2,3,4,5,6] - 0",
 									returnType = "list<int>",
-									equals = "[1,2,3,4,5,6]") }) })
+									equals = "[1,2,3,4,5,6]") }) },
+			special_cases = { "If the element is not in the list, returns the list unchanged.",
+					"If the list is empty, returns an empty list." })
 	@test ("[1,2,3,4,5,6] - 0 = [1,2,3,4,5,6]")
+	@test ("[1,2,3] - 2 = [1,3]")
+	@test ("[1,2,3] - 4 = [1,2,3]")
 	public static IList minus(final IScope scope, final IList l1, final Object object) {
 		final IList result = notNull(scope, l1).copy(scope);
 		result.remove(object);
@@ -1850,10 +2055,10 @@ public class Containers {
 			value = "produces a new pair combining the left and the right operands",
 			special_cases = "nil is not acceptable as a key (although it is as a value). If such a case happens, :: will throw an appropriate error")
 	@test ("string(1::2) = '1::2'")
-	public static GamaPair pair(final IScope scope, final IExpression a, final IExpression b) {
+	public static IPair pair(final IScope scope, final IExpression a, final IExpression b) {
 		final Object v1 = a.value(scope);
 		final Object v2 = b.value(scope);
-		return new GamaPair(notNull(scope, v1), v2, a.getGamlType(), b.getGamlType());
+		return GamaPairFactory.createWith(notNull(scope, v1), v2, a.getGamlType(), b.getGamlType());
 	}
 
 	/**
@@ -1876,6 +2081,9 @@ public class Containers {
 			concept = { IConcept.CONTAINER })
 	@doc (
 			value = "returns a new list containing all the elements of both operands",
+			special_cases = {
+					"Adding an empty container to another returns a list containing all elements of the non-empty operand.",
+					"If one of the operands is nil, " + IKeyword.PLUS + " throws an error." },
 			usages = { @usage (
 					value = "if one of the operands is nil, " + IKeyword.PLUS + " throws an error"),
 					@usage (
@@ -1893,6 +2101,9 @@ public class Containers {
 											equals = "[1,2,3,4,5,6,0,8]") }) },
 			see = { "" + IKeyword.MINUS })
 	@test ("[1,2,3,4,5,6] + [2,4,9] = [1,2,3,4,5,6,2,4,9]")
+	@test ("[1,2] + [3,4] = [1,2,3,4]")
+	@test ("[1,2] + [] = [1,2]")
+	@test ("[] + [1,2] = [1,2]")
 	public static IContainer plus(final IScope scope, final IContainer c1, final IContainer c2) {
 		// special case for the addition of two populations or meta-populations
 		if (c1 instanceof IPopulationSet && c2 instanceof IPopulationSet) {
@@ -1954,12 +2165,10 @@ public class Containers {
 			IType contentType = arguments[0].getGamlType().getContentType();
 			if (contentType != Types.NO_TYPE && !valueType.isTranslatableInto(contentType)
 					&& !Types.isEmptyContainerCase(contentType, item)) {
-				StringBuilder message =
-						new StringBuilder("The type of the elements of ").append(list.serializeToGaml(false))
-								.append(" (").append(contentType).append(") does not match with the type of the ");
-				message.append("argument");
-				message.append(" (").append(valueType).append("). ");
-				message.append("The argument will be casted to ").append(contentType).append(". ");
+				StringBuilder message = new StringBuilder("The contents type of ").append(list.serializeToGaml(false))
+						.append(" (").append(contentType).append(") does not match with the type of the argument");
+				message.append(" (").append(valueType).append("), which will be casted to ").append(contentType)
+						.append(". ");
 				context.warning(message.toString(), IGamlIssue.WRONG_TYPE, emfContext);
 			}
 			return true;
@@ -2049,8 +2258,8 @@ public class Containers {
 	@test ("[1::2, 3::4, 5::6] group_by (each > 4) = [false::[2, 4], true::[6]]")
 	public static IMap group_by(final IScope scope, final String eachName, final IContainer c, final IExpression e) {
 		final IType ct = notNull(scope, c).getGamlType().getContentType();
-		return (IMap) stream(scope, c).groupingTo(with(scope, eachName, e), asMapOf(e.getGamlType(), Types.LIST.of(ct)),
-				listOf(ct));
+		return (IMap) stream(scope, c).groupingTo(buildFunctionWithEach(scope, eachName, e),
+				asMapOf(e.getGamlType(), Types.LIST.of(ct)), listOf(ct));
 	}
 
 	/**
@@ -2102,7 +2311,8 @@ public class Containers {
 	@test ("[1,2,3,4,5,6,7,8] last_with (each > 3) = 8")
 	public static Object last_with(final IScope scope, final String eachName, final IContainer c,
 			final IExpression filter) {
-		return stream(scope, c).filter(by(scope, eachName, filter)).reduce((a, b) -> b).orElse(null);
+		return stream(scope, c).filter(buildPredicateWithEach(scope, eachName, filter)).reduce((a, b) -> b)
+				.orElse(null);
 	}
 
 	/**
@@ -2156,7 +2366,7 @@ public class Containers {
 	@test ("[1,2,3,4,5,6,7,8] first_with (each > 3) = 4")
 	public static Object first_with(final IScope scope, final String eachName, final IContainer c,
 			final IExpression filter) {
-		return stream(scope, c).findFirst(by(scope, eachName, filter)).orElse(null);
+		return stream(scope, c).findFirst(buildPredicateWithEach(scope, eachName, filter)).orElse(null);
 	}
 
 	/**
@@ -2179,6 +2389,10 @@ public class Containers {
 			value = "the sum of all the elements of the operand",
 			masterDoc = true,
 			comment = "the behavior depends on the nature of the operand",
+			special_cases = {
+					"For a typed empty list (e.g. list<int>), returns the identity value: 0 for int/float, an empty string for string, or {0,0} for point.",
+					"For an untyped empty list [], may raise a runtime error because the element type cannot be determined.",
+					"Nil elements in the list may raise a runtime error." },
 			usages = { @usage (
 					value = "if it is a list of int or float: sum returns the sum of all the elements",
 					examples = { @example (
@@ -2207,6 +2421,7 @@ public class Containers {
 			see = { "mul" })
 	@test ("sum([{1.0,3.0},{3.0,5.0},{9.0,1.0},{7.0,8.0}]) = {20.0,17.0}")
 	@test ("sum ([12,10,3]) = 25")
+	@test ("sum([1,2,3]) = 6")
 	public static Object sum(final IScope scope, final IContainer l) {
 		return sum_of(scope, IKeyword.EACH, l, null);
 	}
@@ -2299,7 +2514,7 @@ public class Containers {
 		Stream s = stream(scope, container);
 		IType t;
 		if (filter != null) {
-			s = s.map(with(scope, eachName, filter));
+			s = s.map(buildFunctionWithEach(scope, eachName, filter));
 			t = filter.getGamlType();
 		} else {
 			t = container.getGamlType().getContentType();
@@ -2308,8 +2523,9 @@ public class Containers {
 		return switch (t.id()) {
 			case IType.INT -> ((Stream<Integer>) s).reduce(0, Integer::sum);
 			case IType.FLOAT -> ((Stream<Double>) s).reduce(0d, Double::sum);
-			case IType.POINT -> ((Stream<GamaPoint>) s).reduce(new GamaPoint(), GamaPoint::plus);
-			case IType.COLOR -> ((Stream<GamaColor>) s).reduce(GamaColor.get(0, 0, 0, 0), GamaColor::merge);
+			case IType.POINT -> ((Stream<IPoint>) s).reduce(GamaPointFactory.create(), IPoint::plus);
+			case IType.COLOR -> ((Stream<IColor>) s).reduce(GamaColorFactory.createWithRGBA(0, 0, 0, 0),
+					GamaColorFactory::createByMerging);
 			case IType.STRING -> ((Stream<String>) s).reduce("", String::concat);
 			default -> throw GamaRuntimeException.error("No sum can be computed for " + container.serializeToGaml(true),
 					scope);
@@ -2442,7 +2658,8 @@ public class Containers {
 	@validator (ComparableValidator.class)
 	public static IList sort(final IScope scope, final String eachName, final IContainer c, final IExpression filter) {
 		try {
-			return (IList) stream(scope, c).sortedBy(with(scope, eachName, filter)).toCollection(listLike(c));
+			return (IList) stream(scope, c).sortedBy(buildFunctionWithEach(scope, eachName, filter))
+					.toCollection(listLike(c));
 		} catch (IllegalArgumentException e) {
 			// AD added here to avoid reporting concurrent modifications to the container while sorting it (can happen
 			// when relaunching simulations, see #693, with this exception in java.util.TimSort). Instead we return the
@@ -2479,21 +2696,12 @@ public class Containers {
 							value = "if the left-operand is a map, the keyword each will contain each value",
 							examples = { @example (
 									value = "[1::2, 3::4, 5::6] where (each >= 4)",
-									equals = "[4, 6]") 
-							}),
+									equals = "[4, 6]") }),
 					@usage (
 							value = "if the left-operand is a matrix, the elements will be traversed and filtered row by row.",
 							examples = { @example (
 									value = "matrix([1, 2, 3], [4, 5, 6]) where (each > 2)",
-									equals = "[4, 5, 3, 6]") 
-					}),
-					@usage (
-							value = "if the right-operand is not a bool, it will be casted into a bool. For numbers, 0 will be interpreted as false and the rest as true.",
-							examples = { @example (
-									value = "[-2.000001,-2,-1,0,0.0,1,2,3,4,5,6.5] select each",
-									equals = "[-2.000001,-2,-1,1,2,3,4,5,6.5]") 
-					})
-			},
+									equals = "[4, 5, 3, 6]") }) },
 			examples = { @example (
 					value = "[1,2,3,4,5,6,7,8] where (each > 3)",
 					equals = "[4, 5, 6, 7, 8] "),
@@ -2511,9 +2719,9 @@ public class Containers {
 			see = { "first_with", "last_with" })
 	@test ("[1,2,3,4,5,6,7,8] where (each > 3) = [4, 5, 6, 7, 8] ")
 	@test ("matrix([1, 2, 3], [4, 5, 6]) where (each > 2) = [4, 5, 3, 6] ")
-	@test ("[-2.000001,-2,-1,0,0.0,1,2,3,4,5,6.5] select each = [-2.000001,-2,-1,1,2,3,4,5,6.5]")
 	public static IList where(final IScope scope, final String eachName, final IContainer c, final IExpression filter) {
-		return (IList) stream(scope, c).filter(by(scope, eachName, filter)).toCollection(listLike(c));
+		return (IList) stream(scope, c).filter(buildPredicateWithEach(scope, eachName, filter))
+				.toCollection(listLike(c));
 	}
 
 	/**
@@ -2635,7 +2843,7 @@ public class Containers {
 	@validator (ComparableValidator.class)
 	public static Object with_max_of(final IScope scope, final String eachName, final IContainer c,
 			final IExpression filter) {
-		return stream(scope, c).maxBy(with(scope, eachName, filter)).orElse(null);
+		return stream(scope, c).maxBy(buildFunctionWithEach(scope, eachName, filter)).orElse(null);
 	}
 
 	/**
@@ -2682,7 +2890,7 @@ public class Containers {
 	@validator (ComparableValidator.class)
 	public static Object with_min_of(final IScope scope, final String eachName, final IContainer c,
 			final IExpression filter) {
-		return stream(scope, c).minBy(with(scope, eachName, filter)).orElse(null);
+		return stream(scope, c).minBy(buildFunctionWithEach(scope, eachName, filter)).orElse(null);
 	}
 
 	/**
@@ -2726,12 +2934,24 @@ public class Containers {
 		final IType type = filter.getGamlType();
 		IType resultingContentsType = type;
 		if (resultingContentsType.isContainer()) { resultingContentsType = resultingContentsType.getContentType(); }
-		return (IList) stream(scope, c).flatCollection(with(scope, eachName, filter).andThen(toLists))
+		return (IList) stream(scope, c).flatCollection(buildFunctionWithEach(scope, eachName, filter).andThen(toLists))
 				.toCollection(listOf(resultingContentsType));
 
 	}
-	
-	
+
+	/**
+	 * Collect.
+	 *
+	 * @param scope
+	 *            the scope
+	 * @param eachName
+	 *            the each name
+	 * @param f
+	 *            the f
+	 * @param filter
+	 *            the filter
+	 * @return the gama field
+	 */
 	@operator (
 			value = { "collect" },
 			content_type = ITypeProvider.TYPE_AT_INDEX + 3,
@@ -2739,10 +2959,10 @@ public class Containers {
 			category = IOperatorCategory.CONTAINER,
 			concept = { IConcept.MATRIX })
 	@doc (
-			value = "When applied to a field, collect returns a field of the same size, in which each element is the evaluation of the right-hand operand on the corresponding element in the left-hand operand")
+			value = "When applied to a field, collect returns a field of the same size if the right expression returns float values, in which each element is the evaluation of the right-hand operand on the corresponding element in the left-hand operand")
 	@test ("field([1,2,4],[1,3,4]) collect (x: x *2) = field([2,4,8],[2,6,8])")
-	public static GamaField collect(final IScope scope, final String eachName, final GamaField f, final IExpression filter) {
-		return (GamaField) collect(scope, eachName, (IMatrix)f, filter);
+	public static IMatrix collect(final IScope scope, final String eachName, final IField f, final IExpression filter) {
+		return collect(scope, eachName, (IMatrix) f, filter);
 	}
 
 	/**
@@ -2765,14 +2985,17 @@ public class Containers {
 	@doc (
 			value = "When applied to a matrix, collect returns a matrix of the same size, in which each element is the evaluation of the right-hand operand on the corresponding element in the left-hand operand")
 	@test ("matrix([1,2,4],[1,3,4]) collect (x: x *2) = matrix([2,4,8],[2,6,8])")
-	public static IMatrix collect(final IScope scope, final String eachName, final IMatrix c, final IExpression filter) {
+	public static IMatrix collect(final IScope scope, final String eachName, final IMatrix c,
+			final IExpression filter) {
 		int cols = c.getCols(scope);
 		int rows = c.getRows(scope);
 		int type = filter.getGamlType().id();
 		IMatrix result = switch (type) {
-			case IType.FLOAT -> c.getGamlType() == Types.FIELD  ? GamaFieldType.buildField(scope, cols, rows) : new GamaFloatMatrix(cols, rows);
-			case IType.INT -> new GamaIntMatrix(cols, rows);
-			default -> new GamaObjectMatrix(cols, rows, filter.getGamlType());
+			case IType.FLOAT -> c.getGamlType() == Types.FIELD
+					? GamaMatrixFactory.createFieldWithSize(scope, cols, rows)
+					: GamaMatrixFactory.createFloatMatrix(cols, rows);
+			case IType.INT -> GamaMatrixFactory.createIntMatrix(cols, rows);
+			default -> GamaMatrixFactory.create(cols, rows, filter.getGamlType());
 		};
 
 		for (int x = 0; x < cols; x++) {
@@ -2828,7 +3051,8 @@ public class Containers {
 	@test ("[1,2] collect (i: ([1,2,3] collect (j: i+j))) = [[2,3,4],[3,4,5]]")
 	public static IList collect(final IScope scope, final String eachName, final IContainer c,
 			final IExpression filter) {
-		return (IList) stream(scope, c).map(with(scope, eachName, filter)).toCollection(listOf(filter.getGamlType()));
+		return (IList) stream(scope, c).map(buildFunctionWithEach(scope, eachName, filter))
+				.toCollection(listOf(filter.getGamlType()));
 	}
 
 	/**
@@ -2905,7 +3129,8 @@ public class Containers {
 			see = { "group_by" })
 	public static Integer count(final IScope scope, final String eachName, final IContainer original,
 			final IExpression filter) {
-		return (int) notNull(scope, original).stream(scope).filter(by(scope, eachName, filter)).count();
+		return (int) notNull(scope, original).stream(scope).filter(buildPredicateWithEach(scope, eachName, filter))
+				.count();
 	}
 
 	/**
@@ -2938,7 +3163,7 @@ public class Containers {
 			see = { "none_matches", "all_match", "count" })
 	public static Boolean one_matches(final IScope scope, final String eachName, final IContainer original,
 			final IExpression filter) {
-		return notNull(scope, original).stream(scope).anyMatch(by(scope, eachName, filter));
+		return notNull(scope, original).stream(scope).anyMatch(buildPredicateWithEach(scope, eachName, filter));
 	}
 
 	/**
@@ -2972,7 +3197,7 @@ public class Containers {
 			see = { "one_matches", "all_match", "count" })
 	public static Boolean none_matches(final IScope scope, final String eachName, final IContainer original,
 			final IExpression filter) {
-		return notNull(scope, original).stream(scope).noneMatch(by(scope, eachName, filter));
+		return notNull(scope, original).stream(scope).noneMatch(buildPredicateWithEach(scope, eachName, filter));
 	}
 
 	/**
@@ -3006,7 +3231,7 @@ public class Containers {
 			see = { "none_matches", "one_matches", "count" })
 	public static Boolean all_match(final IScope scope, final String eachName, final IContainer original,
 			final IExpression filter) {
-		return notNull(scope, original).stream(scope).allMatch(by(scope, eachName, filter));
+		return notNull(scope, original).stream(scope).allMatch(buildPredicateWithEach(scope, eachName, filter));
 	}
 
 	/**
@@ -3040,8 +3265,8 @@ public class Containers {
 
 		final StreamEx s = original.stream(scope);
 		final IType contentsType = original.getGamlType().getContentType();
-		return (IMap) s.collect(Collectors.toMap(with(scope, eachName, keyProvider), a -> a, (a, b) -> a,
-				asMapOf(keyProvider.getGamlType(), contentsType)));
+		return (IMap) s.collect(toIMap(buildFunctionWithEach(scope, eachName, keyProvider), Function.identity(),
+				keyProvider.getGamlType(), contentsType));
 	}
 
 	/**
@@ -3078,12 +3303,13 @@ public class Containers {
 			see = {})
 	public static IMap as_map(final IScope scope, final String eachName, final IContainer original,
 			final IExpression filter) {
-		if (!(filter instanceof BinaryOperator pair) || !"::".equals(pair.getName()))
+		if (!(filter instanceof IOperator pair) || !"::".equals(pair.getName()))
 			throw GamaRuntimeException.error("'as_map' expects a pair as second argument", scope);
 		final IExpression key = pair.arg(0);
 		final IExpression value = pair.arg(1);
-		return (IMap) stream(scope, original).collect(Collectors.toMap(with(scope, eachName, key),
-				with(scope, eachName, value), (a, b) -> a, asMapOf(key.getGamlType(), value.getGamlType())));
+
+		return (IMap) stream(scope, original).collect(toIMap(buildFunctionWithEach(scope, eachName, key),
+				buildFunctionWithEach(scope, eachName, value), key.getGamlType(), value.getGamlType()));
 	}
 
 	/**
@@ -3194,10 +3420,10 @@ public class Containers {
 							value = "['a'::1,'b'::2] + ('c'::3)",
 							equals = "['a'::1,'b'::2,'c'::3]") },
 			see = { "" + IKeyword.MINUS })
-	public static IMap plus(final IScope scope, final IMap m1, final GamaPair m2) {
+	public static IMap plus(final IScope scope, final IMap m1, final IPair m2) {
 		final IType type = GamaType.findCommonType(notNull(scope, m1).getGamlType(), notNull(scope, m2).getGamlType());
 		final IMap res = GamaMapFactory.createWithoutCasting(type.getKeyType(), type.getContentType(), m1);
-		res.put(m2.key, m2.value);
+		res.put(m2.key(), m2.value());
 		return res;
 	}
 
@@ -3261,9 +3487,9 @@ public class Containers {
 							value = "['a'::1,'b'::2] - ('c'::3)",
 							equals = "['a'::1,'b'::2]") },
 			see = { "" + IKeyword.MINUS })
-	public static IMap minus(final IScope scope, final IMap m1, final GamaPair m2) {
+	public static IMap minus(final IScope scope, final IMap m1, final IPair m2) {
 		final IMap res = notNull(scope, m1).copy(scope);
-		res.remove(m2.getKey());
+		res.remove(m2.key());
 		return res;
 	}
 
@@ -3289,21 +3515,26 @@ public class Containers {
 			value = "the mean of all the elements of the operand",
 			comment = "the elements of the operand are summed (see sum for more details about the sum of container elements ) and then the sum value is divided by the number of elements.",
 			special_cases = {
-					"if the container contains points, the result will be a point. If the container contains rgb values, the result will be a rgb color" },
+					"If the container contains points, the result will be a point. If the container contains rgb values, the result will be a rgb color",
+					"If the container is empty, the behavior depends on the element type: the sum step may raise a runtime error for untyped empty containers.",
+					"For numeric elements (int or float), the result is always a float." },
 			examples = { @example (
 					value = "mean ([4.5, 3.5, 5.5, 7.0])",
 					equals = "5.125 ") },
 			see = { "sum" })
 	@test ("mean ([4.5, 3.5, 5.5, 7.0]) with_precision 3 = 5.125")
+	@test ("mean([1,2,3]) = 2.0")
 	public static Object opMean(final IScope scope, final IContainer l) throws GamaRuntimeException {
 
 		final Object s = sum(scope, l);
 		int size = l.length(scope);
 		if (size == 0) { size = 1; }
-		if (s instanceof Number) return ((Number) s).doubleValue() / size;
-		if (s instanceof GamaPoint) return Points.divide(scope, (GamaPoint) s, size);
-		if (s instanceof GamaColor) return Colors.divide((GamaColor) s, size);
-		return Cast.asFloat(scope, s) / size;
+		return switch (s) {
+			case Number n -> n.doubleValue() / size;
+			case IPoint ip -> ip.dividedBy(size);
+			case IColor ic -> Colors.divide(ic, size);
+			case null, default -> Cast.asFloat(scope, s) / size;
+		};
 	}
 
 }

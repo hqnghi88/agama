@@ -1,8 +1,11 @@
 /**
-* Name: SPARQLquerywithfiles
-* Reads a SPARQL query from a file, executes it then store the result into another file 
-* Author: baptiste lesquoy
-* Tags: 
+* Name: SPARQL Query with Files
+* Author: Baptiste Lesquoy
+* Description: Demonstrates file-based SPARQL query workflow in GAMA: reads a SPARQL SELECT query from
+*   an external .sparql file, sends it to a remote endpoint, then serializes the result set to another file
+*   in CSV format. This is the recommended approach for complex queries that are too long to embed as strings
+*   and for archiving query results for later analysis.
+* Tags: database, SPARQL, linked_data, load_file, save_file, query, semantic_web
 */
 
 
@@ -26,6 +29,11 @@ global {
 		if empty(result){
 			write #current_error color:#red;
 			return;
+		}
+		
+		// we check for results
+		if empty(first(result)){
+			write "No result found, check the query again" color:#red;
 		}
 		
 		// we save the result as a csv that we manage "manually"

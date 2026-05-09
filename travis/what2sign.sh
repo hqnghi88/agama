@@ -1,5 +1,4 @@
 #!/bin/bash
-
 #
 #	Generate list of jars containings .so\|.dylib\|.jnilib to sign for MacOS release
 #	Can automatically parse 4 releases at once
@@ -53,7 +52,7 @@ function parseApp(){
 					jar xf "$f" "$j"
 					if haveSomethingToSign "$j"; then
 						echo "==> Need to sign $j <=="
-						addJarInFile $f $j
+						addJarInFile "$f" "$j"
 					fi
 				done < nestedJar.txt
 			fi
@@ -66,14 +65,14 @@ function unzipAndParse(){
 	echo "Unzipping $1 ..."
 	unzip -q "$1"
 	parseApp "./Gama.app"
-	find . -maxdepth 1 -type d -exec rm -fr {} \;
+	find . -mindepth 1 -maxdepth 1 -type d -exec rm -fr {} \;
 	echo "xxx"
 }
 
 
 touch alreadySawJar.txt needToSign.txt currentAppJar.txt nestedJar.txt
-for gama in ./gama.application-macosx**zip; do
-	unzipAndParse $gama
+for gama in ./gama.application-macosx*.zip; do
+	unzipAndParse "$gama"
 done
 
 # Remove duplicated lines

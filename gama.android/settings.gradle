@@ -1,0 +1,2 @@
+rootProject.name = "GamaAndroid"
+include ':app'

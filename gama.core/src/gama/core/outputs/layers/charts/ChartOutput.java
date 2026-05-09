@@ -2,14 +2,13 @@
  *
  * ChartOutput.java, in gama.core, is part of the source code of the GAMA modeling and simulation platform (v.2025-03).
  *
- * (c) 2007-2025 UMI 209 UMMISCO IRD/SU & Partners (IRIT, MIAT, ESPACE-DEV, CTU)
+ * (c) 2007-2026 UMI 209 UMMISCO IRD/SU & Partners (IRIT, MIAT, ESPACE-DEV, CTU)
  *
  * Visit https://github.com/gama-platform/gama for license information and contacts.
  *
  ********************************************************************************************************/
 package gama.core.outputs.layers.charts;
 
-import java.awt.Color;
 import java.awt.Font;
 import java.awt.Point;
 import java.awt.image.BufferedImage;
@@ -17,19 +16,23 @@ import java.util.LinkedHashMap;
 
 import org.jfree.chart.JFreeChart;
 
-import gama.core.common.interfaces.IDisplaySurface;
-import gama.core.common.interfaces.IKeyword;
-import gama.core.kernel.simulation.SimulationClock;
-import gama.core.metamodel.shape.GamaPoint;
-import gama.core.runtime.IScope;
-import gama.core.util.GamaColor;
-import gama.gaml.expressions.IExpression;
-import gama.gaml.operators.Cast;
+import gama.annotations.constants.IKeyword;
+import gama.api.gaml.expressions.IExpression;
+import gama.api.gaml.types.Cast;
+import gama.api.kernel.simulation.IClock;
+import gama.api.runtime.scope.IScope;
+import gama.api.types.color.GamaColorFactory;
+import gama.api.types.color.IColor;
+import gama.api.types.geometry.GamaPointFactory;
+import gama.api.types.geometry.IPoint;
+import gama.api.ui.displays.IChart;
+import gama.api.ui.displays.IChartDataSource;
+import gama.api.ui.displays.IDisplaySurface;
 
 /**
  * The Class ChartOutput.
  */
-public abstract class ChartOutput {
+public abstract class ChartOutput implements IChart {
 
 	/** The Constant SERIES_CHART. */
 	static final int SERIES_CHART = 0;
@@ -113,22 +116,22 @@ public abstract class ChartOutput {
 	boolean grid_lines_visible = true;
 
 	/** The background color. */
-	Color backgroundColor = GamaColor.WHITE;
+	IColor backgroundColor = GamaColorFactory.WHITE;
 
 	/** The axes color. */
-	Color axesColor = null;
+	IColor axesColor = null;
 
 	/** The background color. */
-	Color labelBackgroundColor = null;
+	IColor labelBackgroundColor = null;
 
 	/** The background color. */
-	Color labelTextColor = null;
+	IColor labelTextColor = null;
 
 	/** The text color. */
-	Color textColor = null;
+	IColor textColor = null;
 
 	/** The tick color. */
-	Color tickColor = null;
+	IColor tickColor = null;
 
 	/** The tick font face. */
 	String tickFontFace = Font.SANS_SERIF;
@@ -170,7 +173,7 @@ public abstract class ChartOutput {
 	protected String series_label_position = IKeyword.DEFAULT;
 
 	/** The series label anchor. */
-	protected GamaPoint series_label_anchor = new GamaPoint(1, 1);
+	protected IPoint series_label_anchor = GamaPointFactory.create(1, 1);
 
 	/** The style. */
 	protected String style = IKeyword.DEFAULT;
@@ -185,11 +188,23 @@ public abstract class ChartOutput {
 	/** The usexrangeminmax. */
 	boolean usexrangeinterval = false, usexrangeminmax = false;
 
+	/** Individual x axis bound values. */
+	double xmin_val, xmax_val;
+
+	/** Flags for individual x axis bounds (x_min / x_max facets). */
+	boolean usexmin = false, usexmax = false;
+
 	/** The yrangemax. */
 	double yrangeinterval, yrangemin, yrangemax;
 
 	/** The useyrangeminmax. */
 	boolean useyrangeinterval = false, useyrangeminmax = false;
+
+	/** Individual y axis bound values. */
+	double ymin_val, ymax_val;
+
+	/** Flags for individual y axis bounds (y_min / y_max facets). */
+	boolean useymin = false, useymax = false;
 
 	/** The y 2 rangemax. */
 	double y2rangeinterval, y2rangemin, y2rangemax;
@@ -226,6 +241,7 @@ public abstract class ChartOutput {
 	 *            the anti alias
 	 * @return the image
 	 */
+	@Override
 	public abstract BufferedImage getImage(final int sizeX, final int sizeY, final boolean antiAlias);
 
 	/**
@@ -246,7 +262,7 @@ public abstract class ChartOutput {
 				: IKeyword.RADAR.equals(t) ? RADAR_CHART : IKeyword.PIE.equals(t) ? PIE_CHART
 				: IKeyword.BOX_WHISKER.equals(t) ? BOX_WHISKER_CHART : IKeyword.SCATTER.equals(t) ? SCATTER_CHART
 				: XY_CHART;
-		axesColor = GamaColor.get(Color.black);
+		axesColor = GamaColorFactory.BLACK;
 	}
 
 	/**
@@ -262,7 +278,7 @@ public abstract class ChartOutput {
 			return 0;
 		}
 		if (scope != null) {
-			SimulationClock clock = scope.getClock();
+			IClock clock = scope.getClock();
 			if (clock != null) return clock.getCycle() + 1;
 		}
 		return 0;
@@ -319,7 +335,7 @@ public abstract class ChartOutput {
 
 		}
 		resetAxes(scope);
-		SimulationClock clock = scope.getClock();
+		IClock clock = scope.getClock();
 		if (clock != null) {
 			lastUpdateCycle = clock.getCycle();
 			// DEBUG.LOG("output last update:" + lastUpdateCycle);
@@ -490,7 +506,7 @@ public abstract class ChartOutput {
 	 * @param color
 	 *            the color
 	 */
-	public void setAxesColorValue(final IScope scope, final GamaColor color) {
+	public void setAxesColorValue(final IScope scope, final IColor color) {
 		axesColor = color;
 
 	}
@@ -503,7 +519,7 @@ public abstract class ChartOutput {
 	 * @param color
 	 *            the color
 	 */
-	public void setTickColorValue(final IScope scope, final GamaColor color) {
+	public void setTickColorValue(final IScope scope, final IColor color) {
 		tickColor = color;
 
 	}
@@ -516,7 +532,7 @@ public abstract class ChartOutput {
 	 * @param color
 	 *            the color
 	 */
-	public void setBackgroundColorValue(final IScope scope, final GamaColor color) {
+	public void setBackgroundColorValue(final IScope scope, final IColor color) {
 		backgroundColor = color;
 
 	}
@@ -529,7 +545,7 @@ public abstract class ChartOutput {
 	 * @param color
 	 *            the color
 	 */
-	public void setLabelTextColorValue(final IScope scope, final GamaColor color) {
+	public void setLabelTextColorValue(final IScope scope, final IColor color) {
 		labelTextColor = color;
 	}
 
@@ -541,7 +557,7 @@ public abstract class ChartOutput {
 	 * @param color
 	 *            the color
 	 */
-	public void setLabelBackgroundColorValue(final IScope scope, final GamaColor color) {
+	public void setLabelBackgroundColorValue(final IScope scope, final IColor color) {
 		labelBackgroundColor = color;
 	}
 
@@ -553,7 +569,7 @@ public abstract class ChartOutput {
 	 * @param color
 	 *            the color
 	 */
-	public void setColorValue(final IScope scope, final GamaColor color) {
+	public void setColorValue(final IScope scope, final IColor color) {
 		textColor = color;
 
 	}
@@ -911,6 +927,76 @@ public abstract class ChartOutput {
 	}
 
 	/**
+	 * Gets the use X min.
+	 *
+	 * @param scope
+	 *            the scope
+	 * @return the use X min
+	 */
+	public boolean getUseXMin(final IScope scope) {
+		return usexmin;
+	}
+
+	/**
+	 * Gets the use X max.
+	 *
+	 * @param scope
+	 *            the scope
+	 * @return the use X max
+	 */
+	public boolean getUseXMax(final IScope scope) {
+		return usexmax;
+	}
+
+	/**
+	 * Sets the X min.
+	 *
+	 * @param scope
+	 *            the scope
+	 * @param value
+	 *            the lower bound value for the x axis
+	 */
+	public void setXMin(final IScope scope, final double value) {
+		this.usexmin = true;
+		this.xmin_val = value;
+	}
+
+	/**
+	 * Sets the X max.
+	 *
+	 * @param scope
+	 *            the scope
+	 * @param value
+	 *            the upper bound value for the x axis
+	 */
+	public void setXMax(final IScope scope, final double value) {
+		this.usexmax = true;
+		this.xmax_val = value;
+	}
+
+	/**
+	 * Gets the X min value.
+	 *
+	 * @param scope
+	 *            the scope
+	 * @return the x min value
+	 */
+	public double getXMin(final IScope scope) {
+		return xmin_val;
+	}
+
+	/**
+	 * Gets the X max value.
+	 *
+	 * @param scope
+	 *            the scope
+	 * @return the x max value
+	 */
+	public double getXMax(final IScope scope) {
+		return xmax_val;
+	}
+
+	/**
 	 * Gets the y range interval.
 	 *
 	 * @param scope
@@ -974,6 +1060,76 @@ public abstract class ChartOutput {
 	public double getYRangeMax(final IScope scope) {
 		return yrangemax;
 
+	}
+
+	/**
+	 * Gets the use Y min.
+	 *
+	 * @param scope
+	 *            the scope
+	 * @return the use Y min
+	 */
+	public boolean getUseYMin(final IScope scope) {
+		return useymin;
+	}
+
+	/**
+	 * Gets the use Y max.
+	 *
+	 * @param scope
+	 *            the scope
+	 * @return the use Y max
+	 */
+	public boolean getUseYMax(final IScope scope) {
+		return useymax;
+	}
+
+	/**
+	 * Sets the Y min.
+	 *
+	 * @param scope
+	 *            the scope
+	 * @param value
+	 *            the lower bound value for the y axis
+	 */
+	public void setYMin(final IScope scope, final double value) {
+		this.useymin = true;
+		this.ymin_val = value;
+	}
+
+	/**
+	 * Sets the Y max.
+	 *
+	 * @param scope
+	 *            the scope
+	 * @param value
+	 *            the upper bound value for the y axis
+	 */
+	public void setYMax(final IScope scope, final double value) {
+		this.useymax = true;
+		this.ymax_val = value;
+	}
+
+	/**
+	 * Gets the Y min value.
+	 *
+	 * @param scope
+	 *            the scope
+	 * @return the y min value
+	 */
+	public double getYMin(final IScope scope) {
+		return ymin_val;
+	}
+
+	/**
+	 * Gets the Y max value.
+	 *
+	 * @param scope
+	 *            the scope
+	 * @return the y max value
+	 */
+	public double getYMax(final IScope scope) {
+		return ymax_val;
 	}
 
 	/**
@@ -1134,6 +1290,7 @@ public abstract class ChartOutput {
 	 *
 	 * @return the JF chart
 	 */
+	@Override
 	public JFreeChart getJFChart() { return null; }
 
 	/**
@@ -1160,7 +1317,7 @@ public abstract class ChartOutput {
 	 * @param type_val
 	 *            the type val
 	 */
-	public void setDefaultPropertiesFromType(final IScope scope, final ChartDataSource source, final int type_val) {
+	public void setDefaultPropertiesFromType(final IScope scope, final IChartDataSource source, final int type_val) {
 
 	}
 
@@ -1229,6 +1386,7 @@ public abstract class ChartOutput {
 	 *            the sb
 	 * @return the model coordinates info
 	 */
+	@Override
 	public void getModelCoordinatesInfo(final int xOnScreen, final int yOnScreen, final IDisplaySurface g,
 			final Point positionInPixels, final StringBuilder sb) {}
 
@@ -1496,7 +1654,7 @@ public abstract class ChartOutput {
 	 * @param scope
 	 * @param pt
 	 */
-	public void setSeriesLabelAnchor(final IScope scope, final GamaPoint pt) {
+	public void setSeriesLabelAnchor(final IScope scope, final IPoint pt) {
 		series_label_anchor = pt;
 	}
 

@@ -1,9 +1,9 @@
 /*******************************************************************************************************
  *
  * GamaGLCanvas.java, in gama.ui.display.opengl, is part of the source code of the GAMA modeling and simulation platform
- * .
+ * (v.2025-03).
  *
- * (c) 2007-2024 UMI 209 UMMISCO IRD/SU & Partners (IRIT, MIAT, TLU, CTU)
+ * (c) 2007-2026 UMI 209 UMMISCO IRD/SU & Partners (IRIT, MIAT, ESPACE-DEV, CTU)
  *
  * Visit https://github.com/gama-platform/gama for license information and contacts.
  *
@@ -40,7 +40,7 @@ import com.jogamp.opengl.GLException;
 import com.jogamp.opengl.GLProfile;
 import com.jogamp.opengl.GLRunnable;
 
-import gama.core.runtime.PlatformHelper;
+import gama.api.runtime.SystemInfo;
 import gama.dev.DEBUG;
 import gama.ui.display.opengl.OpenGL;
 import gama.ui.display.opengl.camera.IMultiListener;
@@ -60,12 +60,11 @@ public class GamaGLCanvas extends Composite implements GLAutoDrawable, IDelegate
 	/** The canvas. */
 	final Control canvas;
 
-
 	/** The drawable. */
 	final GLWindow drawable;
 
 	/** The fps delegate. */
-	GamaGLAnimator animator;
+	private GamaGLAnimator animator;
 
 	/** The detached. */
 	protected boolean detached = false;
@@ -96,12 +95,14 @@ public class GamaGLCanvas extends Composite implements GLAutoDrawable, IDelegate
 			public void controlMoved(final ControlEvent e) {
 				DEBUG.OUT("Setting monitor for GLCanvas " + parent.getMonitor().toString());
 				GamaGLCanvas.this.setMonitor(parent.getMonitor());
+				GamaGLCanvas.this.fixSurfaceScaleOnWindows();
 			}
 
 			@Override
 			public void controlResized(final ControlEvent e) {
 				DEBUG.OUT("Setting monitor for GLCanvas " + parent.getMonitor().toString());
 				GamaGLCanvas.this.setMonitor(parent.getMonitor());
+				GamaGLCanvas.this.fixSurfaceScaleOnWindows();
 			}
 		});
 		this.name = name;
@@ -118,7 +119,7 @@ public class GamaGLCanvas extends Composite implements GLAutoDrawable, IDelegate
 			@Override
 			public void controlResized(final ControlEvent e) {
 				/* Detached views have no title! */
-				if (PlatformHelper.isMac()) {
+				if (SystemInfo.isMac() || SystemInfo.isWindows()) {
 					final var isDetached = parent.getShell().getText().length() == 0;
 					if (isDetached) {
 						if (!detached) {
@@ -148,6 +149,24 @@ public class GamaGLCanvas extends Composite implements GLAutoDrawable, IDelegate
 	 *            the new monitor
 	 */
 	protected void setMonitor(final Monitor monitor) { this.monitor = monitor; }
+
+	/**
+	 * Corrects the NEWT window pixel scale on Windows when DPI zoom is not 100%. JOGL 2.6.0's
+	 * NewtCanvasSWT.updatePosSizeCheck() uses integer division to compute pixelScale (e.g. 500/400=1 at 125% zoom),
+	 * causing the embedded NEWT window to be sized and positioned incorrectly. Calling setSurfaceScale() with the true
+	 * fractional scale overrides the wrong value and triggers the correct Win32 SetWindowPos.
+	 */
+	private void fixSurfaceScaleOnWindows() {
+		if (!SystemInfo.isWindows() || monitor == null) return;
+		final int zoom = monitor.getZoom();
+		if (zoom == 100) return;
+		final float scale = zoom / 100f;
+		WorkbenchHelper.asyncRun(() -> {
+			if (drawable != null && drawable.isNativeValid()) {
+				drawable.setSurfaceScale(new float[] { scale, scale });
+			}
+		});
+	}
 
 	@Override
 	public Monitor getMonitor() { return monitor; }
@@ -273,9 +292,6 @@ public class GamaGLCanvas extends Composite implements GLAutoDrawable, IDelegate
 	}
 
 	@Override
-	public GLAnimatorControl getAnimator() { return drawable.getAnimator(); }
-
-	@Override
 	public Thread setExclusiveContextThread(final Thread t) throws GLException {
 		return drawable.setExclusiveContextThread(t);
 	}
@@ -363,6 +379,7 @@ public class GamaGLCanvas extends Composite implements GLAutoDrawable, IDelegate
 		w.setFullscreen(true);
 		w.setFullscreen(false);
 		setWindowVisible(true);
+		fixSurfaceScaleOnWindows();
 	}
 
 	/**
@@ -479,6 +496,23 @@ public class GamaGLCanvas extends Composite implements GLAutoDrawable, IDelegate
 	public void updateVisibleStatus(final boolean v) {
 		// DEBUG.OUT("VISIBLE changed through display : " + v);
 		visible = v;
+	}
+
+	@Override
+	public GamaGLAnimator getAnimator() { return animator; }
+
+	/**
+	 *
+	 */
+	public void pauseAnimator() {
+		if (animator != null) { animator.pause(); }
+	}
+
+	/**
+	 * Resume animator.
+	 */
+	public void resumeAnimator() {
+		if (animator != null) { animator.resume(); }
 	}
 
 }
