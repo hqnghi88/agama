@@ -233,7 +233,7 @@ class BridgeServer:
     def start(self):
         """Start the bridge server"""
         # Start HTTP server
-        self.http_server = HTTPServer(("127.0.0.1", BACKEND_PORT), BridgeHandler)
+        self.http_server = HTTPServer(("0.0.0.0", BACKEND_PORT), BridgeHandler)
         self.http_thread = Thread(target=self.http_server.serve_forever, daemon=True)
         self.http_thread.start()
         log.info("HTTP server started on 127.0.0.1:%d", BACKEND_PORT)

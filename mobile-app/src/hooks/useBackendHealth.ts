@@ -2,14 +2,12 @@ import {useEffect, useRef, useCallback} from 'react';
 import {useSimulationStore} from '../store/useSimulationStore';
 
 const HEALTH_CHECK_INTERVAL = 5000;
-const INITIAL_RETRY_INTERVAL = 1000;
-const MAX_INITIAL_RETRIES = 30;
+const INITIAL_RETRY_INTERVAL = 2000;
 
 export function useBackendHealth() {
   const checkHealth = useSimulationStore(s => s.checkHealth);
   const connected = useSimulationStore(s => s.connected);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const retryCountRef = useRef(0);
 
   const startPolling = useCallback(() => {
     if (intervalRef.current) clearInterval(intervalRef.current);
@@ -25,34 +23,36 @@ export function useBackendHealth() {
 
   useEffect(() => {
     let mounted = true;
+    let timeoutId: ReturnType<typeof setTimeout>;
 
-    const initialPoll = async () => {
-      while (retryCountRef.current < MAX_INITIAL_RETRIES && mounted) {
-        try {
-          await checkHealth();
-          if (mounted && useSimulationStore.getState().connected) {
-            startPolling();
-            return;
-          }
-        } catch {
-          // Backend not ready yet
+    const poll = async () => {
+      if (!mounted) return;
+      try {
+        await checkHealth();
+        if (mounted && useSimulationStore.getState().connected) {
+          startPolling();
+          return;
         }
-        retryCountRef.current++;
-        await new Promise(r => setTimeout(r, INITIAL_RETRY_INTERVAL));
+      } catch {
+        // Backend not ready yet
+      }
+      if (mounted) {
+        timeoutId = setTimeout(poll, INITIAL_RETRY_INTERVAL);
       }
     };
 
-    initialPoll();
+    poll();
 
     return () => {
       mounted = false;
+      clearTimeout(timeoutId);
       stopPolling();
     };
   }, [checkHealth, startPolling, stopPolling]);
 
   useEffect(() => {
-    if (!connected) {
-      retryCountRef.current = 0;
+    if (!connected && !intervalRef.current) {
+      // Will be picked up by the existing effect
     }
   }, [connected]);
 

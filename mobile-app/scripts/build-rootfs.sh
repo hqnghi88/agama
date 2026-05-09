@@ -153,9 +153,9 @@ for script in startup.sh java-env.sh; do
     fi
 done
 
-# Copy GAMA-specific launcher
+# Copy GAMA-specific launcher and env
 mkdir -p "${OUTPUT_DIR}/opt/gama/"
-for script in gama-launcher.sh bridge-server.py; do
+for script in gama-launcher.sh bridge-server.py java-env.sh; do
     if [ -f "${MOBILE_ROOT}/proot-setup/${script}" ]; then
         cp "${MOBILE_ROOT}/proot-setup/${script}" "${OUTPUT_DIR}/opt/gama/"
         chmod +x "${OUTPUT_DIR}/opt/gama/${script}"
@@ -165,12 +165,28 @@ done
 # ─── Set up Java alternatives ─────────────────────────────────────────
 # Ensure java is in PATH properly
 if [ -d "${OUTPUT_DIR}/usr/lib/jvm" ]; then
-    JDK_DIR=$(ls -d "${OUTPUT_DIR}/usr/lib/jvm/"*java* 2>/dev/null | head -1)
+    # Pick the first JDK that actually has bin/java
+    JDK_DIR=""
+    for candidate in "${OUTPUT_DIR}/usr/lib/jvm/"*java*; do
+        if [ -f "${candidate}/bin/java" ] || [ -f "${candidate}/bin/java" ]; then
+            JDK_DIR="${candidate}"
+            break
+        fi
+    done
+    if [ -z "${JDK_DIR}" ]; then
+        # Fallback: grab the first *java* entry anyway
+        JDK_DIR=$(ls -d "${OUTPUT_DIR}/usr/lib/jvm/"*java* 2>/dev/null | head -1)
+    fi
     if [ -n "${JDK_DIR}" ]; then
         echo "[rootfs] Found JDK: $(basename ${JDK_DIR})"
-        # Create symlinks if needed
-        if [ ! -f "${OUTPUT_DIR}/usr/bin/java" ]; then
-            ln -sf "${JDK_DIR}/bin/java" "${OUTPUT_DIR}/usr/bin/java"
+        # Ensure java-17-openjdk-arm64 symlink points to a valid JDK
+        REAL_JDK="${JDK_DIR}"
+        if [ -L "${JDK_DIR}" ]; then
+            REAL_JDK=$(readlink -f "${JDK_DIR}")
+        fi
+        # Always create /usr/bin/java symlink pointing to the real JDK
+        if [ -f "${REAL_JDK}/bin/java" ]; then
+            ln -sf "${REAL_JDK}/bin/java" "${OUTPUT_DIR}/usr/bin/java"
         fi
     fi
 fi

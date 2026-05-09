@@ -64,8 +64,9 @@ package-gama: check-gama-product
 	@echo "[gama] Copying launcher scripts..."
 	cp $(PROOT_SETUP_DIR)/gama-launcher.sh $(ROOTFS_BUILD_DIR)/opt/gama/
 	cp $(PROOT_SETUP_DIR)/bridge-server.py $(ROOTFS_BUILD_DIR)/opt/gama/
-	cp $(PROOT_SETUP_DIR)/startup.sh $(ROOTFS_BUILD_DIR)/
+	cp $(PROOT_SETUP_DIR)/java-env.sh $(ROOTFS_BUILD_DIR)/opt/gama/
 	cp $(PROOT_SETUP_DIR)/java-env.sh $(ROOTFS_BUILD_DIR)/
+	cp $(PROOT_SETUP_DIR)/startup.sh $(ROOTFS_BUILD_DIR)/
 	chmod +x $(ROOTFS_BUILD_DIR)/opt/gama/*.sh
 	@echo "[gama] Setting up GAMA configuration for mobile..."
 	@# Adjust memory settings for mobile
@@ -89,6 +90,7 @@ build-proot:
 # ─── Android ───────────────────────────────────────────────────────────
 build-android: setup
 	@echo "[android] Building APK..."
+	JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home \
 	cd android && ./gradlew assembleDebug
 	@echo "[android] APK at android/app/build/outputs/apk/debug/app-debug.apk"
 

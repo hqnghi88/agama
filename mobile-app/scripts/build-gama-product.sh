@@ -49,10 +49,11 @@ fi
 # Copy launcher scripts
 cp "${MOBILE_ROOT}/proot-setup/gama-launcher.sh" "${GAMA_HOME}/"
 cp "${MOBILE_ROOT}/proot-setup/bridge-server.py" "${GAMA_HOME}/"
-cp "${MOBILE_ROOT}/proot-setup/startup.sh" "${OUTPUT_DIR}/"
+cp "${MOBILE_ROOT}/proot-setup/java-env.sh" "${GAMA_HOME}/"
 cp "${MOBILE_ROOT}/proot-setup/java-env.sh" "${OUTPUT_DIR}/"
+cp "${MOBILE_ROOT}/proot-setup/startup.sh" "${OUTPUT_DIR}/"
 
-chmod +x "${GAMA_HOME}/gama-launcher.sh" "${OUTPUT_DIR}/startup.sh" "${OUTPUT_DIR}/java-env.sh"
+chmod +x "${GAMA_HOME}/gama-launcher.sh" "${GAMA_HOME}/java-env.sh" "${OUTPUT_DIR}/startup.sh" "${OUTPUT_DIR}/java-env.sh"
 
 # Create GAMA configuration override for mobile (reduced memory)
 cat > "${GAMA_HOME}/headless/eclipse.ini" << 'INIEOF'

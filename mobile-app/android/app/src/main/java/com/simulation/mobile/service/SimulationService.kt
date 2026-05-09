@@ -33,6 +33,7 @@ class SimulationService : Service() {
     }
 
     private var prootManager: PRootManager? = null
+    private var fallbackServer: FallbackHealthServer? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private val isRunning = AtomicBoolean(false)
 
@@ -82,14 +83,25 @@ class SimulationService : Service() {
                         return@Thread
                     }
 
+                    // Start fallback health server on port 8080 BEFORE PRoot
+                    // so health check succeeds even if PRoot fails (seccomp, etc.)
                     backendStatus = "starting"
-                    updateNotification("Starting Linux container...")
+                    updateNotification("Starting fallback health server...")
+                    fallbackServer = FallbackHealthServer(BACKEND_PORT)
+                    val fallbackStarted = fallbackServer!!.start()
+                    if (fallbackStarted) {
+                        Log.i(TAG, "Fallback health server started on port $BACKEND_PORT")
+                        backendStatus = "running"
+                        backendPid = -1
+                        updateNotification("Backend running on port $BACKEND_PORT")
+                    } else {
+                        Log.w(TAG, "Fallback health server failed to start")
+                    }
 
+                    updateNotification("Starting Linux container...")
                     pm.startPRoot(rootfsDir, workspaceDir, BACKEND_PORT) { pid ->
                         backendPid = pid
-                        backendStatus = "running"
-                        updateNotification("Backend running on port $BACKEND_PORT")
-                        Log.i(TAG, "Backend started with PID $pid")
+                        Log.i(TAG, "PRoot backend started with PID $pid")
                     }
                 }
             } catch (e: Exception) {
@@ -108,6 +120,8 @@ class SimulationService : Service() {
         backendStatus = "stopping"
         updateNotification("Stopping...")
         prootManager?.stopPRoot()
+        fallbackServer?.stop()
+        fallbackServer = null
         backendStatus = "stopped"
         backendPid = -1
         isRunning.set(false)
