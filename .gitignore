@@ -29,3 +29,10 @@ gama.dependencies/lib/
 **/org.eclipse.jdt.core.prefs
 /*/.settings/org.eclipse.m2e.core.prefs
 /*/.project 
+
+# Large junk / generated files
+*.hprof
+*.bundle
+*.heap
+heapdump*
+*.hprof.gz
