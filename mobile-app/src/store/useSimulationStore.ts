@@ -54,30 +54,50 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
   checkHealth: async () => {
     try {
       const response = await api.health();
+      const wasConnected = get().connected;
       set({
         connected: true,
         backendStatus: 'running',
         backendUptime: (response.uptime as number) || 0,
         error: null,
       });
-      get().addLog('info', 'Backend health check OK');
+      if (!wasConnected) {
+        get().addLog('info', 'Backend connected');
+      }
     } catch (err) {
+      const wasConnected = get().connected;
       set({
         connected: false,
         backendStatus: 'stopped',
         backendUptime: 0,
       });
+      if (wasConnected) {
+        get().addLog('warn', 'Backend disconnected');
+      }
     }
   },
 
   checkStatus: async () => {
     try {
       const status: SimulationStatus = await api.getStatus();
+      const prevJobs = get().jobs;
+      const newJobs = (status.jobs || []) as JobInfo[];
+
+      // Detect newly completed jobs
+      for (const job of newJobs) {
+        const prev = prevJobs.find(j => j.id === job.id);
+        if (prev && prev.state !== 'completed' && job.state === 'completed') {
+          get().addLog('info', `Simulation ${job.id} completed (${job.progress}%)`);
+        } else if (prev && prev.state !== 'running' && job.state === 'running') {
+          get().addLog('info', `Simulation ${job.id} running: step ${job.current_step || '?'}`);
+        }
+      }
+
       set({
         connected: true,
         running: status.running,
         backendUptime: status.uptime,
-        jobs: (status.jobs || []) as JobInfo[],
+        jobs: newJobs,
         error: null,
       });
     } catch {

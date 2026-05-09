@@ -1,4 +1,4 @@
-import React, {useCallback} from 'react';
+import React, {useCallback, useEffect, useRef} from 'react';
 import {
   View,
   Text,
@@ -22,7 +22,25 @@ const DashboardScreen: React.FC = () => {
   const jobs = useSimulationStore(s => s.jobs);
   const logs = useSimulationStore(s => s.logs);
   const checkHealth = useSimulationStore(s => s.checkHealth);
+  const checkStatus = useSimulationStore(s => s.checkStatus);
   const addLog = useSimulationStore(s => s.addLog);
+
+  // Poll simulation status every 2s while running
+  const statusInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    if (running && !statusInterval.current) {
+      statusInterval.current = setInterval(() => { checkStatus(); }, 2000);
+    } else if (!running && statusInterval.current) {
+      clearInterval(statusInterval.current);
+      statusInterval.current = null;
+    }
+    return () => {
+      if (statusInterval.current) {
+        clearInterval(statusInterval.current);
+        statusInterval.current = null;
+      }
+    };
+  }, [running, checkStatus]);
 
   const formatUptime = useCallback((ms: number): string => {
     const s = Math.floor(ms / 1000);
@@ -83,14 +101,51 @@ const DashboardScreen: React.FC = () => {
 
       {jobs.length > 0 && (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Active Jobs</Text>
+          <Text style={styles.cardTitle}>
+            {jobs.some(j => j.state === 'running' || j.state === 'starting')
+              ? 'Running Simulations'
+              : 'Simulation Results'
+            }
+          </Text>
           {jobs.map(job => (
-            <View key={job.id} style={styles.jobRow}>
-              <Text style={styles.jobId}>{job.id}</Text>
-              <Text style={styles.jobState}>{job.state}</Text>
-              <Text style={styles.jobProgress}>{job.progress}%</Text>
+            <View key={job.id} style={styles.jobBlock}>
+              <View style={styles.jobRow}>
+                <Text style={styles.jobId}>{job.id}</Text>
+                <Text style={[
+                  styles.jobState,
+                  job.state === 'completed' && styles.completed,
+                  job.state === 'stopped' && styles.stopped,
+                ]}>
+                  {job.state === 'completed' ? '✓ Complete' : job.state}
+                </Text>
+                <Text style={[
+                  styles.jobProgress,
+                  job.state === 'completed' && styles.completedText,
+                ]}>{job.progress}%</Text>
+              </View>
+              <View style={styles.progressBarBg}>
+                <View style={[
+                  styles.progressBarFill,
+                  {width: `${job.progress}%`},
+                  job.state === 'completed' && styles.progressComplete,
+                  job.state === 'stopped' && styles.progressStopped,
+                ]} />
+              </View>
+              {job.current_step != null && job.state !== 'completed' && (
+                <Text style={styles.jobStep}>Step {job.current_step}/{job.steps || 100}</Text>
+              )}
+              {job.state === 'completed' && (
+                <Text style={styles.jobResult}>Simulation finished successfully</Text>
+              )}
+              {job.state === 'stopped' && (
+                <Text style={styles.jobResult}>Simulation stopped by user</Text>
+              )}
             </View>
           ))}
+          <Text style={styles.jobsSummary}>
+            {jobs.filter(j => j.state === 'completed').length} completed,{' '}
+            {jobs.filter(j => j.state === 'running' || j.state === 'starting').length} active
+          </Text>
         </View>
       )}
 
@@ -170,6 +225,9 @@ const styles = StyleSheet.create({
   logContainer: {
     height: 200,
   },
+  jobBlock: {
+    marginBottom: 8,
+  },
   jobRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -182,10 +240,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   jobState: {
-    color: '#22c55e',
+    color: '#fbbf24',
     fontSize: 12,
     fontFamily: 'monospace',
-    width: 60,
+    width: 80,
+  },
+  completed: {
+    color: '#22c55e',
   },
   jobProgress: {
     color: '#e2e8f0',
@@ -193,6 +254,50 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     width: 40,
     textAlign: 'right',
+  },
+  progressBarBg: {
+    height: 6,
+    backgroundColor: '#334155',
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginTop: 2,
+  },
+  progressBarFill: {
+    height: 6,
+    backgroundColor: '#3b82f6',
+    borderRadius: 3,
+  },
+  jobStep: {
+    color: '#64748b',
+    fontSize: 10,
+    fontFamily: 'monospace',
+    marginTop: 2,
+  },
+  stopped: {
+    color: '#ef4444',
+  },
+  completedText: {
+    color: '#22c55e',
+  },
+  progressComplete: {
+    backgroundColor: '#22c55e',
+  },
+  progressStopped: {
+    backgroundColor: '#ef4444',
+  },
+  jobResult: {
+    color: '#64748b',
+    fontSize: 11,
+    fontFamily: 'monospace',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  jobsSummary: {
+    color: '#475569',
+    fontSize: 11,
+    fontFamily: 'monospace',
+    marginTop: 8,
+    textAlign: 'center',
   },
   footer: {
     alignItems: 'center',

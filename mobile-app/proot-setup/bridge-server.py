@@ -118,14 +118,16 @@ class BridgeHandler(BaseHTTPRequestHandler):
         })
 
     def _handle_status(self):
-        running_jobs = [
-            j for j in simulation_state["jobs"].values()
-            if j.get("state") in ("running", "starting")
-        ]
+        jobs_list = sorted(
+            simulation_state["jobs"].values(),
+            key=lambda j: j.get("created", 0),
+            reverse=True,
+        )
+        running_jobs = [j for j in jobs_list if j.get("state") in ("running", "starting")]
         self._send_json(200, {
             "status": "ok",
             "running": len(running_jobs) > 0,
-            "jobs": running_jobs,
+            "jobs": jobs_list,
             "uptime": int(time.time() - simulation_state["start_time"]),
         })
 
@@ -167,10 +169,8 @@ class BridgeHandler(BaseHTTPRequestHandler):
         simulation_state["jobs"][job_id] = job
         log.info("Started job %s (model=%s, experiment=%s)", job_id, model, experiment)
 
-        # In a real implementation, we would send a 'load' command via WebSocket
-        # and then a 'play' command. For now, simulate progress.
-        if not HAS_WEBSOCKETS:
-            self._simulate_job_progress(job_id, steps)
+        # Simulate progress until real GAMA WebSocket commands are implemented
+        self._simulate_job_progress(job_id, steps)
 
         self._send_json(200, {
             "status": "ok",
