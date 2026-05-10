@@ -43,6 +43,15 @@ else
     HAS_GAMA=false
 fi
 
+# ─── Clean output dir to prevent stale files from previous builds ────
+# The Docker export is extracted on top of OUTPUT_DIR.  If old/pinned
+# binaries (e.g. Python 3.14 from an earlier manual install) exist in
+# /usr/local/bin they won't be overwritten by the export and will
+# break at runtime (GLIBC version mismatch).
+echo "[rootfs] Cleaning output directory for fresh extraction..."
+rm -rf "${OUTPUT_DIR:?}/"*
+mkdir -p "${OUTPUT_DIR}"
+
 # ─── Build rootfs via Docker ──────────────────────────────────────────
 echo "[rootfs] Building rootfs (this may take a few minutes)..."
 
@@ -189,10 +198,35 @@ if [ -d "${OUTPUT_DIR}/usr/lib/jvm/java-25" ]; then
     fi
 fi
 
+# ─── Clean stale/incompatible files ──────────────────────────────────
+# Remove Python 3.14 from /usr/local/bin if present (requires GLIBC 2.38,
+# but Debian Bookworm ships 2.36).  The system Python 3.11 at /usr/bin
+# is the one we should use.
+echo "[rootfs] Cleaning incompatible Python 3.14 from /usr/local..."
+rm -f "${OUTPUT_DIR}/usr/local/bin/python3" \
+      "${OUTPUT_DIR}/usr/local/bin/python3.14" \
+      "${OUTPUT_DIR}/usr/local/bin/python3-config" \
+      "${OUTPUT_DIR}/usr/local/bin/python3.14-config" \
+      "${OUTPUT_DIR}/usr/local/bin/pip3" \
+      "${OUTPUT_DIR}/usr/local/bin/pip3.14" \
+      "${OUTPUT_DIR}/usr/local/bin/idle3" \
+      "${OUTPUT_DIR}/usr/local/bin/idle3.14" \
+      "${OUTPUT_DIR}/usr/local/bin/pydoc3" \
+      "${OUTPUT_DIR}/usr/local/bin/pydoc3.14"
+# Recreate python3 symlink pointing to system Python 3.11
+ln -sf python3.11 "${OUTPUT_DIR}/usr/bin/python3"
+
+# Remove AppleDouble metadata files from macOS
+find "${OUTPUT_DIR}" -name '._*' -delete 2>/dev/null || true
+
 # ─── Set permissions ──────────────────────────────────────────────────
 echo "[rootfs] Setting permissions..."
 find "${OUTPUT_DIR}/tmp" -type d -exec chmod 1777 {} + 2>/dev/null || true
 find "${OUTPUT_DIR}/dev" -type d -exec chmod 755 {} + 2>/dev/null || true
+
+# Make shell scripts executable (Android toybox tar doesn't preserve permissions)
+find "${OUTPUT_DIR}" -name '*.sh' -exec chmod +x {} + 2>/dev/null || true
+find "${OUTPUT_DIR}" -name '*.py' -exec chmod +x {} + 2>/dev/null || true
 
 # ─── Verify rootfs ────────────────────────────────────────────────────
 echo "[rootfs] Verifying rootfs..."

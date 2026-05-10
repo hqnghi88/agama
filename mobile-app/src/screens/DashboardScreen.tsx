@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Image,
   StyleSheet,
+  NativeModules,
 } from 'react-native';
 import {useBackendHealth} from '../hooks/useBackendHealth';
 import {useSimulationStore} from '../store/useSimulationStore';
@@ -14,12 +15,16 @@ import StatusIndicator from '../components/StatusIndicator';
 import SimulationControls from '../components/SimulationControls';
 import LogViewer from '../components/LogViewer';
 
+const {SimulationModule} = NativeModules;
+
 const DashboardScreen: React.FC = () => {
   useBackendHealth();
 
   const connected = useSimulationStore(s => s.connected);
   const backendStatus = useSimulationStore(s => s.backendStatus);
+  const backendProgress = useSimulationStore(s => s.backendProgress);
   const backendUptime = useSimulationStore(s => s.backendUptime);
+  const error = useSimulationStore(s => s.error);
   const running = useSimulationStore(s => s.running);
   const jobs = useSimulationStore(s => s.jobs);
   const logs = useSimulationStore(s => s.logs);
@@ -75,6 +80,24 @@ const DashboardScreen: React.FC = () => {
     return `${s}s`;
   }, []);
 
+  const [restarting, setRestarting] = useState(false);
+
+  const handleRestartBackend = useCallback(async () => {
+    if (restarting) return;
+    setRestarting(true);
+    addLog('info', 'Restarting backend...');
+    try {
+      await SimulationModule?.stopBackend();
+      await new Promise(r => setTimeout(r, 2000));
+      await SimulationModule?.startBackend();
+      await new Promise(r => setTimeout(r, 3000));
+      await checkHealth();
+    } catch (e) {
+      addLog('error', `Restart failed: ${(e as Error).message}`);
+    }
+    setRestarting(false);
+  }, [restarting, addLog, checkHealth]);
+
   const backendColor = connected
     ? 'ok'
     : backendStatus === 'starting'
@@ -97,10 +120,22 @@ const DashboardScreen: React.FC = () => {
             connected
               ? `Up ${formatUptime(backendUptime)}`
               : backendStatus === 'starting'
-                ? 'Starting...'
-                : 'Offline'
+                ? (backendProgress || 'Starting...')
+                : backendStatus === 'error'
+                  ? (error && error.length < 40 ? error : 'Error')
+                  : 'Offline'
           }
         />
+        {!connected && SimulationModule && (
+          <TouchableOpacity
+            style={styles.restartBtn}
+            onPress={handleRestartBackend}
+            disabled={restarting}>
+            <Text style={styles.restartBtnText}>
+              {restarting ? 'RESTARTING...' : 'RESTART BACKEND'}
+            </Text>
+          </TouchableOpacity>
+        )}
         <StatusIndicator
           label="Simulation"
           status={running ? 'ok' : 'inactive'}
@@ -134,21 +169,26 @@ const DashboardScreen: React.FC = () => {
           {jobs.map(job => {
             const frameUrl = api.getFrameUrl(job.id, frameTs);
             return (
-            <View key={job.id} style={styles.jobBlock}>
-              <View style={styles.jobRow}>
-                <Text style={styles.jobId}>{job.id}</Text>
-                <Text style={[
-                  styles.jobState,
-                  job.state === 'completed' && styles.completed,
-                  job.state === 'stopped' && styles.stopped,
-                ]}>
-                  {job.state === 'completed' ? '✓ Complete' : job.state}
-                </Text>
-                <Text style={[
-                  styles.jobProgress,
-                  job.state === 'completed' && styles.completedText,
-                ]}>{job.progress}%</Text>
-              </View>
+              <View key={job.id} style={styles.jobBlock}>
+                <View style={styles.jobRow}>
+                  <Text style={styles.jobId}>{job.id}</Text>
+                  <Text style={[
+                    styles.jobState,
+                    job.state === 'completed' && styles.completed,
+                    job.state === 'stopped' && styles.stopped,
+                  ]}>
+                    {job.state === 'completed' ? '✓ Complete' : job.state}
+                  </Text>
+                  <Text style={[
+                    styles.jobProgress,
+                    job.state === 'completed' && styles.completedText,
+                  ]}>{job.progress}%</Text>
+                </View>
+                {job.model || job.experiment ? (
+                  <Text style={styles.jobModel}>
+                    {[String(job.model ?? ''), String(job.experiment ?? '')].filter(Boolean).join(' # ')}
+                  </Text>
+                ) : null}
               <View style={styles.progressBarBg}>
                 <View style={[
                   styles.progressBarFill,
@@ -309,6 +349,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#3b82f6',
     borderRadius: 3,
   },
+  jobModel: {
+    color: '#60a5fa',
+    fontSize: 10,
+    fontFamily: 'monospace',
+    marginTop: 2,
+  },
   jobStep: {
     color: '#64748b',
     fontSize: 10,
@@ -353,6 +399,20 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     marginTop: 8,
     textAlign: 'center',
+  },
+  restartBtn: {
+    backgroundColor: '#334155',
+    borderRadius: 8,
+    padding: 10,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  restartBtnText: {
+    color: '#f8fafc',
+    fontSize: 11,
+    fontWeight: '700',
+    fontFamily: 'monospace',
+    letterSpacing: 1,
   },
   footer: {
     alignItems: 'center',

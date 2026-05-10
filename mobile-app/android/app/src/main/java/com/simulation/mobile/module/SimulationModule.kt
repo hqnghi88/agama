@@ -48,6 +48,7 @@ class SimulationModule(reactContext: ReactApplicationContext) :
         try {
             val map = Arguments.createMap().apply {
                 putString("status", SimulationService.backendStatus)
+                putString("progress", SimulationService.backendProgress)
                 putInt("pid", SimulationService.backendPid)
                 putInt("port", SimulationService.BACKEND_PORT)
             }

@@ -6,6 +6,7 @@ import java.io.BufferedReader
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStreamReader
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 class PRootManager(private val context: Context) {
@@ -19,18 +20,20 @@ class PRootManager(private val context: Context) {
     private var prootProcess: Process? = null
     private val isRunning = AtomicBoolean(false)
 
-    fun setupRootfs(rootfsDir: File): Boolean {
+    fun setupRootfs(rootfsDir: File, onProgress: ((String) -> Unit)? = null): Boolean {
         return try {
             if (rootfsDir.exists() && File(rootfsDir, "usr").exists()) {
                 Log.i(TAG, "Rootfs already extracted at $rootfsDir")
             } else {
                 Log.i(TAG, "Setting up rootfs at $rootfsDir")
                 rootfsDir.mkdirs()
+                onProgress?.invoke("copying rootfs archive from APK")
 
                 val archiveFile = extractRawResource(ROOTFS_ARCHIVE, rootfsDir.parentFile!!)
                     ?: return false
 
                 Log.i(TAG, "Extracting rootfs archive: ${archiveFile.absolutePath}")
+                onProgress?.invoke("extracting rootfs (this may take several minutes)")
 
                 Log.i(TAG, "Archive size: ${archiveFile.length()} bytes")
                 val pb = ProcessBuilder(
@@ -38,8 +41,25 @@ class PRootManager(private val context: Context) {
                     "-C", rootfsDir.absolutePath
                 ).redirectErrorStream(true)
                 val extractProcess = pb.start()
-                val output = extractProcess.inputStream.bufferedReader().readText()
-                val exitCode = extractProcess.waitFor()
+                // Read output in background thread to prevent pipe buffer deadlock
+                val outputHolder = java.util.concurrent.atomic.AtomicReference("")
+                val readerThread = Thread {
+                    try {
+                        outputHolder.set(extractProcess.inputStream.bufferedReader().readText())
+                    } catch (_: Exception) {}
+                }.apply { name = "tar-reader"; start() }
+                val finished = extractProcess.waitFor(5, TimeUnit.MINUTES)
+
+                if (!finished) {
+                    Log.e(TAG, "Rootfs extraction timed out after 5 min — destroying")
+                    extractProcess.destroyForcibly()
+                    rootfsDir.deleteRecursively()
+                    readerThread.join(1000)
+                    return false
+                }
+
+                val exitCode = extractProcess.exitValue()
+                val output = outputHolder.get()
                 Log.i(TAG, "Tar exit code: $exitCode")
 
                 if (exitCode != 0) {
@@ -47,13 +67,14 @@ class PRootManager(private val context: Context) {
                     Log.e(TAG, "Tar output: ${output.take(500)}")
                     Log.i(TAG, "Archive file exists: ${archiveFile.exists()}, size: ${archiveFile.length()}")
                     Log.i(TAG, "Rootfs dir exists: ${rootfsDir.exists()}, writable: ${rootfsDir.canWrite()}")
+                    // Clean up so next launch retries from scratch
+                    rootfsDir.deleteRecursively()
                     return false
                 }
             }
 
-            // Fix permissions: Android toybox tar doesn't preserve archive permissions
-            // so we fix them explicitly
-            fixRootfsPermissions(rootfsDir)
+            onProgress?.invoke("fixing filesystem permissions")
+            fixRootfsPermissions(rootfsDir, onProgress)
 
             // Always ensure writable directories exist
             File(rootfsDir, "tmp").apply {
@@ -66,7 +87,7 @@ class PRootManager(private val context: Context) {
             File(rootfsDir, "workspace").apply { mkdirs(); setWritable(true, false); setExecutable(true, false) }
             File(rootfsDir, "opt/gama/logs").apply { mkdirs(); setWritable(true, false) }
 
-            // Write fallback startup script (in case rootfs /startup.sh is missing)
+            onProgress?.invoke("writing startup script")
             writeFallbackStartup(rootfsDir)
 
             Log.i(TAG, "Rootfs setup complete")
@@ -77,34 +98,85 @@ class PRootManager(private val context: Context) {
         }
     }
 
-    private fun fixRootfsPermissions(rootfsDir: File) {
+    private fun fixRootfsPermissions(rootfsDir: File, onProgress: ((String) -> Unit)? = null) {
         try {
-            // Toybox tar on Android doesn't preserve permissions,
-            // so everything ends up 0700. Fix with chmod.
             Log.i(TAG, "Fixing rootfs permissions...")
             val runtime = Runtime.getRuntime()
 
-            // Make user rwx, group/other rx (adds world permissions without stripping owner)
-            runtime.exec(arrayOf(
+            onProgress?.invoke("fixing permissions (chmod -R)")
+            execWithTimeout(runtime, arrayOf(
                 "chmod", "-R", "u+rwX,go+rX",
                 rootfsDir.absolutePath
-            )).waitFor()
+            ), "chmod -R", 60)
 
-            // /tmp needs world-writable with sticky bit
-            runtime.exec(arrayOf(
+            onProgress?.invoke("fixing permissions (shell scripts)")
+            makeExecutableBySuffix(rootfsDir, ".sh")
+
+            onProgress?.invoke("fixing permissions (python scripts)")
+            makeExecutableBySuffix(rootfsDir, ".py")
+
+            onProgress?.invoke("fixing permissions (removing AppleDouble files)")
+            removeAppleDoubleFiles(rootfsDir)
+
+            onProgress?.invoke("fixing permissions (/tmp sticky bit)")
+            execWithTimeout(runtime, arrayOf(
                 "chmod", "1777",
                 File(rootfsDir, "tmp").absolutePath
-            )).waitFor()
+            ), "chmod 1777 /tmp", 10)
 
-            // /root should stay private
-            runtime.exec(arrayOf(
+            onProgress?.invoke("fixing permissions (/root private)")
+            execWithTimeout(runtime, arrayOf(
                 "chmod", "700",
                 File(rootfsDir, "root").absolutePath
-            )).waitFor()
+            ), "chmod 700 /root", 10)
 
             Log.i(TAG, "Rootfs permissions fixed")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to fix rootfs permissions", e)
+        }
+    }
+
+    private fun execWithTimeout(runtime: Runtime, cmd: Array<String>, label: String, timeoutSec: Int) {
+        val proc = runtime.exec(cmd)
+        val finished = proc.waitFor(timeoutSec.toLong(), TimeUnit.SECONDS)
+        if (!finished) {
+            Log.w(TAG, "$label timed out after ${timeoutSec}s — destroying")
+            proc.destroyForcibly()
+        } else {
+            val code = proc.exitValue()
+            if (code != 0) {
+                Log.w(TAG, "$label exited with code $code")
+            }
+        }
+    }
+
+    private fun makeExecutableBySuffix(rootfsDir: File, suffix: String) {
+        try {
+            var count = 0
+            rootfsDir.walkTopDown().forEach { file ->
+                if (file.isFile && file.name.endsWith(suffix)) {
+                    file.setExecutable(true, false)
+                    count++
+                }
+            }
+            Log.i(TAG, "Made $count $suffix files executable")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to make $suffix files executable", e)
+        }
+    }
+
+    private fun removeAppleDoubleFiles(rootfsDir: File) {
+        try {
+            var count = 0
+            rootfsDir.walkTopDown().forEach { file ->
+                if (file.isFile && file.name.startsWith("._")) {
+                    file.delete()
+                    count++
+                }
+            }
+            Log.i(TAG, "Removed $count AppleDouble files")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to remove AppleDouble files", e)
         }
     }
 
@@ -281,9 +353,10 @@ class PRootManager(private val context: Context) {
         |mkdir -p /tmp /data /workspace /opt/gama/logs 2>/dev/null
         |[ -f /etc/profile.d/gama-env.sh ] && source /etc/profile.d/gama-env.sh
         |
-        |# Port check function (uses Python since nc may not be available)
+        |# Port check function (uses explicit /usr/bin/python3, not PATH lookup)
+        |PYTHON=/usr/bin/python3
         |check_port() {
-        |  python3 -c "import socket; s=socket.socket(); s.settimeout(2); s.connect(('$1', $2)); s.close()" 2>/dev/null
+        |  ${'$'}{PYTHON} -c "import socket; s=socket.socket(); s.settimeout(2); s.connect(('$1', $2)); s.close()" 2>/dev/null
         |}
         |
         |# ─── Run rootfs startup.sh in background (handles GAMA + bridge) ─
@@ -302,24 +375,13 @@ class PRootManager(private val context: Context) {
         |  sleep 1
         |done
         |
-        |# ─── Fallback: start minimal health endpoint ───────────────────
+        |# ─── Fallback: warn but don't start anything on the port ──────
+        |# The Kotlin FallbackHealthServer (outside PRoot) already returns
+        |# {"status":"ok","mode":"fallback"} for health checks when the
+        |# bridge isn't accessible. Starting another server on the same
+        |# port would conflict with the real bridge when it eventually starts.
         |if ! check_port 127.0.0.1 ${'$'}BACKEND_PORT; then
-        |  echo "[startup] Starting fallback health endpoint on port ${'$'}BACKEND_PORT..."
-        |  python3 -c "
-        |import http.server, json, sys, signal
-        |signal.signal(signal.SIGTERM, lambda *a: sys.exit(0))
-        |signal.signal(signal.SIGINT, lambda *a: sys.exit(0))
-        |class H(http.server.BaseHTTPRequestHandler):
-        |  def do_GET(self):
-        |    self.send_response(200)
-        |    self.send_header('Content-Type', 'application/json')
-        |    self.send_header('Access-Control-Allow-Origin', '*')
-        |    self.end_headers()
-        |    self.wfile.write(json.dumps({'status': 'ok', 'mode': 'fallback'}).encode())
-        |  def log_message(self, *a): pass
-        |http.server.HTTPServer(('0.0.0.0', ${'$'}BACKEND_PORT), H).serve_forever()
-        |" &
-        |  echo "[startup] Fallback health PID: ${'$'}!"
+        |  echo "[startup] WARNING: Bridge not ready on port ${'$'}BACKEND_PORT after 120s"
         |fi
         |
         |# Keep alive

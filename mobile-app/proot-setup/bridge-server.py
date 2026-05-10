@@ -16,10 +16,13 @@ import asyncio
 import json
 import logging
 import os
+import re
 import signal
+import struct
 import sys
 import time
 import uuid
+import zlib
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread, Event
 from urllib.parse import urlparse
@@ -36,6 +39,10 @@ GAMA_WS_URL = f"ws://127.0.0.1:{GAMA_WS_PORT}"
 
 # Thread-safe command queue: HTTP handlers enqueue, WS sender dequeues
 ws_send_queue = asyncio.Queue()
+
+# Reference to the running asyncio event loop (set by BridgeServer._ws_client)
+# Used by _queue_ws_command to send commands from HTTP handler threads
+_running_loop = None
 
 simulation_state = {
     "status": "initializing",
@@ -63,26 +70,153 @@ def extract_png(data):
             return data[:idx + len(iend)]
     return data
 
+# ── GAML experiment extractor ───────────────────────────────────────
+
+_GAML_EXPERIMENT_RE = re.compile(
+    r'^\s*experiment\s+(?:\"([^\"]+)\"|([A-Za-z_]\w*))(?:\s+type:\s*\w+)?',
+    re.MULTILINE,
+)
+
+
+def _extract_experiments(gaml_path):
+    """Parse a .gaml file and return list of experiment names."""
+    try:
+        with open(gaml_path, "r", encoding="utf-8", errors="replace") as f:
+            content = f.read()
+    except (OSError, IOError):
+        return []
+    names = []
+    for m in _GAML_EXPERIMENT_RE.finditer(content):
+        name = m.group(1) or m.group(2)
+        if name:
+            names.append(name)
+    return names
+
+
+def create_placeholder_png(step, total_steps):
+    """Generate a gradient placeholder PNG (stdlib only, no PIL needed)."""
+    width, height = 320, 240
+    raw = b''
+    ratio = step / max(total_steps, 1)
+    for y in range(height):
+        raw += b'\x00'
+        for x in range(width):
+            r = int(255 * ratio)
+            g = int(255 * (1 - ratio))
+            b = int(128 + 64 * (x / width))
+            raw += struct.pack('BBB', r, g, b)
+
+    def png_chunk(ctype, data):
+        body = ctype + data
+        crc = struct.pack('>I', zlib.crc32(body) & 0xffffffff)
+        return struct.pack('>I', len(data)) + body + crc
+
+    ihdr = struct.pack('>IIBBBBB', width, height, 8, 2, 0, 0, 0)
+    png = b'\x89PNG\r\n\x1a\n'
+    png += png_chunk(b'IHDR', ihdr)
+    png += png_chunk(b'IDAT', zlib.compress(raw))
+    png += png_chunk(b'IEND', b'')
+    return png
+
+# ── GAMA workspace paths ────────────────────────────────────────────
+
+GAMA_PLUGINS_DIR = "/opt/gama/headless/plugins"
+GAMA_WORKSPACE_DIR = "/workspace"
+
+
+def _make_model_entry(fpath):
+    """Create model dict from file path, including experiments from .gaml parsing."""
+    fname = os.path.basename(fpath)
+    experiments = _extract_experiments(fpath)
+    return {
+        "path": fpath,
+        "name": fname.replace(".gaml", ""),
+        "file": fname,
+        "experiments": experiments,
+    }
+
+
+def _scan_workspace_models():
+    """Scan GAMA workspace for Eclipse projects containing .gaml files."""
+    models = []
+    if not os.path.isdir(GAMA_WORKSPACE_DIR):
+        log.warning("Workspace dir not found: %s", GAMA_WORKSPACE_DIR)
+        return models
+    try:
+        proj_names = sorted(os.listdir(GAMA_WORKSPACE_DIR))
+    except OSError as e:
+        log.warning("Cannot list workspace dir: %s", e)
+        return models
+    for proj_name in proj_names:
+        proj_dir = os.path.join(GAMA_WORKSPACE_DIR, proj_name)
+        if not os.path.isdir(proj_dir):
+            continue
+        has_project = os.path.isfile(os.path.join(proj_dir, ".project"))
+        base_cat = f"workspace/{proj_name}" if has_project else "workspace"
+        for root, _dirs, files in os.walk(proj_dir):
+            for f in files:
+                if f.endswith(".gaml"):
+                    mdl = _make_model_entry(os.path.join(root, f))
+                    mdl["category"] = base_cat
+                    models.append(mdl)
+    return models
+
+
+def _scan_plugin_models():
+    """Scan GAMA plugin directories for bundled example models."""
+    models = []
+    if not os.path.isdir(GAMA_PLUGINS_DIR):
+        log.warning("Plugins dir not found: %s", GAMA_PLUGINS_DIR)
+        return models
+    try:
+        entries = sorted(os.listdir(GAMA_PLUGINS_DIR))
+    except OSError as e:
+        log.warning("Cannot list plugins dir: %s", e)
+        return models
+    for entry in entries:
+        plugin_dir = os.path.join(GAMA_PLUGINS_DIR, entry)
+        if not os.path.isdir(plugin_dir):
+            continue
+        models_dir = os.path.join(plugin_dir, "models")
+        if not os.path.isdir(models_dir):
+            continue
+        for root, _dirs, files in os.walk(models_dir):
+            for f in files:
+                if f.endswith(".gaml"):
+                    mdl = _make_model_entry(os.path.join(root, f))
+                    rel = os.path.relpath(root, models_dir)
+                    mdl["category"] = f"builtin/{entry}" if rel == "." else f"builtin/{entry}/{rel}"
+                    models.append(mdl)
+    return models
+
+
+# ── HTTP Request Handler ────────────────────────────────────────────
+
 class BridgeHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         log.info("%s %s %s", *args)
 
     def _send_json(self, status_code, data):
+        body = json.dumps(data).encode()
         self.send_response(status_code)
         self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Connection", "close")
         self.end_headers()
-        self.wfile.write(json.dumps(data).encode())
+        self.wfile.write(body)
 
     def _send_png(self, png_bytes):
         self.send_response(200)
         self.send_header("Content-Type", "image/png")
+        self.send_header("Content-Length", str(len(png_bytes)))
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
         self.send_header("Pragma", "no-cache")
         self.send_header("Expires", "0")
+        self.send_header("Connection", "close")
         self.end_headers()
         self.wfile.write(png_bytes)
 
@@ -112,6 +246,10 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 self._handle_job_status(job_id)
             else:
                 self._send_json(404, {"status": "error", "message": "Not found"})
+        elif path == "/api/debug":
+            self._handle_debug()
+        elif path == "/api/models":
+            self._handle_models()
         else:
             self._send_json(404, {"status": "error", "message": "Not found"})
 
@@ -141,7 +279,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
             "gama_connected": simulation_state["connected"],
             "jobs_running": running,
             "frames_cached": len(simulation_state["frames"]),
-            "version": "0.3.0",
+            "version": "0.4.0",
             "mode": "bridge" if HAS_WEBSOCKETS else "standalone",
         })
 
@@ -152,7 +290,6 @@ class BridgeHandler(BaseHTTPRequestHandler):
             reverse=True,
         )
         running = any(j.get("state") in ("running", "starting") for j in jobs_list)
-        # Enrich jobs with frame availability
         for j in jobs_list:
             jid = j.get("id", "")
             j["has_frame"] = jid in simulation_state["frames"]
@@ -192,6 +329,42 @@ class BridgeHandler(BaseHTTPRequestHandler):
         lines = simulation_state["console"].get(job_id, [])
         self._send_json(200, {"status": "ok", "lines": lines})
 
+    def _handle_debug(self):
+        jobs_snapshot = {}
+        for jid, job in simulation_state["jobs"].items():
+            jobs_snapshot[jid] = dict(job)
+        self._send_json(200, {
+            "status": simulation_state["status"],
+            "connected": simulation_state["connected"],
+            "uptime": int(time.time() - simulation_state["start_time"]),
+            "jobs": jobs_snapshot,
+            "frames_cached": len(simulation_state["frames"]),
+            "frame_keys": list(simulation_state["frames"].keys()),
+        })
+
+    def _handle_models(self):
+        """List available GAML models from both workspace projects and plugin bundles."""
+        try:
+            seen = set()
+            all_models = []
+
+            for m in _scan_workspace_models():
+                if m["path"] not in seen:
+                    seen.add(m["path"])
+                    all_models.append(m)
+
+            for m in _scan_plugin_models():
+                if m["path"] not in seen:
+                    seen.add(m["path"])
+                    all_models.append(m)
+
+            all_models.sort(key=lambda m: (m["category"], m["name"]))
+            log.info("Models: found %d", len(all_models))
+            self._send_json(200, {"status": "ok", "total": len(all_models), "models": all_models})
+        except Exception as e:
+            log.exception("Failed to scan models")
+            self._send_json(200, {"status": "error", "message": str(e), "total": 0, "models": []})
+
     def _handle_start(self, data):
         job_id = data.get("job_id", uuid.uuid4().hex[:8])
         model = data.get("model", "")
@@ -209,57 +382,93 @@ class BridgeHandler(BaseHTTPRequestHandler):
         }
         simulation_state["jobs"][job_id] = job
         simulation_state["console"][job_id] = []
-        log.info("Job %s: queued (model=%s, experiment=%s)", job_id, model, experiment)
+        log.info("Job %s: created model=%s experiment=%s steps=%s", job_id, model, experiment, steps)
 
-        # Queue load command for GAMA
-        load_cmd = {
-            "type": "load",
-            "model": model if model else "",
-            "experiment": experiment if experiment else "",
-            "exp_id": job_id,
-        }
-        _queue_ws_command(load_cmd)
-
-        # Queue play command (sent after load completes)
-        play_cmd = {
-            "type": "play",
-            "exp_id": job_id,
-            "nb_step": steps,
-        }
-        _queue_ws_command(play_cmd)
-
-        self._send_json(200, {
-            "status": "ok",
-            "job_id": job_id,
-            "message": "Simulation command queued to GAMA",
-        })
+        if simulation_state["connected"] and model and experiment:
+            job["state"] = "loading"
+            log.info("Queueing WS load for job %s", job_id)
+            _queue_ws_command({
+                "type": "load",
+                "model": model,
+                "experiment": experiment,
+                "exp_id": job_id,
+                "console": True,
+                "status": False,
+                "dialog": False,
+                "runtime": True,
+            })
+            self._send_json(200, {
+                "status": "ok",
+                "job_id": job_id,
+                "mode": "gama-ws",
+                "message": f"Simulation loading via GAMA WS ({model}#{experiment})",
+            })
+        else:
+            reason = "WS not connected" if not simulation_state["connected"] else "missing model/experiment"
+            log.info("GAMA WS not available (%s), fallback for job %s", reason, job_id)
+            self._simulate_job_progress(job_id, steps)
+            self._send_json(200, {
+                "status": "ok",
+                "job_id": job_id,
+                "mode": "fallback",
+                "message": f"Simulation started (fallback, model: {model})",
+            })
 
     def _handle_stop(self, data):
         job_id = data.get("job_id")
         if job_id:
-            cmd = {"type": "stop", "exp_id": job_id}
-            _queue_ws_command(cmd)
+            if simulation_state["connected"]:
+                job = simulation_state["jobs"].get(job_id)
+                gama_exp = (job or {}).get("gama_exp_id", job_id)
+                _queue_ws_command({"type": "stop", "exp_id": gama_exp})
             if job_id in simulation_state["jobs"]:
                 simulation_state["jobs"][job_id]["state"] = "stopped"
             log.info("Stop queued for job %s", job_id)
             self._send_json(200, {"status": "ok", "message": f"Stop queued for {job_id}"})
         else:
             for jid in list(simulation_state["jobs"].keys()):
-                cmd = {"type": "stop", "exp_id": jid}
-                _queue_ws_command(cmd)
+                job = simulation_state["jobs"][jid]
+                gama_exp = job.get("gama_exp_id", jid)
+                if simulation_state["connected"]:
+                    _queue_ws_command({"type": "stop", "exp_id": gama_exp})
                 simulation_state["jobs"][jid]["state"] = "stopped"
             log.info("Stop queued for all jobs")
             self._send_json(200, {"status": "ok", "message": "All jobs stopped"})
 
+    def _simulate_job_progress(self, job_id, total_steps):
+        """Simulate job progress in a background thread (fallback when GAMA WS unavailable)."""
+        def _run():
+            import time as _time
+            for step in range(1, total_steps + 1):
+                _time.sleep(0.2)
+                if job_id in simulation_state["jobs"]:
+                    job = simulation_state["jobs"][job_id]
+                    if job.get("state") == "stopped":
+                        return
+                    job["progress"] = int((step / total_steps) * 100)
+                    job["state"] = "running" if step < total_steps else "completed"
+                    job["current_step"] = step
+                try:
+                    simulation_state["frames"][job_id] = create_placeholder_png(step, total_steps)
+                except Exception:
+                    log.exception("Failed to generate placeholder frame for step %d", step)
+            log.info("Job %s completed (local fallback)", job_id)
+
+        Thread(target=_run, daemon=True).start()
+
 
 def _queue_ws_command(cmd):
     """Thread-safe: enqueue a command dict for the WS sender coroutine."""
-    try:
-        loop = asyncio.get_running_loop()
-        asyncio.run_coroutine_threadsafe(ws_send_queue.put(cmd), loop)
-    except RuntimeError:
-        log.warning("No running event loop, command not sent: %s", cmd.get("type"))
+    global _running_loop
+    if _running_loop is not None and _running_loop.is_running():
+        asyncio.run_coroutine_threadsafe(ws_send_queue.put(cmd), _running_loop)
+        return True
+    else:
+        log.warning("WS not connected, command not sent: %s", cmd.get("type"))
+        return False
 
+
+# ── Bridge Server (HTTP + WS client) ────────────────────────────────
 
 class BridgeServer:
     def __init__(self):
@@ -300,6 +509,8 @@ class BridgeServer:
             self.http_server.shutdown()
 
     async def _ws_client(self):
+        global _running_loop
+        _running_loop = asyncio.get_running_loop()
         retry_delay = 2
         max_delay = 30
 
@@ -317,10 +528,8 @@ class BridgeServer:
                     self.ws_connected.set()
                     retry_delay = 2
 
-                    # Start sender task for queued commands
                     sender_task = asyncio.create_task(self._ws_sender(ws))
 
-                    # Read messages from GAMA
                     async for message in ws:
                         self._handle_ws_message(message)
 
@@ -333,6 +542,12 @@ class BridgeServer:
                 log.debug("WS reconnect in %ds: %s", retry_delay, e)
                 await asyncio.sleep(retry_delay)
                 retry_delay = min(retry_delay * 1.5, max_delay)
+            except Exception as e:
+                log.warning("WS client unexpected error: %s", e)
+                simulation_state["connected"] = False
+                self._ws = None
+                _running_loop = None
+                return
 
     async def _ws_sender(self, ws):
         """Read commands from the queue and send them to GAMA via WebSocket."""
@@ -365,60 +580,88 @@ class BridgeServer:
             log.info("GAMA WS handshake complete: %s", data)
 
         elif msg_type == "CommandExecutedSuccessfully":
-            exp_id = data.get("exp_id", "")
-            cmd_type = data.get("command", "")
-            content = data.get("content", {})
-            log.info("CommandExecuted: %s for exp=%s", cmd_type, exp_id)
+            # GAMA CommandResponse serializes as:
+            # {"type": "...", "content": ..., "command": {original_params}}
+            # The original params include our exp_id (job_id)
+            command_params = data.get("command", {})
+            if not isinstance(command_params, dict):
+                command_params = {}
+            bridge_exp_id = command_params.get("exp_id", "")
+            cmd_type = command_params.get("type", "")
+            # content is the GAMA internal exp_id from LoadCommand
+            gama_content = data.get("content", "")
+            log.info("CommandExecuted: %s for bridge_exp=%s (gama_content=%s)",
+                     cmd_type, bridge_exp_id, gama_content)
 
-            if exp_id and exp_id in simulation_state["jobs"]:
-                job = simulation_state["jobs"][exp_id]
+            if bridge_exp_id and bridge_exp_id in simulation_state["jobs"]:
+                job = simulation_state["jobs"][bridge_exp_id]
                 if cmd_type == "load":
+                    gama_exp_id = str(gama_content) if gama_content else bridge_exp_id
                     job["state"] = "loaded"
-                    job["exp_id"] = content.get("exp_id", exp_id)
+                    job["gama_exp_id"] = gama_exp_id
                     job["progress"] = 0
+                    log.info("Load complete for %s → gama_exp=%s, queuing play",
+                             bridge_exp_id, gama_exp_id)
+                    _queue_ws_command({"type": "play", "exp_id": gama_exp_id})
                 elif cmd_type == "play":
                     job["state"] = "running"
+                    log.info("Play complete for %s", bridge_exp_id)
                 elif cmd_type == "stop":
                     job["state"] = "stopped"
+                    log.info("Stop complete for %s", bridge_exp_id)
 
         elif msg_type == "SimulationEnded":
-            exp_id = data.get("exp_id", "")
-            if exp_id and exp_id in simulation_state["jobs"]:
-                simulation_state["jobs"][exp_id]["state"] = "completed"
-                simulation_state["jobs"][exp_id]["progress"] = 100
-                log.info("Simulation %s completed", exp_id)
+            # GamaServerMessage: {"type": "SimulationEnded", "content": ..., "exp_id": "..."}
+            gama_exp_id = data.get("exp_id", "")
+            # Map gama_exp_id back to our bridge job_id
+            for jid, job in list(simulation_state["jobs"].items()):
+                if job.get("gama_exp_id") == gama_exp_id:
+                    job["state"] = "completed"
+                    job["progress"] = 100
+                    log.info("Simulation %s (bridge job %s) completed", gama_exp_id, jid)
+                    break
 
         elif msg_type == "SimulationOutput":
-            exp_id = data.get("exp_id", "")
+            gama_exp_id = data.get("exp_id", "")
             text = data.get("content", str(data))
-            if exp_id:
-                lines = simulation_state["console"].setdefault(exp_id, [])
-                lines.append(text)
+            # Map gama_exp_id to bridge job_id for console storage
+            for jid, job in simulation_state["jobs"].items():
+                if job.get("gama_exp_id") == gama_exp_id:
+                    lines = simulation_state["console"].setdefault(jid, [])
+                    lines.append(text)
+                    break
             else:
-                log.info("GAMA output: %s", text)
+                log.info("GAMA output (unmapped): %s", text)
 
         elif msg_type == "SimulationStatus":
-            exp_id = data.get("exp_id", "")
+            gama_exp_id = data.get("exp_id", "")
             status_text = data.get("content", "")
-            if exp_id and exp_id in simulation_state["jobs"]:
-                simulation_state["jobs"][exp_id]["status_msg"] = status_text
-            log.debug("Status[%s]: %s", exp_id, status_text)
+            for jid, job in simulation_state["jobs"].items():
+                if job.get("gama_exp_id") == gama_exp_id:
+                    job["status_msg"] = status_text
+                    break
+            log.debug("Status[%s]: %s", gama_exp_id, status_text)
 
         elif msg_type == "SimulationError":
-            exp_id = data.get("exp_id", "")
+            gama_exp_id = data.get("exp_id", "")
             err = data.get("content", str(data))
-            if exp_id and exp_id in simulation_state["jobs"]:
-                simulation_state["jobs"][exp_id]["state"] = "error"
-                simulation_state["jobs"][exp_id]["error"] = err
-                log.error("Simulation error [%s]: %s", exp_id, err)
+            for jid, job in simulation_state["jobs"].items():
+                if job.get("gama_exp_id") == gama_exp_id:
+                    job["state"] = "error"
+                    job["error"] = err
+                    log.error("Simulation error [%s bridge=%s]: %s", gama_exp_id, jid, err)
+                    break
 
         elif msg_type == "UnableToExecuteRequest":
-            exp_id = data.get("exp_id", "")
+            command_params = data.get("command", {})
+            if not isinstance(command_params, dict):
+                command_params = {}
+            bridge_exp_id = command_params.get("exp_id", "")
             err = data.get("content", str(data))
-            log.warning("GAMA unable to execute [%s]: %s", exp_id, err)
-            if exp_id and exp_id in simulation_state["jobs"]:
-                simulation_state["jobs"][exp_id]["state"] = "error"
-                simulation_state["jobs"][exp_id]["error"] = err
+            log.warning("GAMA unable to execute [%s]: %s", bridge_exp_id, err)
+            if bridge_exp_id and bridge_exp_id in simulation_state["jobs"]:
+                simulation_state["jobs"][bridge_exp_id]["state"] = "error"
+                simulation_state["jobs"][bridge_exp_id]["error"] = str(err)
 
         else:
             log.debug("Unhandled WS message type: %s", msg_type)
@@ -428,7 +671,6 @@ class BridgeServer:
         if not data or len(data) < 8:
             return
 
-        # Check for PNG signature
         if data[:4] != b'\x89PNG':
             log.debug("Binary message (non-PNG, %d bytes)", len(data))
             return
@@ -438,38 +680,50 @@ class BridgeServer:
             log.debug("Binary message too small for PNG (%d bytes)", len(png))
             return
 
-        # Extract exp_id from the trailing marker bytes after PNG IEND
-        # Format from GamaServerExperimentJob: [PNG][0x00 marker][index byte]
-        # After IEND, the remaining bytes are [marker][index][?]
+        # GAMA sends: [PNG bytes][0x00][exp_id ascii bytes]
         extra = data[len(png):]
-        exp_id = None
 
-        if len(extra) >= 2:
-            # Try to find which experiment this belongs to
-            # We know the PNG came from some running experiment
+        # Try to extract exp_id from trailing marker bytes
+        gama_exp_id = None
+        if len(extra) >= 2 and extra[0:1] == b'\x00':
+            try:
+                gama_exp_id = extra[1:].decode('ascii').rstrip('\x00').strip()
+            except (UnicodeDecodeError, ValueError):
+                pass
+
+        # Map to a bridge job
+        bridge_job_id = None
+        if gama_exp_id:
+            for jid, job in simulation_state["jobs"].items():
+                if job.get("gama_exp_id") == gama_exp_id:
+                    bridge_job_id = jid
+                    break
+
+        if not bridge_job_id:
+            # Fallback: pick first running job (for GAMA WS that don't embed exp_id)
             for jid in list(simulation_state["jobs"].keys()):
                 job = simulation_state["jobs"][jid]
                 if job.get("state") == "running":
-                    exp_id = jid
+                    bridge_job_id = jid
                     break
 
-        if exp_id:
-            simulation_state["frames"][exp_id] = png
-            step = simulation_state["jobs"][exp_id].get("current_step", 0)
-            simulation_state["jobs"][exp_id]["current_step"] = step + 1
-            progress = simulation_state["jobs"][exp_id].get("steps", 100)
-            if progress > 0:
-                pct = min(int((step + 1) / progress * 100), 100)
-                simulation_state["jobs"][exp_id]["progress"] = pct
-            log.debug("Frame captured for %s (%d bytes, step %d)", exp_id, len(png), step + 1)
+        if bridge_job_id:
+            simulation_state["frames"][bridge_job_id] = png
+            job = simulation_state["jobs"][bridge_job_id]
+            step = job.get("current_step", 0)
+            job["current_step"] = step + 1
+            total = job.get("steps", 100)
+            if total > 0:
+                pct = min(int((step + 1) / total * 100), 100)
+                job["progress"] = pct
+            log.debug("Frame for job %s (%d bytes, step %d)", bridge_job_id, len(png), step + 1)
         else:
-            # Store as unassigned frame if we can't determine the exp
             simulation_state["frames"]["_latest"] = png
-            log.debug("Frame captured (unassigned, %d bytes)", len(png))
+            log.debug("Frame captured (unmapped, %d bytes)", len(png))
 
 
 def main():
-    log.info("GAMA Mobile Bridge Server v0.3.0")
+    log.info("GAMA Mobile Bridge Server v0.4.0")
     log.info("Backend port: %d", BACKEND_PORT)
     log.info("GAMA WS port: %d", GAMA_WS_PORT)
 

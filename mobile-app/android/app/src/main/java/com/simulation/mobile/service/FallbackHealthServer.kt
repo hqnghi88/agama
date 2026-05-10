@@ -144,9 +144,14 @@ class FallbackHealthServer(private val listenPort: Int, private val backendPort:
             val responseHeaderBuilder = StringBuilder()
             responseHeaderBuilder.append("HTTP/1.1 $statusCode $statusText\r\n")
             for ((key, value) in responseHeaders) {
+                if (key.equals("Connection", ignoreCase = true)) continue
+                if (key.equals("Transfer-Encoding", ignoreCase = true)) continue
                 responseHeaderBuilder.append("$key: $value\r\n")
             }
+            val bodyLen = (responseBody?.size ?: 0).toString()
+            responseHeaderBuilder.append("Content-Length: $bodyLen\r\n")
             responseHeaderBuilder.append("Connection: close\r\n")
+            responseHeaderBuilder.append("Access-Control-Allow-Origin: *\r\n")
             responseHeaderBuilder.append("\r\n")
 
             clientOut.write(responseHeaderBuilder.toString().toByteArray(Charsets.UTF_8))
@@ -236,6 +241,16 @@ class FallbackHealthServer(private val listenPort: Int, private val backendPort:
 
             if (path == "/api/health") {
                 val fbBody = """{"status":"ok","mode":"fallback"}"""
+                val fbHeaders = mapOf(
+                    "Content-Type" to "application/json",
+                    "Access-Control-Allow-Origin" to "*",
+                    "Content-Length" to fbBody.toByteArray(Charsets.UTF_8).size.toString()
+                )
+                return Triple(200, fbHeaders, fbBody.toByteArray(Charsets.UTF_8))
+            }
+
+            if (path == "/api/models") {
+                val fbBody = """{"status":"ok","total":0,"models":[]}"""
                 val fbHeaders = mapOf(
                     "Content-Type" to "application/json",
                     "Access-Control-Allow-Origin" to "*",

@@ -1,5 +1,5 @@
 export const BASE_URL = 'http://127.0.0.1:8080';
-const REQUEST_TIMEOUT = 5000;
+const REQUEST_TIMEOUT = 20000;
 
 interface ApiResponse {
   status: string;
@@ -15,6 +15,20 @@ interface SimulationStatus {
     [key: string]: unknown;
   }>;
   uptime: number;
+}
+
+interface GamlModel {
+  path: string;
+  name: string;
+  file: string;
+  category: string;
+  experiments: string[];
+}
+
+interface ModelsResponse {
+  status: string;
+  total: number;
+  models: GamlModel[];
 }
 
 class ApiError extends Error {
@@ -81,9 +95,11 @@ export const api = {
   stopSimulation: (jobId?: string) =>
     request<ApiResponse>('POST', '/api/simulation/stop', {job_id: jobId}),
 
+  getModels: () => request<ModelsResponse>('GET', '/api/models'),
+
   getFrameUrl: (jobId: string, ts?: number): string =>
     `${BASE_URL}/api/simulation/frame/${jobId}?_=${ts ?? Date.now()}`,
 };
 
-export type {ApiResponse, SimulationStatus};
+export type {ApiResponse, SimulationStatus, GamlModel, ModelsResponse};
 export {BASE_URL, ApiError};

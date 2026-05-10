@@ -1,11 +1,16 @@
 import {create} from 'zustand';
-import {api, type SimulationStatus} from '../services/api';
+import {api, type SimulationStatus, type GamlModel} from '../services/api';
 
 interface JobInfo {
   id: string;
   state: string;
   progress: number;
   name?: string;
+  model?: string;
+  has_frame?: boolean;
+  current_step?: number;
+  steps?: number;
+  experiment?: string;
   [key: string]: unknown;
 }
 
@@ -18,15 +23,26 @@ interface LogEntry {
 interface SimulationState {
   backendStatus: 'stopped' | 'starting' | 'running' | 'error';
   backendPid: number | null;
+  backendProgress: string;
   backendUptime: number;
   connected: boolean;
   running: boolean;
   jobs: JobInfo[];
   logs: LogEntry[];
   error: string | null;
+  models: GamlModel[];
+  selectedModel: GamlModel | null;
+  selectedExperiment: string | null;
+  loadingModels: boolean;
+  modelsFetched: boolean;
 
   checkHealth: () => Promise<void>;
+  checkNativeStatus: (nativeStatus: string, nativeProgress?: string) => void;
   checkStatus: () => Promise<void>;
+  fetchModels: () => Promise<void>;
+  clearModels: () => void;
+  setSelectedModel: (model: GamlModel | null) => void;
+  setSelectedExperiment: (experiment: string | null) => void;
   startSimulation: (config?: Record<string, unknown>) => Promise<string | null>;
   stopSimulation: (jobId?: string) => Promise<void>;
   setBackendStatus: (status: SimulationState['backendStatus']) => void;
@@ -44,12 +60,18 @@ const initialLog: LogEntry = {
 export const useSimulationStore = create<SimulationState>((set, get) => ({
   backendStatus: 'stopped',
   backendPid: null,
+  backendProgress: '',
   backendUptime: 0,
   connected: false,
   running: false,
   jobs: [],
   logs: [initialLog],
   error: null,
+  models: [],
+  selectedModel: null,
+  selectedExperiment: null,
+  loadingModels: false,
+  modelsFetched: false,
 
   checkHealth: async () => {
     try {
@@ -74,6 +96,21 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
       if (wasConnected) {
         get().addLog('warn', 'Backend disconnected');
       }
+    }
+  },
+
+  checkNativeStatus: (nativeStatus: string, nativeProgress?: string) => {
+    const state = get();
+    if (nativeProgress !== undefined) {
+      set({backendProgress: nativeProgress});
+    }
+    if (!state.connected && nativeStatus === 'running') {
+      set({backendStatus: 'running', error: null, backendProgress: ''});
+    } else if (nativeStatus.startsWith('error')) {
+      const msg = nativeStatus.replace(/^error:\s*/, '');
+      set({backendStatus: 'error', error: msg, backendProgress: ''});
+    } else if (nativeStatus === 'initializing' || nativeStatus === 'starting') {
+      set({backendStatus: 'starting', error: null});
     }
   },
 
@@ -105,10 +142,49 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
     }
   },
 
+  fetchModels: async () => {
+    set({loadingModels: true});
+    try {
+      const response = await api.getModels();
+      const list = response.models || [];
+      set({models: list, loadingModels: false, modelsFetched: list.length > 0});
+      get().addLog('info', `Loaded ${response.total} model(s)`);
+    } catch (err) {
+      set({loadingModels: false});
+      get().addLog('warn', `Failed to load models: ${(err as Error).message}`);
+    }
+  },
+
+  setSelectedModel: (model) => {
+    const experiment = model?.experiments?.[0] ?? null;
+    set({selectedModel: model, selectedExperiment: experiment});
+    if (model) {
+      get().addLog('info', `Selected model: ${model.name}`);
+    }
+  },
+
+  setSelectedExperiment: (experiment) => {
+    set({selectedExperiment: experiment});
+  },
+
   startSimulation: async (config) => {
     try {
-      get().addLog('info', 'Starting simulation...');
-      const response = await api.startSimulation(config);
+      const selected = get().selectedModel;
+      const experiment = get().selectedExperiment;
+      if (!selected) {
+        get().addLog('error', 'No model selected');
+        return null;
+      }
+      if (!experiment) {
+        get().addLog('error', 'No experiment selected');
+        return null;
+      }
+      get().addLog('info', `Starting simulation: ${selected.name}#${experiment}`);
+      const response = await api.startSimulation({
+        model: selected.path,
+        experiment,
+        ...config,
+      });
       const jobId = response.job_id as string;
       get().addLog('info', `Simulation started: ${jobId}`);
       await get().checkStatus();
@@ -150,6 +226,10 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
     }));
   },
 
+  clearModels: () => {
+    set({models: [], selectedModel: null, selectedExperiment: null, modelsFetched: false});
+  },
+
   clearLogs: () => {
     set({logs: []});
   },
@@ -158,11 +238,17 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
     set({
       backendStatus: 'stopped',
       backendPid: null,
+      backendProgress: '',
       backendUptime: 0,
       connected: false,
       running: false,
       jobs: [],
       error: null,
+      models: [],
+      selectedModel: null,
+      selectedExperiment: null,
+      loadingModels: false,
+      modelsFetched: false,
     });
   },
 }));

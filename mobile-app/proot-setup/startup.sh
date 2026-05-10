@@ -11,8 +11,9 @@ export BACKEND_PORT=${BACKEND_PORT:-8080}
 export GAMA_WS_PORT=${GAMA_WS_PORT:-6868}
 
 # Port check function (uses Python since nc may not be available)
+PYTHON=/usr/bin/python3
 check_port() {
-  python3 -c "import socket; s=socket.socket(); s.settimeout(2); s.connect(('$1', $2)); s.close()" 2>/dev/null
+  ${PYTHON} -c "import socket; s=socket.socket(); s.settimeout(2); s.connect(('$1', $2)); s.close()" 2>/dev/null
 }
 
 echo "[rootfs] GAMA Mobile rootfs startup"
@@ -34,32 +35,16 @@ else
     echo "[rootfs] GAMA headless product not found"
 fi
 
-# Start GAMA Headless (if available)
-if [ "${GAMA_AVAILABLE}" = true ]; then
-    echo "[rootfs] Starting GAMA headless WebSocket server on port ${GAMA_WS_PORT}..."
-    /opt/gama/gama-launcher.sh \
-        > /opt/gama/logs/gama-stdout.log 2> /opt/gama/logs/gama-stderr.log &
-    GAMA_PID=$!
-    echo "[rootfs] GAMA PID: ${GAMA_PID}"
-
-    echo "[rootfs] Waiting for GAMA WebSocket server..."
-    for i in $(seq 1 120); do
-        check_port 127.0.0.1 ${GAMA_WS_PORT} && echo "[rootfs] GAMA WebSocket ready (attempt ${i})" && break
-        [ $i -eq 120 ] && echo "[rootfs] WARNING: GAMA WebSocket not detected"
-        sleep 1
-    done
-fi
-
 # Install websockets for bridge<->GAMA connectivity
-python3 -c "import websockets" 2>/dev/null || pip3 install -q websockets 2>/dev/null || true
+${PYTHON} -c "import websockets" 2>/dev/null || ${PYTHON} -m pip install -q websockets 2>/dev/null || true
 
-# Start bridge server (if port 8080 is free)
+# Start bridge server FIRST so the health proxy can reach it immediately
 if check_port 127.0.0.1 ${BACKEND_PORT}; then
-    echo "[rootfs] Port ${BACKEND_PORT} already in use (health endpoint active), skipping bridge"
+    echo "[rootfs] Port ${BACKEND_PORT} already in use, skipping bridge"
 else
     echo "[rootfs] Starting HTTP bridge server on port ${BACKEND_PORT}..."
     if [ -f "${GAMA_HOME}/bridge-server.py" ]; then
-        python3 "${GAMA_HOME}/bridge-server.py" \
+        ${PYTHON} "${GAMA_HOME}/bridge-server.py" \
             > /opt/gama/logs/bridge.log 2>&1 &
         BRIDGE_PID=$!
         echo "[rootfs] Bridge PID: ${BRIDGE_PID} (Python)"
@@ -79,6 +64,22 @@ else
             sleep 1
         done
     fi
+fi
+
+# Start GAMA Headless in background (non-blocking - bridge already running)
+if [ "${GAMA_AVAILABLE}" = true ]; then
+    echo "[rootfs] Starting GAMA headless WebSocket server on port ${GAMA_WS_PORT}..."
+    /opt/gama/gama-launcher.sh \
+        > /opt/gama/logs/gama-stdout.log 2> /opt/gama/logs/gama-stderr.log &
+    GAMA_PID=$!
+    echo "[rootfs] GAMA PID: ${GAMA_PID}"
+
+    echo "[rootfs] Waiting for GAMA WebSocket server..."
+    for i in $(seq 1 120); do
+        check_port 127.0.0.1 ${GAMA_WS_PORT} && echo "[rootfs] GAMA WebSocket ready (attempt ${i})" && break
+        [ $i -eq 120 ] && echo "[rootfs] WARNING: GAMA WebSocket not detected"
+        sleep 1
+    done
 fi
 
 echo "[rootfs] Backend initialization complete"

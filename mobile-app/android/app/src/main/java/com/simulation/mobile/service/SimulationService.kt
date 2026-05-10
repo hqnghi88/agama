@@ -29,6 +29,9 @@ class SimulationService : Service() {
         var backendStatus: String = "stopped"
             private set
         @Volatile
+        var backendProgress: String = ""
+            private set
+        @Volatile
         var backendPid: Int = -1
             private set
     }
@@ -76,7 +79,10 @@ class SimulationService : Service() {
                 workspaceDir.mkdirs()
 
                 prootManager?.let { pm ->
-                    val success = pm.setupRootfs(rootfsDir)
+                    val success = pm.setupRootfs(rootfsDir) { stage ->
+                        backendProgress = stage
+                        updateNotification(stage.replaceFirstChar { it.uppercase() })
+                    }
                     if (!success) {
                         Log.e(TAG, "Failed to setup rootfs")
                         backendStatus = "error: rootfs setup failed"
@@ -84,11 +90,13 @@ class SimulationService : Service() {
                         return@Thread
                     }
 
+                    backendProgress = ""
                     // Start proxy server on port 8080 BEFORE PRoot.
                     // Proxies API calls to the real guest backend on port 8081.
                     // Falls back to {"status":"ok","mode":"fallback"} for health checks
                     // when the guest backend is not yet ready.
                     backendStatus = "starting"
+                    backendProgress = "Starting proxy server..."
                     updateNotification("Starting proxy server...")
                     fallbackServer = FallbackHealthServer(BACKEND_PORT, GUEST_BACKEND_PORT)
                     val fallbackStarted = fallbackServer!!.start()
@@ -96,15 +104,19 @@ class SimulationService : Service() {
                         Log.i(TAG, "Proxy server started on 127.0.0.1:$BACKEND_PORT -> 127.0.0.1:$GUEST_BACKEND_PORT")
                         backendStatus = "running"
                         backendPid = -1
+                        backendProgress = "Backend running on port $BACKEND_PORT"
                         updateNotification("Backend running on port $BACKEND_PORT")
+                        backendProgress = "Starting Linux container..."
+                        updateNotification("Starting Linux container...")
+                        pm.startPRoot(rootfsDir, workspaceDir, GUEST_BACKEND_PORT) { pid ->
+                            backendPid = pid
+                            backendProgress = "PRoot backend started with PID $pid"
+                            Log.i(TAG, "PRoot backend started with PID $pid")
+                        }
                     } else {
-                        Log.w(TAG, "Proxy server failed to start")
-                    }
-
-                    updateNotification("Starting Linux container...")
-                    pm.startPRoot(rootfsDir, workspaceDir, GUEST_BACKEND_PORT) { pid ->
-                        backendPid = pid
-                        Log.i(TAG, "PRoot backend started with PID $pid")
+                        Log.e(TAG, "Proxy server failed to start")
+                        backendStatus = "error: proxy server failed to start (port $BACKEND_PORT in use?)"
+                        isRunning.set(false)
                     }
                 }
             } catch (e: Exception) {
