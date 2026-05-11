@@ -4,6 +4,7 @@ import android.content.Intent
 import android.util.Log
 import com.facebook.react.bridge.*
 import com.simulation.mobile.service.SimulationService
+import com.simulation.mobile.vnc.VncView
 
 class SimulationModule(reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext) {
@@ -73,6 +74,14 @@ class SimulationModule(reactContext: ReactApplicationContext) :
         } catch (e: Exception) {
             Log.e(TAG, "Failed to open VNC viewer", e)
             promise.reject("VNC_ERROR", e.message)
+        }
+    }
+
+    @ReactMethod
+    fun toggleKeyboard() {
+        VncView.currentInstance?.let { view ->
+            Log.i(TAG, "Toggling keyboard on VncView")
+            view.toggleKeyboard()
         }
     }
 

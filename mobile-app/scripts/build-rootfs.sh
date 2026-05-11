@@ -78,17 +78,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     xvfb \
     x11-utils \
     xfonts-base \
-    fluxbox \
+    openbox \
     # GTK3 runtime for GAMA full GUI (./Gama binary requires libgtk-3.so.0)
     libgtk-3-0 \
     # Additional X11/GL deps
     libxdamage1 \
     libxcomposite1 \
     libxrandr2 \
+    libxtst6 \
+    libxrender1 \
+    libfontconfig1 \
+    # Vulkan/Zink for GPU-accelerated OpenGL
+    mesa \
+    libvulkan1 \
     # System utilities
     procps \
     iproute2 \
     netcat-openbsd \
+    dbus-x11 \
     # Python for bridge server
     python3 \
     python3-pip \

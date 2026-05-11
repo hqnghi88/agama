@@ -1,5 +1,5 @@
-import React, {useState, useEffect, useRef} from 'react';
-import {View, Text, StyleSheet, DeviceEventEmitter, requireNativeComponent, BackHandler} from 'react-native';
+import React, {useState, useEffect, useRef, useCallback} from 'react';
+import {View, Text, StyleSheet, DeviceEventEmitter, requireNativeComponent, BackHandler, TouchableOpacity, NativeModules} from 'react-native';
 
 interface VncScreenProps {
   onBack: () => void;
@@ -17,6 +17,10 @@ const VncScreen: React.FC<VncScreenProps> = ({onBack}) => {
   const [vncState, setVncState] = useState<VncState>('connecting');
   const connectedRef = useRef(false);
   const listenerRef = useRef<any>(null);
+
+  const toggleKeyboard = useCallback(() => {
+    NativeModules.SimulationModule.toggleKeyboard();
+  }, []);
 
   useEffect(() => {
     listenerRef.current = DeviceEventEmitter.addListener('VncStateChange', (event: {state: string}) => {
@@ -61,6 +65,11 @@ const VncScreen: React.FC<VncScreenProps> = ({onBack}) => {
           </View>
         </View>
       )}
+      <TouchableOpacity style={styles.kbdButton} onPress={toggleKeyboard} activeOpacity={0.6}>
+        <View style={styles.kbdInner}>
+          <Text style={styles.kbdIcon}>⌨</Text>
+        </View>
+      </TouchableOpacity>
     </View>
   );
 };
@@ -83,6 +92,32 @@ const styles = StyleSheet.create({
   vncView: {
     flex: 1,
     backgroundColor: '#000000',
+  },
+  kbdButton: {
+    position: 'absolute',
+    bottom: 28,
+    right: 28,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(30, 41, 59, 0.85)',
+    borderWidth: 1,
+    borderColor: 'rgba(148, 163, 184, 0.3)',
+    elevation: 8,
+    zIndex: 9999,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 4},
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+  },
+  kbdInner: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  kbdIcon: {
+    color: '#e2e8f0',
+    fontSize: 22,
   },
 });
 

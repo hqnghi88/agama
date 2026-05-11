@@ -373,13 +373,14 @@ class PRootManager(private val context: Context) {
         |echo "[startup] GAMA Mobile VNC starting"
         |echo "[startup] Java: $(java -version 2>&1 | head -1 2>/dev/null || echo 'not found')"
         |
-        |mkdir -p /tmp /data /data/GamaWorkspace /workspace /opt/gama/logs /tmp/.X11-unix /dev/shm 2>/dev/null
-        |chmod 1777 /tmp /tmp/.X11-unix /dev/shm 2>/dev/null || true
-        |chmod 777 /workspace /data /data/GamaWorkspace /opt/gama/logs 2>/dev/null || true
+        |mkdir -p /tmp /data /workspace /opt/gama/logs /tmp/.X11-unix 2>/dev/null
+        |chmod 1777 /tmp /tmp/.X11-unix 2>/dev/null || true
+        |chmod 777 /workspace /data /opt/gama/logs 2>/dev/null || true
         |
         |# ─── Start D-Bus (required by X11 and GTK) ─
-        |mkdir -p /run/dbus /var/run/dbus 2>/dev/null
-        |dbus-daemon --system 2>/dev/null || dbus-daemon --system --fork 2>/dev/null || true
+        |mkdir -p /run/dbus /var/run/dbus /dev/shm 2>/dev/null
+        |chmod 777 /dev/shm 2>/dev/null || true
+        |service dbus start 2>/dev/null || dbus-daemon --system --fork 2>/dev/null || true
         |echo "[startup] D-Bus status: $(pgrep dbus-daemon >/dev/null 2>&1 && echo 'OK' || echo 'FAILED')"
         |
 
@@ -437,19 +438,9 @@ class PRootManager(private val context: Context) {
         |  sleep 1
         |done
         |
-        |# ─── Install fbsetbg (fluxbox bg setter) via apt, fall back to shim ─
-        |apt-get update -qq 2>/dev/null && apt-get install -y -qq fbautostart 2>/dev/null || {
-        |  echo '#!/bin/bash' > /usr/local/bin/fbsetbg
-        |  echo 'true' >> /usr/local/bin/fbsetbg
-        |  chmod +x /usr/local/bin/fbsetbg
-        |}
-        |
-        |# ─── Clean stale workspace metadata (prevent GAMA/Eclipse lock errors) ─
-        |rm -f /data/GamaWorkspace/.metadata/.lock 2>/dev/null || true
-        |
-        |# ─── Start fluxbox (window manager) ─
-        |echo "[startup] Starting fluxbox..."
-        |fluxbox &>/opt/gama/logs/fluxbox.log 2>&1 &
+        |# ─── Start openbox (window manager) ─
+        |echo "[startup] Starting openbox..."
+        |openbox &>/opt/gama/logs/openbox.log 2>&1 &
         |
         |# ─── Start GAMA GUI ─
         |GAMA_HOME=/opt/gama
