@@ -145,8 +145,8 @@ class VncView @JvmOverloads constructor(
             val (fx, fy) = viewToFb(event.x, event.y)
             val buttons = event.buttonState
             val mask = ((buttons and MotionEvent.BUTTON_PRIMARY) shr 0) or
-                ((buttons and MotionEvent.BUTTON_SECONDARY) shr 1) or
-                ((buttons and MotionEvent.BUTTON_TERTIARY) shr 1)
+                ((buttons and MotionEvent.BUTTON_TERTIARY) shr 1) or
+                ((buttons and MotionEvent.BUTTON_SECONDARY) shl 1)
             client.sendPointerEvent(fx, fy, mask)
             return true
         }

@@ -1,6 +1,8 @@
 package com.simulation.mobile.vnc
 
 import android.graphics.Bitmap
+import android.os.Handler
+import android.os.HandlerThread
 import android.util.Log
 import java.io.DataInputStream
 import java.io.DataOutputStream
@@ -34,6 +36,9 @@ class VncRfbClient(
     private var bitmap: Bitmap? = null
     private var onFrame: ((Bitmap) -> Unit)? = null
     private var onStateChange: ((VncState) -> Unit)? = null
+    private val writeLock = Any()
+    private val writeThread = HandlerThread("vnc-write").apply { start() }
+    private val writeHandler = Handler(writeThread.looper)
 
     enum class VncState { DISCONNECTED, CONNECTING, CONNECTED, ERROR }
 
@@ -50,6 +55,7 @@ class VncRfbClient(
         Log.i(TAG, "Stopping VNC client")
         running.set(false)
         disconnect()
+        writeThread.quitSafely()
     }
 
     private fun run() {
@@ -62,7 +68,7 @@ class VncRfbClient(
             try {
                 socket = Socket()
                 socket?.connect(InetSocketAddress(host, port), 5000)
-                socket?.soTimeout = 10000
+                socket?.soTimeout = 0
                 input = DataInputStream(socket!!.getInputStream())
                 output = DataOutputStream(socket!!.getOutputStream())
                 Log.i(TAG, "TCP connected to $host:$port")
@@ -145,6 +151,7 @@ class VncRfbClient(
 
             bitmap = Bitmap.createBitmap(fbWidth, fbHeight, Bitmap.Config.ARGB_8888)
             sendSetPixelFormat()
+            sendSetEncodings()
             sendFbUpdateRequest(true)
 
             Log.i(TAG, "Negotiation complete, bitmap created: ${fbWidth}x${fbHeight}")
@@ -161,34 +168,49 @@ class VncRfbClient(
     }
 
     private fun sendSetPixelFormat() {
-        output?.writeByte(0)
-        output?.writeByte(0)
-        output?.writeByte(0)
-        output?.writeByte(0)
-        output?.writeByte(32)
-        output?.writeByte(24)
-        output?.writeByte(0)
-        output?.writeByte(1)
-        output?.writeShort(255)
-        output?.writeShort(255)
-        output?.writeShort(255)
-        output?.writeByte(16)
-        output?.writeByte(8)
-        output?.writeByte(0)
-        output?.writeByte(0)
-        output?.writeByte(0)
-        output?.writeByte(0)
-        output?.flush()
+        synchronized(writeLock) {
+            output?.writeByte(0)
+            output?.writeByte(0)
+            output?.writeByte(0)
+            output?.writeByte(0)
+            output?.writeByte(32)
+            output?.writeByte(24)
+            output?.writeByte(0)
+            output?.writeByte(1)
+            output?.writeShort(255)
+            output?.writeShort(255)
+            output?.writeShort(255)
+            output?.writeByte(16)
+            output?.writeByte(8)
+            output?.writeByte(0)
+            output?.writeByte(0)
+            output?.writeByte(0)
+            output?.writeByte(0)
+            output?.flush()
+        }
     }
 
     private fun sendFbUpdateRequest(incremental: Boolean) {
-        output?.writeByte(3)
-        output?.writeByte(if (incremental) 1 else 0)
-        output?.writeShort(0)
-        output?.writeShort(0)
-        output?.writeShort(fbWidth)
-        output?.writeShort(fbHeight)
-        output?.flush()
+        synchronized(writeLock) {
+            output?.writeByte(3)
+            output?.writeByte(if (incremental) 1 else 0)
+            output?.writeShort(0)
+            output?.writeShort(0)
+            output?.writeShort(fbWidth)
+            output?.writeShort(fbHeight)
+            output?.flush()
+        }
+    }
+
+    private fun sendSetEncodings() {
+        synchronized(writeLock) {
+            output?.writeByte(2)
+            output?.writeByte(0)
+            output?.writeShort(2)
+            output?.writeInt(0)
+            output?.writeInt(-223)
+            output?.flush()
+        }
     }
 
     private fun updateLoop() {
@@ -299,15 +321,21 @@ class VncRfbClient(
         val out = output
         if (out == null) { Log.w(TAG, "sendPointerEvent: output is null"); return }
         if (socket?.isConnected != true) { Log.w(TAG, "sendPointerEvent: socket not connected"); return }
-        try {
-            out.writeByte(5)
-            out.writeByte(buttonMask)
-            out.writeShort(x.coerceIn(0, fbWidth - 1))
-            out.writeShort(y.coerceIn(0, fbHeight - 1))
-            out.flush()
-            Log.d(TAG, "PointerEvent: btn=$buttonMask ($x,$y)")
-        } catch (e: Exception) {
-            Log.w(TAG, "sendPointerEvent failed: ${e.message}")
+        val fx = x.coerceIn(0, fbWidth - 1)
+        val fy = y.coerceIn(0, fbHeight - 1)
+        writeHandler.post {
+            try {
+                synchronized(writeLock) {
+                    out.writeByte(5)
+                    out.writeByte(buttonMask)
+                    out.writeShort(fx)
+                    out.writeShort(fy)
+                    out.flush()
+                }
+                Log.d(TAG, "PointerEvent: btn=$buttonMask ($fx,$fy)")
+            } catch (e: Exception) {
+                Log.w(TAG, "sendPointerEvent failed", e)
+            }
         }
     }
 
@@ -315,17 +343,21 @@ class VncRfbClient(
         val out = output
         if (out == null) { Log.w(TAG, "sendKeyEvent: output is null"); return }
         if (socket?.isConnected != true) { Log.w(TAG, "sendKeyEvent: socket not connected"); return }
-        try {
-            out.writeByte(4)
-            out.writeByte(if (downFlag) 1 else 0)
-            out.writeByte(0)
-            out.writeByte(0)
-            out.writeInt(keysym)
-            out.flush()
-            val dir = if (downFlag) "down" else "up"
-            Log.d(TAG, "KeyEvent: keysym=0x${keysym.toString(16)} $dir")
-        } catch (e: Exception) {
-            Log.w(TAG, "sendKeyEvent failed: ${e.message}")
+        writeHandler.post {
+            try {
+                synchronized(writeLock) {
+                    out.writeByte(4)
+                    out.writeByte(if (downFlag) 1 else 0)
+                    out.writeByte(0)
+                    out.writeByte(0)
+                    out.writeInt(keysym)
+                    out.flush()
+                }
+                val dir = if (downFlag) "down" else "up"
+                Log.d(TAG, "KeyEvent: keysym=0x${keysym.toString(16)} $dir")
+            } catch (e: Exception) {
+                Log.w(TAG, "sendKeyEvent failed", e)
+            }
         }
     }
 
