@@ -16,8 +16,8 @@ class VncRfbClient(
 ) {
     companion object {
         const val TAG = "VncRfbClient"
-        private const val RETRY_DELAY_MS = 2000L
-        private const val MAX_RETRIES = 15
+        private const val RETRY_DELAY_MS = 3000L
+        private const val MAX_RETRIES = 120
         private const val FRAME_INTERVAL_MS = 50L
     }
 
@@ -296,24 +296,37 @@ class VncRfbClient(
     }
 
     fun sendPointerEvent(x: Int, y: Int, buttonMask: Int) {
+        val out = output
+        if (out == null) { Log.w(TAG, "sendPointerEvent: output is null"); return }
+        if (socket?.isConnected != true) { Log.w(TAG, "sendPointerEvent: socket not connected"); return }
         try {
-            output?.writeByte(5)
-            output?.writeByte(buttonMask)
-            output?.writeShort(x.coerceIn(0, fbWidth - 1))
-            output?.writeShort(y.coerceIn(0, fbHeight - 1))
-            output?.flush()
-        } catch (_: Exception) {}
+            out.writeByte(5)
+            out.writeByte(buttonMask)
+            out.writeShort(x.coerceIn(0, fbWidth - 1))
+            out.writeShort(y.coerceIn(0, fbHeight - 1))
+            out.flush()
+            Log.d(TAG, "PointerEvent: btn=$buttonMask ($x,$y)")
+        } catch (e: Exception) {
+            Log.w(TAG, "sendPointerEvent failed: ${e.message}")
+        }
     }
 
     fun sendKeyEvent(keysym: Int, downFlag: Boolean) {
+        val out = output
+        if (out == null) { Log.w(TAG, "sendKeyEvent: output is null"); return }
+        if (socket?.isConnected != true) { Log.w(TAG, "sendKeyEvent: socket not connected"); return }
         try {
-            output?.writeByte(4)
-            output?.writeByte(if (downFlag) 1 else 0)
-            output?.writeByte(0)
-            output?.writeByte(0)
-            output?.writeInt(keysym)
-            output?.flush()
-        } catch (_: Exception) {}
+            out.writeByte(4)
+            out.writeByte(if (downFlag) 1 else 0)
+            out.writeByte(0)
+            out.writeByte(0)
+            out.writeInt(keysym)
+            out.flush()
+            val dir = if (downFlag) "down" else "up"
+            Log.d(TAG, "KeyEvent: keysym=0x${keysym.toString(16)} $dir")
+        } catch (e: Exception) {
+            Log.w(TAG, "sendKeyEvent failed: ${e.message}")
+        }
     }
 
     private fun disconnect() {

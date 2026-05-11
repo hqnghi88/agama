@@ -84,6 +84,7 @@ class VncView @JvmOverloads constructor(
     init {
         isFocusable = true
         isFocusableInTouchMode = true
+        isClickable = true
     }
 
     private fun viewToFb(viewX: Float, viewY: Float): Pair<Int, Int> {
@@ -99,27 +100,43 @@ class VncView @JvmOverloads constructor(
         return Pair(fx, fy)
     }
 
-    override fun onTouchEvent(event: MotionEvent): Boolean {
-        val client = rfbClient ?: return false
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        Log.i(TAG, "View size: ${w}x${h}")
+    }
+
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        val client = rfbClient
+        if (client == null) {
+            Log.w(TAG, "dispatchTouchEvent: rfbClient is null")
+            return false
+        }
+        parent?.requestDisallowInterceptTouchEvent(true)
         val (fx, fy) = viewToFb(event.x, event.y)
 
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                Log.d(TAG, "Touch DOWN at view=(${event.x},${event.y}) fb=($fx,$fy)")
                 requestFocus()
                 val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
                 imm?.showSoftInput(this, InputMethodManager.SHOW_IMPLICIT)
                 pointerButtonMask = LEFT_BUTTON
                 client.sendPointerEvent(fx, fy, pointerButtonMask)
+                return true
             }
             MotionEvent.ACTION_MOVE -> {
+                Log.d(TAG, "Touch MOVE at fb=($fx,$fy)")
                 client.sendPointerEvent(fx, fy, pointerButtonMask)
+                return true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                Log.d(TAG, "Touch UP at fb=($fx,$fy)")
                 client.sendPointerEvent(fx, fy, 0)
                 pointerButtonMask = 0
+                return true
             }
         }
-        return true
+        return super.dispatchTouchEvent(event)
     }
 
     override fun onGenericMotionEvent(event: MotionEvent): Boolean {

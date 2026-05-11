@@ -237,7 +237,7 @@ class PRootManager(private val context: Context) {
 
             val cmd = arrayListOf(
                 prootBin,
-                "-v", "9",
+                "-v", "0",
                 "-r", rootfsDir.absolutePath,
                 "-b", "/dev",
                 "-b", "/proc",
@@ -368,6 +368,7 @@ class PRootManager(private val context: Context) {
         |
         |mkdir -p /tmp /data /workspace /opt/gama/logs /tmp/.X11-unix /dev/shm 2>/dev/null
         |chmod 1777 /tmp /tmp/.X11-unix /dev/shm 2>/dev/null || true
+        |chmod 777 /workspace /data /opt/gama/logs 2>/dev/null || true
         |
         |# ─── Start D-Bus (required by X11 and GTK) ─
         |mkdir -p /run/dbus /var/run/dbus 2>/dev/null

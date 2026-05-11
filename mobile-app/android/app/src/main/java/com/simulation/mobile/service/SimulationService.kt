@@ -84,6 +84,7 @@ class SimulationService : Service() {
                 workspaceDir.setReadable(true, false)
                 workspaceDir.setWritable(true, false)
                 workspaceDir.setExecutable(true, false)
+                workspaceDir.walkTopDown().forEach { it.setWritable(true, false) }
 
                 prootManager?.let { pm ->
                     val success = pm.setupRootfs(rootfsDir) { stage ->
