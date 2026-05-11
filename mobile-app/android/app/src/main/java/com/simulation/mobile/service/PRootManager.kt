@@ -366,9 +366,9 @@ class PRootManager(private val context: Context) {
         |echo "[startup] GAMA Mobile VNC starting"
         |echo "[startup] Java: $(java -version 2>&1 | head -1 2>/dev/null || echo 'not found')"
         |
-        |mkdir -p /tmp /data /workspace /opt/gama/logs /tmp/.X11-unix /dev/shm 2>/dev/null
+        |mkdir -p /tmp /data /data/GamaWorkspace /workspace /opt/gama/logs /tmp/.X11-unix /dev/shm 2>/dev/null
         |chmod 1777 /tmp /tmp/.X11-unix /dev/shm 2>/dev/null || true
-        |chmod 777 /workspace /data /opt/gama/logs 2>/dev/null || true
+        |chmod 777 /workspace /data /data/GamaWorkspace /opt/gama/logs 2>/dev/null || true
         |
         |# ─── Start D-Bus (required by X11 and GTK) ─
         |mkdir -p /run/dbus /var/run/dbus 2>/dev/null
@@ -379,7 +379,11 @@ class PRootManager(private val context: Context) {
         |export GDK_BACKEND=x11
         |
         |# ─── LD_PRELOAD shim to make link() work (Android kernel blocks hard links) ─
-        |export LD_PRELOAD=/opt/gama/override_link.so
+        |if [ -f /opt/gama/override_link.so ]; then
+        |  export LD_PRELOAD=/opt/gama/override_link.so
+        |else
+        |  echo "[startup] override_link.so not found, skipping LD_PRELOAD"
+        |fi
         |
         |# ─── Remove stale X lock files ─
         |rm -f /tmp/.X1-lock /tmp/.X11-unix/X1 2>/dev/null || true
@@ -402,6 +406,8 @@ class PRootManager(private val context: Context) {
         |  echo "[startup] Starting x11vnc on port ${'$'}VNC_PORT..."
         |  x11vnc -display ${'$'}DISPLAY -forever -nopw -quiet -rfbport ${'$'}VNC_PORT &>/opt/gama/logs/x11vnc.log 2>&1 &
         |fi
+        |# Clean lock file in case Xvfb died but left stale lock
+        |rm -f /tmp/.X1-lock /tmp/.X11-unix/X1 2>/dev/null || true
         |
         |if [ "${'$'}X_SERVER_RUNNING" = false ]; then
         |  echo "[startup] Xvfb failed, trying Xtightvnc..."
@@ -434,7 +440,7 @@ class PRootManager(private val context: Context) {
         |}
         |
         |# ─── Clean stale workspace metadata (prevent GAMA/Eclipse lock errors) ─
-        |rm -f /workspace/.metadata/.lock 2>/dev/null || true
+        |rm -f /data/GamaWorkspace/.metadata/.lock 2>/dev/null || true
         |
         |# ─── Start fluxbox (window manager) ─
         |echo "[startup] Starting fluxbox..."

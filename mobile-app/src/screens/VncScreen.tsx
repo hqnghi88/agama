@@ -1,6 +1,5 @@
 import React, {useState, useEffect, useRef} from 'react';
 import {View, Text, StyleSheet, DeviceEventEmitter, requireNativeComponent, BackHandler} from 'react-native';
-import {useSimulationStore} from '../store/useSimulationStore';
 
 interface VncScreenProps {
   onBack: () => void;
@@ -16,13 +15,11 @@ const NativeVncView = requireNativeComponent<NativeVncViewProps>('VncView');
 
 const VncScreen: React.FC<VncScreenProps> = ({onBack}) => {
   const [vncState, setVncState] = useState<VncState>('connecting');
-  const addLog = useSimulationStore(s => s.addLog);
   const connectedRef = useRef(false);
   const listenerRef = useRef<any>(null);
 
   useEffect(() => {
     listenerRef.current = DeviceEventEmitter.addListener('VncStateChange', (event: {state: string}) => {
-      addLog('info', 'VNC: ' + event.state);
       switch (event.state) {
         case 'connected':
           connectedRef.current = true;
@@ -39,20 +36,18 @@ const VncScreen: React.FC<VncScreenProps> = ({onBack}) => {
           break;
       }
     });
-
     return () => {
       if (listenerRef.current) listenerRef.current.remove();
     };
-  }, [addLog]);
+  }, []);
 
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      addLog('info', 'VNC viewer closed');
       onBack();
       return true;
     });
     return () => backHandler.remove();
-  }, [addLog, onBack]);
+  }, [onBack]);
 
   return (
     <View style={styles.container}>

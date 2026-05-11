@@ -15,6 +15,7 @@ import android.view.View
 import android.view.inputmethod.BaseInputConnection
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
+import android.view.inputmethod.InputMethodManager
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.ReactContext
 import com.facebook.react.modules.core.DeviceEventManagerModule
@@ -35,6 +36,8 @@ class VncView @JvmOverloads constructor(
     private val paint = Paint(Paint.FILTER_BITMAP_FLAG)
     private var destRect = RectF()
     private var pointerButtonMask = 0
+    private val kbdToggleDp = 48f // dp - touch target size
+    private val kbdTogglePx: Float get() = kbdToggleDp * density
 
     private val keysymMap = mapOf(
         KeyEvent.KEYCODE_A to 0x0061, KeyEvent.KEYCODE_B to 0x0062,
@@ -110,6 +113,17 @@ class VncView @JvmOverloads constructor(
             Log.w(TAG, "dispatchTouchEvent: rfbClient is null")
             return false
         }
+
+        // Check if touch is in keyboard toggle corner (bottom-right)
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+            val k = kbdTogglePx
+            if (event.x >= width - k && event.y >= height - k) {
+                Log.d(TAG, "Keyboard toggle corner tapped at (${event.x},${event.y}), area: ${width-k}x${height-k}")
+                toggleKeyboard()
+                return true
+            }
+        }
+
         parent?.requestDisallowInterceptTouchEvent(true)
         val (fx, fy) = viewToFb(event.x, event.y)
 
@@ -227,6 +241,16 @@ class VncView @JvmOverloads constructor(
         rfbClient = null
     }
 
+    fun toggleKeyboard() {
+        val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        if (imm.isAcceptingText) {
+            imm.hideSoftInputFromWindow(windowToken, 0)
+        } else {
+            requestFocus()
+            imm.showSoftInput(this, InputMethodManager.SHOW_IMPLICIT)
+        }
+    }
+
     private fun emitState(state: String) {
         val map = Arguments.createMap().apply {
             putString("state", state)
@@ -255,7 +279,30 @@ class VncView @JvmOverloads constructor(
         val bh = fbh * scale
         destRect.set((vw - bw) / 2, (vh - bh) / 2, (vw + bw) / 2, (vh + bh) / 2)
         canvas.drawBitmap(bitmap, null, destRect, paint)
+
+        // Keyboard toggle indicator (bottom-right corner)
+        val s = kbdTogglePx
+        val left = vw - s
+        val top = vh - s
+        canvas.drawRoundRect(left, top, vw, vh, 8f, 8f, kbdBgPaint)
+        canvas.drawText("\u2328", left + s / 2 - charWidth / 2, top + s / 2 + charHeight / 2, kbdTextPaint)
     }
+
+    private val density: Float get() = resources.displayMetrics.density
+
+    private val kbdBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xCC1E293B.toInt()
+        setShadowLayer(4f, 0f, 2f, 0x40000000.toInt())
+    }
+
+    private val kbdTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFFE2E8F0.toInt()
+        textSize = 24f * resources.displayMetrics.density
+        textAlign = Paint.Align.LEFT
+    }
+
+    private val charWidth: Float get() = kbdTextPaint.measureText("\u2328")
+    private val charHeight: Float get() = kotlin.math.abs(kbdTextPaint.ascent() + kbdTextPaint.descent())
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
