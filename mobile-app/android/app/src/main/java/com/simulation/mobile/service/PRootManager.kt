@@ -426,6 +426,16 @@ class PRootManager(private val context: Context) {
         |  sleep 1
         |done
         |
+        |# ─── Install fbsetbg (fluxbox bg setter) via apt, fall back to shim ─
+        |apt-get update -qq 2>/dev/null && apt-get install -y -qq fbautostart 2>/dev/null || {
+        |  echo '#!/bin/bash' > /usr/local/bin/fbsetbg
+        |  echo 'true' >> /usr/local/bin/fbsetbg
+        |  chmod +x /usr/local/bin/fbsetbg
+        |}
+        |
+        |# ─── Clean stale workspace metadata (prevent GAMA/Eclipse lock errors) ─
+        |rm -f /workspace/.metadata/.lock 2>/dev/null || true
+        |
         |# ─── Start fluxbox (window manager) ─
         |echo "[startup] Starting fluxbox..."
         |fluxbox &>/opt/gama/logs/fluxbox.log 2>&1 &
@@ -435,14 +445,18 @@ class PRootManager(private val context: Context) {
         |if [ -f "${'$'}GAMA_HOME/Gama" ]; then
         |  echo "[startup] Starting GAMA GUI..."
         |  cd "${'$'}GAMA_HOME"
-        |  DISPLAY=${'$'}DISPLAY ./Gama -data /workspace &>/opt/gama/logs/gama.log 2>&1 &
-        |  GAMA_PID=${'$'}!
-        |  echo "[startup] GAMA PID: ${'$'}GAMA_PID"
-        |elif [ -f "${'$'}GAMA_HOME/headless/Gama" ]; then
-        |  echo "[startup] Starting GAMA headless..."
-        |  cd "${'$'}GAMA_HOME/headless"
-        |  DISPLAY=${'$'}DISPLAY ./Gama -data /workspace &>/opt/gama/logs/gama.log 2>&1 &
-        |  GAMA_PID=${'$'}!
+         |  DISPLAY=${'$'}DISPLAY ./Gama -vmargs \
+         |    -Dosgi.locking=none \
+         |    -Dorg.eclipse.core.resources.disable.workspace.locking=true &>/opt/gama/logs/gama.log 2>&1 &
+         |  GAMA_PID=${'$'}!
+         |  echo "[startup] GAMA PID: ${'$'}GAMA_PID"
+         |elif [ -f "${'$'}GAMA_HOME/headless/Gama" ]; then
+         |  echo "[startup] Starting GAMA headless..."
+         |  cd "${'$'}GAMA_HOME/headless"
+         |  DISPLAY=${'$'}DISPLAY ./Gama -vmargs \
+         |    -Dosgi.locking=none \
+         |    -Dorg.eclipse.core.resources.disable.workspace.locking=true &>/opt/gama/logs/gama.log 2>&1 &
+         |  GAMA_PID=${'$'}!
         |  echo "[startup] GAMA PID: ${'$'}GAMA_PID"
         |else
         |  echo "[startup] GAMA binary not found"
@@ -454,7 +468,9 @@ class PRootManager(private val context: Context) {
         |  if [ -n "${'$'}GAMA_PID" ] && ! kill -0 ${'$'}GAMA_PID 2>/dev/null; then
         |    echo "[startup] GAMA died, restarting..."
         |    cd "${'$'}GAMA_HOME"
-        |    DISPLAY=${'$'}DISPLAY ./Gama -data /workspace &>/opt/gama/logs/gama.log 2>&1 &
+        |    DISPLAY=${'$'}DISPLAY ./Gama -vmargs \
+        |      -Dosgi.locking=none \
+        |      -Dorg.eclipse.core.resources.disable.workspace.locking=true &>/opt/gama/logs/gama.log 2>&1 &
         |    GAMA_PID=${'$'}!
         |    echo "[startup] GAMA restarted with PID ${'$'}GAMA_PID"
         |  fi
