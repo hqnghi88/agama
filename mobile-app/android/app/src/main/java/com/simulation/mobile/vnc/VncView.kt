@@ -15,7 +15,6 @@ import android.view.View
 import android.view.inputmethod.BaseInputConnection
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
-import android.view.inputmethod.InputMethodManager
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.ReactContext
 import com.facebook.react.modules.core.DeviceEventManagerModule
@@ -118,8 +117,6 @@ class VncView @JvmOverloads constructor(
             MotionEvent.ACTION_DOWN -> {
                 Log.d(TAG, "Touch DOWN at view=(${event.x},${event.y}) fb=($fx,$fy)")
                 requestFocus()
-                val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
-                imm?.showSoftInput(this, InputMethodManager.SHOW_IMPLICIT)
                 pointerButtonMask = LEFT_BUTTON
                 client.sendPointerEvent(fx, fy, pointerButtonMask)
                 return true
