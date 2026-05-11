@@ -362,6 +362,13 @@ class PRootManager(private val context: Context) {
         |export TMPDIR=/tmp
         |export VNC_PORT=5901
         |export DISPLAY=:1
+        |export GDK_BACKEND=x11
+        |
+        |# GPU/driver settings for mobile GPU (Zink over Vulkan)
+        |export MESA_LOADER_DRIVER_OVERRIDE=zink
+        |export GALLIUM_DRIVER=zink
+        |export ZINK_DESCRIPTORS=lazy
+        |export TU_DEBUG=noconform
         |
         |echo "[startup] GAMA Mobile VNC starting"
         |echo "[startup] Java: $(java -version 2>&1 | head -1 2>/dev/null || echo 'not found')"
@@ -375,9 +382,7 @@ class PRootManager(private val context: Context) {
         |dbus-daemon --system 2>/dev/null || dbus-daemon --system --fork 2>/dev/null || true
         |echo "[startup] D-Bus status: $(pgrep dbus-daemon >/dev/null 2>&1 && echo 'OK' || echo 'FAILED')"
         |
-        |# ─── GTK will use X11 backend (not Wayland) ─
-        |export GDK_BACKEND=x11
-        |
+
         |# ─── LD_PRELOAD shim to make link() work (Android kernel blocks hard links) ─
         |if [ -f /opt/gama/override_link.so ]; then
         |  export LD_PRELOAD=/opt/gama/override_link.so
