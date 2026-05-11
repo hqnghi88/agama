@@ -31,15 +31,19 @@ if ! command -v docker &> /dev/null; then
     exit 1
 fi
 
-# ─── Check for pre-staged GAMA product ────────────────────────────────
-if [ -d "${OUTPUT_DIR}/opt/gama/headless/plugins" ]; then
-    PLUGIN_COUNT=$(ls "${OUTPUT_DIR}/opt/gama/headless/plugins/"*.jar 2>/dev/null | wc -l)
-    echo "[rootfs] Pre-staged GAMA product found: ${PLUGIN_COUNT} plugins"
+# ─── Check for GAMA product source ────────────────────────────────────
+# Resolve GAMA product location: prefer unpacked directory, then archive
+GAMA_SOURCE_DIR="$(cd "${MOBILE_ROOT}/../gama.product/target/products/gama.ui.application.product/linux/gtk/aarch64" 2>/dev/null && pwd)"
+GAMA_SOURCE_ARCHIVE="$(ls -t "${MOBILE_ROOT}/../gama.product/target/products/gama.application-linux.gtk.aarch64.tar.gz" 2>/dev/null | head -1)"
+if [ -n "${GAMA_SOURCE_DIR}" ] && [ -d "${GAMA_SOURCE_DIR}/plugins" ]; then
+    PLUGIN_COUNT=$(ls "${GAMA_SOURCE_DIR}/plugins/"*.jar 2>/dev/null | wc -l)
+    echo "[rootfs] GAMA product directory found at ${GAMA_SOURCE_DIR}: ${PLUGIN_COUNT} plugins"
+    HAS_GAMA=true
+elif [ -n "${GAMA_SOURCE_ARCHIVE}" ]; then
+    echo "[rootfs] GAMA product archive found: ${GAMA_SOURCE_ARCHIVE}"
     HAS_GAMA=true
 else
-    echo "[rootfs] No pre-staged GAMA product found."
-    echo "[rootfs] Run 'make package-gama' first or copy product manually."
-    echo "[rootfs] Proceeding with minimal rootfs (Phase 1 mode)..."
+    echo "[rootfs] No GAMA product found. Proceeding with minimal rootfs (Phase 1 mode)..."
     HAS_GAMA=false
 fi
 
@@ -68,6 +72,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Required runtime
     ca-certificates \
     curl \
+    # X11 + VNC for full GAMA GUI
+    tightvncserver \
+    x11vnc \
+    xvfb \
+    x11-utils \
+    xfonts-base \
+    fluxbox \
+    # GTK3 runtime for GAMA full GUI (./Gama binary requires libgtk-3.so.0)
+    libgtk-3-0 \
+    # Additional X11/GL deps
+    libxdamage1 \
+    libxcomposite1 \
+    libxrandr2 \
     # System utilities
     procps \
     iproute2 \
@@ -141,12 +158,12 @@ else
 fi
 
 # ─── Copy GAMA product (if available) ─────────────────────────────────
-GAMA_SOURCE_DIR="$(cd "${MOBILE_ROOT}/../gama.product/target/products/gama.headless.product/linux/gtk/aarch64" 2>/dev/null && pwd)"
-GAMA_SOURCE_ARCHIVE="$(ls -t "${MOBILE_ROOT}/../gama.product/target/products/gama.headless-linux.gtk.aarch64.tar.gz" 2>/dev/null | head -1)"
+GAMA_SOURCE_DIR="$(cd "${MOBILE_ROOT}/../gama.product/target/products/gama.ui.application.product/linux/gtk/aarch64" 2>/dev/null && pwd)"
+GAMA_SOURCE_ARCHIVE="$(ls -t "${MOBILE_ROOT}/../gama.product/target/products/gama.application-linux.gtk.aarch64.tar.gz" 2>/dev/null | head -1)"
 
 if [ "${HAS_GAMA:-false}" = true ]; then
     echo "[rootfs] Re-copying GAMA product from source (Docker export overwrote the staged files)..."
-    GAMA_TARGET="${OUTPUT_DIR}/opt/gama/headless"
+    GAMA_TARGET="${OUTPUT_DIR}/opt/gama"
     mkdir -p "${GAMA_TARGET}"
     if [ -d "${GAMA_SOURCE_DIR}" ]; then
         cp -r "${GAMA_SOURCE_DIR}/"* "${GAMA_TARGET}/"
@@ -181,7 +198,7 @@ done
 
 # Copy GAMA-specific launcher and env
 mkdir -p "${OUTPUT_DIR}/opt/gama/"
-for script in gama-launcher.sh bridge-server.py java-env.sh; do
+for script in gama-launcher.sh gama-vnc.sh bridge-server.py java-env.sh; do
     if [ -f "${MOBILE_ROOT}/proot-setup/${script}" ]; then
         cp "${MOBILE_ROOT}/proot-setup/${script}" "${OUTPUT_DIR}/opt/gama/"
         chmod +x "${OUTPUT_DIR}/opt/gama/${script}"

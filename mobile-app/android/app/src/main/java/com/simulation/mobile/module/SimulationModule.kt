@@ -50,12 +50,29 @@ class SimulationModule(reactContext: ReactApplicationContext) :
                 putString("status", SimulationService.backendStatus)
                 putString("progress", SimulationService.backendProgress)
                 putInt("pid", SimulationService.backendPid)
-                putInt("port", SimulationService.BACKEND_PORT)
+                putInt("vncHttpPort", SimulationService.vncHttpPort)
+                putInt("vncWsPort", SimulationService.vncWsPort)
             }
             promise.resolve(map)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to get status", e)
             promise.reject("STATUS_ERROR", e.message)
+        }
+    }
+
+    @ReactMethod
+    fun openVncViewer(promise: Promise) {
+        try {
+            val httpPort = SimulationService.vncHttpPort
+            val wsPort = SimulationService.vncWsPort
+            if (httpPort < 0 || wsPort < 0) {
+                promise.reject("VNC_NOT_READY", "VNC proxy is not running")
+                return
+            }
+            promise.resolve(true)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to open VNC viewer", e)
+            promise.reject("VNC_ERROR", e.message)
         }
     }
 

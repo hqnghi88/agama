@@ -1,99 +1,56 @@
 #!/bin/bash
 # Rootfs startup.sh - runs inside PRoot Linux container
-# Started by PRootManager's generated /opt/gama/startup.sh
+# Starts VNC server + full GAMA GUI for remote display via VNC viewer
 
 export JAVA_HOME=/usr/lib/jvm/java-25
 export PATH=$JAVA_HOME/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 export HOME=/data
 export TMPDIR=/tmp
 export GAMA_HOME=/opt/gama
-export BACKEND_PORT=${BACKEND_PORT:-8080}
-export GAMA_WS_PORT=${GAMA_WS_PORT:-6868}
+export DISPLAY=:1
+export VNC_PORT=5901
 
-# Port check function (uses Python since nc may not be available)
-PYTHON=/usr/bin/python3
-check_port() {
-  ${PYTHON} -c "import socket; s=socket.socket(); s.settimeout(2); s.connect(('$1', $2)); s.close()" 2>/dev/null
-}
+mkdir -p /tmp /data /workspace /opt/gama/logs /data/.vnc 2>/dev/null
 
-echo "[rootfs] GAMA Mobile rootfs startup"
+[ -f /etc/profile.d/gama-env.sh ] && source /etc/profile.d/gama-env.sh
+
+echo "[rootfs] GAMA Mobile starting (VNC mode)"
 java -version 2>&1 | head -1 || echo "[rootfs] Java not found"
-echo "[rootfs] Backend port: ${BACKEND_PORT}"
-echo "[rootfs] GAMA WS port: ${GAMA_WS_PORT}"
 
-mkdir -p /tmp /data /workspace /opt/gama/logs 2>/dev/null
-
-[ -f /etc/profile.d/gama-env.sh ] && . /etc/profile.d/gama-env.sh
-
-# Detect GAMA headless product
-GAMA_AVAILABLE=false
-if [ -d "${GAMA_HOME}/headless/plugins" ] && ls "${GAMA_HOME}/headless/plugins/org.eclipse.equinox.launcher_"*.jar >/dev/null 2>&1; then
-    GAMA_AVAILABLE=true
-    PLUGIN_COUNT=$(ls "${GAMA_HOME}/headless/plugins/"*.jar 2>/dev/null | wc -l)
-    echo "[rootfs] GAMA headless product detected: ${PLUGIN_COUNT} plugins"
+# Detect GAMA product
+if [ -f "${GAMA_HOME}/Gama" ]; then
+    echo "[rootfs] Full GAMA GUI product found"
+elif [ -f "${GAMA_HOME}/headless/Gama" ]; then
+    echo "[rootfs] GAMA product found at headless/"
+    GAMA_HOME="${GAMA_HOME}/headless"
 else
-    echo "[rootfs] GAMA headless product not found"
+    echo "[rootfs] GAMA product not found at ${GAMA_HOME}"
+    GAMA_AVAILABLE=false
 fi
 
-# Install websockets for bridge<->GAMA connectivity
-${PYTHON} -c "import websockets" 2>/dev/null || ${PYTHON} -m pip install -q websockets 2>/dev/null || true
+# Set blank VNC password for dev
+echo -n "" | /usr/bin/vncpasswd -f > /data/.vnc/passwd 2>/dev/null
+chmod 600 /data/.vnc/passwd
 
-# Start bridge server FIRST so the health proxy can reach it immediately
-if check_port 127.0.0.1 ${BACKEND_PORT}; then
-    echo "[rootfs] Port ${BACKEND_PORT} already in use, skipping bridge"
-else
-    echo "[rootfs] Starting HTTP bridge server on port ${BACKEND_PORT}..."
-    if [ -f "${GAMA_HOME}/bridge-server.py" ]; then
-        ${PYTHON} "${GAMA_HOME}/bridge-server.py" \
-            > /opt/gama/logs/bridge.log 2>&1 &
-        BRIDGE_PID=$!
-        echo "[rootfs] Bridge PID: ${BRIDGE_PID} (Python)"
-    elif [ -f "${GAMA_HOME}/gama-backend.jar" ]; then
-        java ${JAVA_OPTS:-} -jar "${GAMA_HOME}/gama-backend.jar" \
-            --port=${BACKEND_PORT} --workspace=/workspace \
-            --log=/opt/gama/logs/backend.log &
-        BRIDGE_PID=$!
-        echo "[rootfs] Bridge PID: ${BRIDGE_PID} (Java)"
-    else
-        echo "[rootfs] No bridge server found"
-    fi
+echo "[rootfs] Starting VNC server on display :1 (port ${VNC_PORT})..."
+tightvncserver :1 -geometry 1280x720 -depth 16 -localhost no -passwd /data/.vnc/passwd 2>&1
 
-    if [ -n "${BRIDGE_PID:-}" ]; then
-        for i in $(seq 1 30); do
-            check_port 127.0.0.1 ${BACKEND_PORT} && echo "[rootfs] Bridge server ready!" && break
-            sleep 1
-        done
-    fi
-fi
+echo "[rootfs] Starting fluxbox window manager..."
+fluxbox &>/opt/gama/logs/fluxbox.log 2>&1 &
 
-# Start GAMA Headless in background (non-blocking - bridge already running)
-if [ "${GAMA_AVAILABLE}" = true ]; then
-    echo "[rootfs] Starting GAMA headless WebSocket server on port ${GAMA_WS_PORT}..."
-    /opt/gama/gama-launcher.sh \
-        > /opt/gama/logs/gama-stdout.log 2> /opt/gama/logs/gama-stderr.log &
-    GAMA_PID=$!
-    echo "[rootfs] GAMA PID: ${GAMA_PID}"
+echo "[rootfs] Starting GAMA GUI..."
+cd "${GAMA_HOME}"
+DISPLAY=:1 ./Gama -data /workspace &>/opt/gama/logs/gama.log 2>&1 &
+GAMA_PID=$!
+echo "[rootfs] GAMA PID: ${GAMA_PID}"
 
-    echo "[rootfs] Waiting for GAMA WebSocket server..."
-    for i in $(seq 1 120); do
-        check_port 127.0.0.1 ${GAMA_WS_PORT} && echo "[rootfs] GAMA WebSocket ready (attempt ${i})" && break
-        [ $i -eq 120 ] && echo "[rootfs] WARNING: GAMA WebSocket not detected"
-        sleep 1
-    done
-fi
-
-echo "[rootfs] Backend initialization complete"
-echo "[rootfs] REST API:  http://127.0.0.1:${BACKEND_PORT}"
-echo "[rootfs] WS (GAMA): ws://127.0.0.1:${GAMA_WS_PORT}"
-echo "[rootfs] Logs:      /opt/gama/logs/"
-
-# Monitor processes
+# Keep alive and monitor
 while true; do
     sleep 5
-    if [ -n "${BRIDGE_PID:-}" ] && ! kill -0 ${BRIDGE_PID} 2>/dev/null; then
-        echo "[rootfs] Bridge process died"
-    fi
-    if [ "${GAMA_AVAILABLE}" = true ] && [ -n "${GAMA_PID:-}" ] && ! kill -0 ${GAMA_PID} 2>/dev/null; then
-        echo "[rootfs] GAMA process died"
+    if ! kill -0 ${GAMA_PID} 2>/dev/null; then
+        echo "[rootfs] GAMA process died, restarting..."
+        DISPLAY=:1 ./Gama -data /workspace &>/opt/gama/logs/gama.log 2>&1 &
+        GAMA_PID=$!
+        echo "[rootfs] GAMA restarted with PID ${GAMA_PID}"
     fi
 done

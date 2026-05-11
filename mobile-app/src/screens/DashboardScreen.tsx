@@ -17,7 +17,11 @@ import LogViewer from '../components/LogViewer';
 
 const {SimulationModule} = NativeModules;
 
-const DashboardScreen: React.FC = () => {
+interface DashboardScreenProps {
+  onOpenVnc?: () => void;
+}
+
+const DashboardScreen: React.FC<DashboardScreenProps> = ({onOpenVnc}) => {
   useBackendHealth();
 
   const connected = useSimulationStore(s => s.connected);
@@ -134,6 +138,11 @@ const DashboardScreen: React.FC = () => {
             <Text style={styles.restartBtnText}>
               {restarting ? 'RESTARTING...' : 'RESTART BACKEND'}
             </Text>
+          </TouchableOpacity>
+        )}
+        {connected && onOpenVnc && (
+          <TouchableOpacity style={styles.vncBtn} onPress={onOpenVnc}>
+            <Text style={styles.vncBtnText}>OPEN VNC VIEWER</Text>
           </TouchableOpacity>
         )}
         <StatusIndicator
@@ -411,6 +420,20 @@ const styles = StyleSheet.create({
     color: '#f8fafc',
     fontSize: 11,
     fontWeight: '700',
+    fontFamily: 'monospace',
+    letterSpacing: 1,
+  },
+  vncBtn: {
+    backgroundColor: '#7c3aed',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  vncBtnText: {
+    color: '#f8fafc',
+    fontSize: 12,
+    fontWeight: '800',
     fontFamily: 'monospace',
     letterSpacing: 1,
   },

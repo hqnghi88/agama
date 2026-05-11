@@ -105,7 +105,7 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
       set({backendProgress: nativeProgress});
     }
     if (!state.connected && nativeStatus === 'running') {
-      set({backendStatus: 'running', error: null, backendProgress: ''});
+      set({connected: true, backendStatus: 'running', error: null, backendProgress: ''});
     } else if (nativeStatus.startsWith('error')) {
       const msg = nativeStatus.replace(/^error:\s*/, '');
       set({backendStatus: 'error', error: msg, backendProgress: ''});

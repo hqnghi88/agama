@@ -90,6 +90,9 @@ class PRootManager(private val context: Context) {
             onProgress?.invoke("writing startup script")
             writeFallbackStartup(rootfsDir)
 
+            onProgress?.invoke("updating bridge server")
+            overwriteBridgeServer(rootfsDir)
+
             Log.i(TAG, "Rootfs setup complete")
             true
         } catch (e: Exception) {
@@ -180,7 +183,7 @@ class PRootManager(private val context: Context) {
         }
     }
 
-    fun startPRoot(rootfsDir: File, workspaceDir: File, port: Int, onStarted: (pid: Int) -> Unit) {
+    fun startPRoot(rootfsDir: File, workspaceDir: File, onStarted: (pid: Int) -> Unit) {
         if (isRunning.getAndSet(true)) {
             Log.d(TAG, "PRoot already running")
             return
@@ -226,12 +229,7 @@ class PRootManager(private val context: Context) {
                 "PROOT_TMP_DIR" to prootTmpDir,
                 "PROOT_LOADER" to loaderBin,
                 "PROOT_LOADER_32" to loader32Bin,
-                // PROOT_NO_SECCOMP disabled: seccomp intercepts only syscalls needing path translation.
-                // getcwd passes through seccomp correctly (ptrace mode breaks getcwd for Java).
-                // mkdir failures are handled in gama-launcher.sh with || true.
-                // "PROOT_NO_SECCOMP" to "1",
                 "LD_LIBRARY_PATH" to libHelperDir.absolutePath,
-                "BACKEND_PORT" to port.toString(),
                 "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/bin",
                 "JAVA_HOME" to "/usr/lib/jvm/java-25",
                 "TERM" to "xterm"
@@ -330,62 +328,136 @@ class PRootManager(private val context: Context) {
         }
     }
 
+    private fun overwriteBridgeServer(rootfsDir: File) {
+        try {
+            val bridgeFile = File(rootfsDir, "opt/gama/bridge-server.py")
+            val resId = context.resources.getIdentifier("bridge_server_py", "raw", context.packageName)
+            if (resId == 0) {
+                Log.w(TAG, "bridge_server_py resource not found, keeping existing bridge-server.py")
+                return
+            }
+            context.resources.openRawResource(resId).use { input ->
+                bridgeFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+            bridgeFile.setExecutable(true)
+            Log.i(TAG, "Bridge server updated from bundled resource")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to overwrite bridge-server.py", e)
+        }
+    }
+
     private fun generateStartupScript(): String = """
         |#!/bin/bash
         |
-        |# GAMA Mobile startup - runs inside PRoot Linux container
+        |# GAMA Mobile VNC startup - runs inside PRoot Linux container
+        |# Tries Xvfb + x11vnc first, falls back to Xtightvnc (combined X+VNC)
         |
         |unset LD_PRELOAD
-        |# PROOT_NO_SECCOMP is intentionally unset here (set by PRootManager env, not inside guest).
         |export JAVA_HOME=/usr/lib/jvm/java-25
         |export PATH=${'$'}JAVA_HOME/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         |export HOME=/data
+        |export USER=shell
         |export TMPDIR=/tmp
-        |export GAMA_HOME=/opt/gama
-        |export BACKEND_PORT=${'$'}{BACKEND_PORT:-8080}
-        |export GAMA_WS_PORT=${'$'}{GAMA_WS_PORT:-6868}
+        |export VNC_PORT=5901
+        |export DISPLAY=:1
         |
-        |echo "[startup] GAMA Mobile backend starting"
+        |echo "[startup] GAMA Mobile VNC starting"
         |echo "[startup] Java: $(java -version 2>&1 | head -1 2>/dev/null || echo 'not found')"
-        |echo "[startup] Backend port: ${'$'}BACKEND_PORT"
-        |echo "[startup] GAMA WS port: ${'$'}GAMA_WS_PORT"
         |
-        |mkdir -p /tmp /data /workspace /opt/gama/logs 2>/dev/null
-        |[ -f /etc/profile.d/gama-env.sh ] && source /etc/profile.d/gama-env.sh
+        |mkdir -p /tmp /data /workspace /opt/gama/logs /tmp/.X11-unix /dev/shm 2>/dev/null
+        |chmod 1777 /tmp /tmp/.X11-unix /dev/shm 2>/dev/null || true
         |
-        |# Port check function (uses explicit /usr/bin/python3, not PATH lookup)
-        |PYTHON=/usr/bin/python3
-        |check_port() {
-        |  ${'$'}{PYTHON} -c "import socket; s=socket.socket(); s.settimeout(2); s.connect(('$1', $2)); s.close()" 2>/dev/null
-        |}
+        |# ─── Start D-Bus (required by X11 and GTK) ─
+        |mkdir -p /run/dbus /var/run/dbus 2>/dev/null
+        |dbus-daemon --system 2>/dev/null || dbus-daemon --system --fork 2>/dev/null || true
+        |echo "[startup] D-Bus status: $(pgrep dbus-daemon >/dev/null 2>&1 && echo 'OK' || echo 'FAILED')"
         |
-        |# ─── Run rootfs startup.sh in background (handles GAMA + bridge) ─
-        |if [ -f /startup.sh ]; then
-        |  echo "[startup] Running rootfs startup.sh in background..."
-        |  bash /startup.sh &
-        |  STARTUP_PID=${'$'}!
-        |  echo "[startup] Rootfs startup PID: ${'$'}STARTUP_PID"
+        |# ─── GTK will use X11 backend (not Wayland) ─
+        |export GDK_BACKEND=x11
+        |
+        |# ─── LD_PRELOAD shim to make link() work (Android kernel blocks hard links) ─
+        |export LD_PRELOAD=/opt/gama/override_link.so
+        |
+        |# ─── Remove stale X lock files ─
+        |rm -f /tmp/.X1-lock /tmp/.X11-unix/X1 2>/dev/null || true
+        |chmod 1777 /tmp/.X11-unix 2>/dev/null || true
+        |
+        |# ─── Determine which X+VNC server to use ─
+        |USE_XVNC=false
+        |
+        |# ─── Try Xvfb (virtual framebuffer X server) ─
+        |echo "[startup] Starting Xvfb on display ${'$'}DISPLAY..."
+        |Xvfb ${'$'}DISPLAY -screen 0 1280x720x16 -pixdepths 8 16 24 32 -noreset +extension GLX +extension RENDER &>/opt/gama/logs/xvfb.log 2>&1 &
+        |XVFB_PID=${'$'}!
+        |sleep 3
+        |
+        |X_SERVER_RUNNING=false
+        |if kill -0 ${'$'}XVFB_PID 2>/dev/null; then
+        |  echo "[startup] Xvfb running (PID ${'$'}XVFB_PID)"
+        |  X_SERVER_RUNNING=true
+        |  # ─── Start x11vnc (VNC server attached to Xvfb) ─
+        |  echo "[startup] Starting x11vnc on port ${'$'}VNC_PORT..."
+        |  x11vnc -display ${'$'}DISPLAY -forever -nopw -quiet -rfbport ${'$'}VNC_PORT &>/opt/gama/logs/x11vnc.log 2>&1 &
         |fi
         |
-        |# ─── Wait for backend on port ${'$'}BACKEND_PORT ────────────────────
-        |echo "[startup] Waiting for backend on port ${'$'}BACKEND_PORT..."
-        |for i in $(seq 1 120); do
-        |  check_port 127.0.0.1 ${'$'}BACKEND_PORT && echo "[startup] Backend ready! (attempt ${'$'}i)" && break
-        |  [ ${'$'}i -eq 120 ] && echo "[startup] Backend not ready after 120s"
+        |if [ "${'$'}X_SERVER_RUNNING" = false ]; then
+        |  echo "[startup] Xvfb failed, trying Xtightvnc..."
+        |  Xtightvnc ${'$'}DISPLAY -geometry 1280x720 -depth 16 -rfbport ${'$'}VNC_PORT \
+        |    -desktop GAMA -localhost &>/opt/gama/logs/xvnc.log 2>&1 &
+        |  XVNC_PID=${'$'}!
+        |  sleep 3
+        |  if kill -0 ${'$'}XVNC_PID 2>/dev/null; then
+        |    echo "[startup] Xtightvnc running (PID ${'$'}XVNC_PID)"
+        |    X_SERVER_RUNNING=true
+        |  else
+        |    echo "[startup] Xtightvnc also failed (check /opt/gama/logs/xvnc.log)"
+        |  fi
+        |fi
+        |
+        |# ─── Wait for VNC port (up to 30s) ─
+        |echo "[startup] Waiting for VNC on port ${'$'}VNC_PORT..."
+        |for i in $(seq 1 30); do
+        |  python3 -c "import socket; s=socket.socket(); s.settimeout(2); s.connect(('127.0.0.1', ${'$'}VNC_PORT)); s.close()" 2>/dev/null \
+        |    && echo "[startup] VNC ready! (attempt ${'$'}i)" && break
+        |  [ ${'$'}i -eq 30 ] && echo "[startup] VNC not ready after 30s"
         |  sleep 1
         |done
         |
-        |# ─── Fallback: warn but don't start anything on the port ──────
-        |# The Kotlin FallbackHealthServer (outside PRoot) already returns
-        |# {"status":"ok","mode":"fallback"} for health checks when the
-        |# bridge isn't accessible. Starting another server on the same
-        |# port would conflict with the real bridge when it eventually starts.
-        |if ! check_port 127.0.0.1 ${'$'}BACKEND_PORT; then
-        |  echo "[startup] WARNING: Bridge not ready on port ${'$'}BACKEND_PORT after 120s"
+        |# ─── Start fluxbox (window manager) ─
+        |echo "[startup] Starting fluxbox..."
+        |fluxbox &>/opt/gama/logs/fluxbox.log 2>&1 &
+        |
+        |# ─── Start GAMA GUI ─
+        |GAMA_HOME=/opt/gama
+        |if [ -f "${'$'}GAMA_HOME/Gama" ]; then
+        |  echo "[startup] Starting GAMA GUI..."
+        |  cd "${'$'}GAMA_HOME"
+        |  DISPLAY=${'$'}DISPLAY ./Gama -data /workspace &>/opt/gama/logs/gama.log 2>&1 &
+        |  GAMA_PID=${'$'}!
+        |  echo "[startup] GAMA PID: ${'$'}GAMA_PID"
+        |elif [ -f "${'$'}GAMA_HOME/headless/Gama" ]; then
+        |  echo "[startup] Starting GAMA headless..."
+        |  cd "${'$'}GAMA_HOME/headless"
+        |  DISPLAY=${'$'}DISPLAY ./Gama -data /workspace &>/opt/gama/logs/gama.log 2>&1 &
+        |  GAMA_PID=${'$'}!
+        |  echo "[startup] GAMA PID: ${'$'}GAMA_PID"
+        |else
+        |  echo "[startup] GAMA binary not found"
         |fi
         |
-        |# Keep alive
-        |while true; do sleep 10; done
+        |# ─── Monitor and keep alive ─
+        |while true; do
+        |  sleep 5
+        |  if [ -n "${'$'}GAMA_PID" ] && ! kill -0 ${'$'}GAMA_PID 2>/dev/null; then
+        |    echo "[startup] GAMA died, restarting..."
+        |    cd "${'$'}GAMA_HOME"
+        |    DISPLAY=${'$'}DISPLAY ./Gama -data /workspace &>/opt/gama/logs/gama.log 2>&1 &
+        |    GAMA_PID=${'$'}!
+        |    echo "[startup] GAMA restarted with PID ${'$'}GAMA_PID"
+        |  fi
+        |done
         |""".trimMargin()
 
     private fun extractRawResource(name: String, destDir: File): File? {

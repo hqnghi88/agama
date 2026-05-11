@@ -22,8 +22,6 @@ class SimulationService : Service() {
         const val ACTION_STATUS = "com.simulation.mobile.STATUS"
         const val CHANNEL_ID = "simulation_service"
         const val NOTIFICATION_ID = 1001
-        const val BACKEND_PORT = 8080
-        const val GUEST_BACKEND_PORT = 8081
 
         @Volatile
         var backendStatus: String = "stopped"
@@ -34,10 +32,16 @@ class SimulationService : Service() {
         @Volatile
         var backendPid: Int = -1
             private set
+        @Volatile
+        var vncHttpPort: Int = -1
+            private set
+        @Volatile
+        var vncWsPort: Int = -1
+            private set
     }
 
     private var prootManager: PRootManager? = null
-    private var fallbackServer: FallbackHealthServer? = null
+    private var vncProxyServer: VncProxyServer? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private val isRunning = AtomicBoolean(false)
 
@@ -77,6 +81,9 @@ class SimulationService : Service() {
                 val rootfsDir = File(filesDir, "rootfs")
                 val workspaceDir = File(filesDir, "workspace")
                 workspaceDir.mkdirs()
+                workspaceDir.setReadable(true, false)
+                workspaceDir.setWritable(true, false)
+                workspaceDir.setExecutable(true, false)
 
                 prootManager?.let { pm ->
                     val success = pm.setupRootfs(rootfsDir) { stage ->
@@ -91,32 +98,17 @@ class SimulationService : Service() {
                     }
 
                     backendProgress = ""
-                    // Start proxy server on port 8080 BEFORE PRoot.
-                    // Proxies API calls to the real guest backend on port 8081.
-                    // Falls back to {"status":"ok","mode":"fallback"} for health checks
-                    // when the guest backend is not yet ready.
                     backendStatus = "starting"
-                    backendProgress = "Starting proxy server..."
-                    updateNotification("Starting proxy server...")
-                    fallbackServer = FallbackHealthServer(BACKEND_PORT, GUEST_BACKEND_PORT)
-                    val fallbackStarted = fallbackServer!!.start()
-                    if (fallbackStarted) {
-                        Log.i(TAG, "Proxy server started on 127.0.0.1:$BACKEND_PORT -> 127.0.0.1:$GUEST_BACKEND_PORT")
+                    backendProgress = "Starting VNC + GAMA..."
+                    updateNotification("Starting VNC + GAMA...")
+                    pm.startPRoot(rootfsDir, workspaceDir) { pid ->
+                        backendPid = pid
                         backendStatus = "running"
-                        backendPid = -1
-                        backendProgress = "Backend running on port $BACKEND_PORT"
-                        updateNotification("Backend running on port $BACKEND_PORT")
-                        backendProgress = "Starting Linux container..."
-                        updateNotification("Starting Linux container...")
-                        pm.startPRoot(rootfsDir, workspaceDir, GUEST_BACKEND_PORT) { pid ->
-                            backendPid = pid
-                            backendProgress = "PRoot backend started with PID $pid"
-                            Log.i(TAG, "PRoot backend started with PID $pid")
-                        }
-                    } else {
-                        Log.e(TAG, "Proxy server failed to start")
-                        backendStatus = "error: proxy server failed to start (port $BACKEND_PORT in use?)"
-                        isRunning.set(false)
+                        backendProgress = "GAMA VNC at 127.0.0.1:5901"
+                        updateNotification("GAMA VNC ready on port 5901")
+                        Log.i(TAG, "PRoot backend started with PID $pid")
+
+                        startVncProxy()
                     }
                 }
             } catch (e: Exception) {
@@ -130,13 +122,32 @@ class SimulationService : Service() {
         }
     }
 
+    private fun startVncProxy() {
+        try {
+            val proxy = VncProxyServer(this)
+            if (proxy.start()) {
+                vncProxyServer = proxy
+                vncHttpPort = proxy.httpPort
+                vncWsPort = proxy.wsProxyPort
+                backendProgress = "VNC proxy ready: port ${proxy.wsProxyPort}"
+                Log.i(TAG, "VNC proxy started (HTTP:${proxy.httpPort}, WS:${proxy.wsProxyPort})")
+            } else {
+                Log.e(TAG, "Failed to start VNC proxy")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error starting VNC proxy", e)
+        }
+    }
+
     private fun stopBackend() {
         Log.d(TAG, "Stopping backend")
         backendStatus = "stopping"
         updateNotification("Stopping...")
+        vncProxyServer?.stop()
+        vncProxyServer = null
+        vncHttpPort = -1
+        vncWsPort = -1
         prootManager?.stopPRoot()
-        fallbackServer?.stop()
-        fallbackServer = null
         backendStatus = "stopped"
         backendPid = -1
         isRunning.set(false)
