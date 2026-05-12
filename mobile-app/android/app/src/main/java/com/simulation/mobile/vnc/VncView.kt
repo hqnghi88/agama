@@ -38,6 +38,7 @@ class VncView @JvmOverloads constructor(
     private val paint = Paint(Paint.FILTER_BITMAP_FLAG)
     private var destRect = RectF()
     private var pointerButtonMask = 0
+    private var keyboardShowing = false
 
     private val keysymMap = mapOf(
         KeyEvent.KEYCODE_A to 0x0061, KeyEvent.KEYCODE_B to 0x0062,
@@ -233,13 +234,18 @@ class VncView @JvmOverloads constructor(
         rfbClient = null
     }
 
+    override fun onCheckIsTextEditor(): Boolean = keyboardShowing
+
     fun toggleKeyboard() {
-        val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-        if (imm.isAcceptingText) {
-            imm.hideSoftInputFromWindow(windowToken, 0)
-        } else {
-            requestFocus()
-            imm.showSoftInput(this, InputMethodManager.SHOW_IMPLICIT)
+        post {
+            keyboardShowing = !keyboardShowing
+            val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            if (keyboardShowing) {
+                requestFocus()
+                imm.showSoftInput(this, 0)
+            } else {
+                imm.hideSoftInputFromWindow(windowToken, 0)
+            }
         }
     }
 
