@@ -14,13 +14,13 @@ MOBILE_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 OUTPUT_DIR="${1:-${MOBILE_ROOT}/build/rootfs}"
 ROOTFS_TAR="${MOBILE_ROOT}/android/app/src/main/res/raw/rootfs_tar_gz"
 APK_ASSETS_DIR="${MOBILE_ROOT}/android/app/src/main/res/raw"
-DEBIAN_VERSION="bookworm"
+
 
 echo "╔═══════════════════════════════════════════════════════════╗"
-echo "║       GAMA Mobile - Rootfs Builder                       ║"
+echo "║       GAMA Mobile - Rootfs Builder (Ubuntu)              ║"
 echo "╚═══════════════════════════════════════════════════════════╝"
 echo ""
-echo "[rootfs] Building Debian ${DEBIAN_VERSION} ARM64 rootfs"
+echo "[rootfs] Building Ubuntu ARM64 rootfs"
 echo "[rootfs] Output: ${OUTPUT_DIR}"
 
 mkdir -p "${OUTPUT_DIR}"
@@ -61,58 +61,50 @@ echo "[rootfs] Building rootfs (this may take a few minutes)..."
 
 # Create a Dockerfile for the rootfs build
 cat > /tmp/Dockerfile.gama-rootfs << 'DOCKEREOF'
-FROM arm64v8/debian:bookworm-slim AS rootfs
+FROM arm64v8/ubuntu:24.04 AS rootfs
 
 # Avoid interactive debconf
 ENV DEBIAN_FRONTEND=noninteractive
 ENV DEBCONF_NONINTERACTIVE_SEEN=true
 
-# Install core packages (openjdk-17-headless for system deps only, actual JRE is Temurin 25 below)
+# Install packages matching b.sh + X11/VNC for headless PRoot
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    # Required runtime
-    ca-certificates \
-    curl \
-    # X11 + VNC for full GAMA GUI
-    tightvncserver \
-    x11vnc \
-    xvfb \
-    x11-utils \
-    xfonts-base \
-    openbox \
-    # GTK3 runtime for GAMA full GUI (./Gama binary requires libgtk-3.so.0)
+    # From b.sh: Java 21 + GTK + X11 libs
+    openjdk-21-jdk \
+    # GAMA product compiled for Java 25; keep 25 as default, 21 for compatibility
+    openjdk-25-jdk \
     libgtk-3-0 \
-    # Additional X11/GL deps
-    libxdamage1 \
-    libxcomposite1 \
-    libxrandr2 \
+    libx11-6 \
     libxtst6 \
     libxrender1 \
     libfontconfig1 \
-    # Vulkan/Zink for GPU-accelerated OpenGL
-    mesa \
-    libvulkan1 \
-    # System utilities
-    procps \
-    iproute2 \
-    netcat-openbsd \
+    # From b.sh: dbus + openbox
     dbus-x11 \
+    openbox \
+    # X11 + VNC for headless (replaces termux-x11 from c.sh)
+    xvfb \
+    x11vnc \
+    x11-utils \
+    xfonts-base \
+    # Vulkan/Zink for GPU-accelerated OpenGL
+    libgl1-mesa-dri \
+    mesa-utils \
+    libvulkan1 \
     # Python for bridge server
     python3 \
     python3-pip \
-    # Build tools (optional)
-    gpg \
+    # VNC fallback when Xvfb hard-link locking fails under PRoot
+    tightvncserver \
+    # System utilities
+    ca-certificates \
+    curl \
+    procps \
+    netcat-openbsd \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Download and install Eclipse Temurin JDK 25 JRE (ARM64)
-RUN TEMURIN_URL="https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.3+9/OpenJDK25U-jre_aarch64_linux_hotspot_25.0.3_9.tar.gz" && \
-    echo "[rootfs] Downloading Temurin JDK 25 JRE..." && \
-    curl -fsSL -o /tmp/jdk.tar.gz "$TEMURIN_URL" && \
-    mkdir -p /usr/lib/jvm/java-25 && \
-    tar xzf /tmp/jdk.tar.gz -C /usr/lib/jvm/java-25 --strip-components=1 && \
-    rm /tmp/jdk.tar.gz && \
-    ln -sf /usr/lib/jvm/java-25/bin/java /usr/bin/java && \
-    echo "[rootfs] Temurin JDK 25 installed"
+# Set java-25 as default (GAMA product compiled for Java 25)
+RUN ln -sf /usr/lib/jvm/java-25-openjdk-arm64/bin/java /usr/bin/java
 
 # Install Python websockets library for the bridge
 RUN pip3 install --no-cache-dir --break-system-packages websockets
@@ -129,8 +121,10 @@ RUN echo "=== Verification ===" && \
     echo "pip:" && pip3 --version
 
 # Set up environment
-RUN echo 'export JAVA_HOME=/usr/lib/jvm/java-25' >> /etc/profile.d/gama-env.sh && \
+RUN echo 'export JAVA_HOME=/usr/lib/jvm/java-25-openjdk-arm64' >> /etc/profile.d/gama-env.sh && \
     echo 'export PATH=$JAVA_HOME/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' >> /etc/profile.d/gama-env.sh && \
+    echo 'export DISPLAY=:0' >> /etc/profile.d/gama-env.sh && \
+    echo 'export GDK_BACKEND=x11' >> /etc/profile.d/gama-env.sh && \
     echo 'export _JAVA_OPTIONS="-Xms64m -Xmx512m -XX:+UseG1GC -Djava.awt.headless=true"' >> /etc/profile.d/gama-env.sh && \
     chmod +x /etc/profile.d/gama-env.sh
 
@@ -212,33 +206,31 @@ for script in gama-launcher.sh gama-vnc.sh bridge-server.py java-env.sh; do
     fi
 done
 
+# ─── Copy LD_PRELOAD shim for Xvfb hard-link fix ──────────────────────
+if [ -f "${APK_ASSETS_DIR}/override_link_so" ]; then
+    mkdir -p "${OUTPUT_DIR}/opt/gama/"
+    cp "${APK_ASSETS_DIR}/override_link_so" "${OUTPUT_DIR}/opt/gama/override_link.so"
+    chmod +x "${OUTPUT_DIR}/opt/gama/override_link.so"
+    echo "[rootfs] LD_PRELOAD shim installed at /opt/gama/override_link.so"
+fi
+
 # ─── Set up Java alternatives ─────────────────────────────────────────
-# Ensure java-25 symlink and /usr/bin/java point to the Temurin JDK
-if [ -d "${OUTPUT_DIR}/usr/lib/jvm/java-25" ]; then
-    echo "[rootfs] Found Temurin JDK 25 at /usr/lib/jvm/java-25"
-    if [ -f "${OUTPUT_DIR}/usr/lib/jvm/java-25/bin/java" ]; then
-        ln -sf /usr/lib/jvm/java-25/bin/java "${OUTPUT_DIR}/usr/bin/java"
-        echo "[rootfs] Java symlink: /usr/bin/java -> /usr/lib/jvm/java-25/bin/java"
+# Ensure java symlink points to openjdk-25 (GAMA product compiled for J25)
+if [ -d "${OUTPUT_DIR}/usr/lib/jvm/java-25-openjdk-arm64" ]; then
+    echo "[rootfs] Found OpenJDK 25 at /usr/lib/jvm/java-25-openjdk-arm64"
+    if [ -f "${OUTPUT_DIR}/usr/lib/jvm/java-25-openjdk-arm64/bin/java" ]; then
+        ln -sf /usr/lib/jvm/java-25-openjdk-arm64/bin/java "${OUTPUT_DIR}/usr/bin/java"
+        echo "[rootfs] Java symlink: /usr/bin/java -> /usr/lib/jvm/java-25-openjdk-arm64/bin/java"
     fi
 fi
 
 # ─── Clean stale/incompatible files ──────────────────────────────────
-# Remove Python 3.14 from /usr/local/bin if present (requires GLIBC 2.38,
-# but Debian Bookworm ships 2.36).  The system Python 3.11 at /usr/bin
-# is the one we should use.
-echo "[rootfs] Cleaning incompatible Python 3.14 from /usr/local..."
-rm -f "${OUTPUT_DIR}/usr/local/bin/python3" \
-      "${OUTPUT_DIR}/usr/local/bin/python3.14" \
-      "${OUTPUT_DIR}/usr/local/bin/python3-config" \
-      "${OUTPUT_DIR}/usr/local/bin/python3.14-config" \
-      "${OUTPUT_DIR}/usr/local/bin/pip3" \
-      "${OUTPUT_DIR}/usr/local/bin/pip3.14" \
-      "${OUTPUT_DIR}/usr/local/bin/idle3" \
-      "${OUTPUT_DIR}/usr/local/bin/idle3.14" \
-      "${OUTPUT_DIR}/usr/local/bin/pydoc3" \
-      "${OUTPUT_DIR}/usr/local/bin/pydoc3.14"
-# Recreate python3 symlink pointing to system Python 3.11
-ln -sf python3.11 "${OUTPUT_DIR}/usr/bin/python3"
+# Ensure python3 points to system Python
+if [ -f "${OUTPUT_DIR}/usr/bin/python3.12" ]; then
+    ln -sf python3.12 "${OUTPUT_DIR}/usr/bin/python3"
+elif [ -f "${OUTPUT_DIR}/usr/bin/python3.11" ]; then
+    ln -sf python3.11 "${OUTPUT_DIR}/usr/bin/python3"
+fi
 
 # Remove AppleDouble metadata files from macOS
 find "${OUTPUT_DIR}" -name '._*' -delete 2>/dev/null || true

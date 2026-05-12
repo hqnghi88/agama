@@ -2,7 +2,7 @@
 # Java environment configuration for GAMA Mobile backend
 # Source this file to set up Java paths and JVM options
 
-export JAVA_HOME=/usr/lib/jvm/java-25
+export JAVA_HOME=/usr/lib/jvm/java-25-openjdk-arm64
 export JDK_HOME=${JAVA_HOME}
 export JRE_HOME=${JAVA_HOME}
 

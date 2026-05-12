@@ -2,7 +2,7 @@
 # Rootfs startup.sh - runs inside PRoot Linux container
 # Starts VNC server + full GAMA GUI for remote display via VNC viewer
 
-export JAVA_HOME=/usr/lib/jvm/java-25
+export JAVA_HOME=/usr/lib/jvm/java-25-openjdk-arm64
 export PATH=$JAVA_HOME/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 export HOME=/data
 export TMPDIR=/tmp

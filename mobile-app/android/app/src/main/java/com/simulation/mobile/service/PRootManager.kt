@@ -62,14 +62,18 @@ class PRootManager(private val context: Context) {
                 val output = outputHolder.get()
                 Log.i(TAG, "Tar exit code: $exitCode")
 
-                if (exitCode != 0) {
-                    Log.e(TAG, "Rootfs extraction failed with code $exitCode")
+                if (exitCode >= 2) {
+                    Log.e(TAG, "Rootfs extraction fatal error (exit code $exitCode)")
                     Log.e(TAG, "Tar output: ${output.take(500)}")
                     Log.i(TAG, "Archive file exists: ${archiveFile.exists()}, size: ${archiveFile.length()}")
                     Log.i(TAG, "Rootfs dir exists: ${rootfsDir.exists()}, writable: ${rootfsDir.canWrite()}")
                     // Clean up so next launch retries from scratch
                     rootfsDir.deleteRecursively()
                     return false
+                }
+                if (exitCode == 1) {
+                    Log.w(TAG, "Tar had warnings (exit code 1, likely hard links on Android)")
+                    Log.w(TAG, "Tar output: ${output.take(300)}")
                 }
             }
 
@@ -232,7 +236,7 @@ class PRootManager(private val context: Context) {
                 "PROOT_LOADER_32" to loader32Bin,
                 "LD_LIBRARY_PATH" to libHelperDir.absolutePath,
                 "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/bin",
-                "JAVA_HOME" to "/usr/lib/jvm/java-25",
+                "JAVA_HOME" to "/usr/lib/jvm/java-25-openjdk-arm64",
                 "TERM" to "xterm"
             )
 
@@ -325,8 +329,22 @@ class PRootManager(private val context: Context) {
             script.setExecutable(true)
 
             Log.i(TAG, "Startup script written to ${script.absolutePath}")
+
+            val soResId = context.resources.getIdentifier("override_link_so", "raw", context.packageName)
+            if (soResId != 0) {
+                val soFile = File(optDir, "override_link.so")
+                context.resources.openRawResource(soResId).use { input ->
+                    soFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                soFile.setExecutable(true)
+                Log.i(TAG, "LD_PRELOAD shim written to ${soFile.absolutePath}")
+            } else {
+                Log.w(TAG, "override_link_so resource not found — Xvfb may fail")
+            }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to write startup script", e)
+            Log.e(TAG, "Failed to write startup script components", e)
         }
     }
 
@@ -353,125 +371,135 @@ class PRootManager(private val context: Context) {
     private fun generateStartupScript(): String = """
         |#!/bin/bash
         |
-        |# GAMA Mobile VNC startup - runs inside PRoot Linux container
-        |# Tries Xvfb + x11vnc first, falls back to Xtightvnc (combined X+VNC)
+        |# GAMA Mobile startup — Ubuntu PRoot
+        |# Commands mirror c.sh + u.sh pattern, with VNC fallback
         |
         |unset LD_PRELOAD
-        |export JAVA_HOME=/usr/lib/jvm/java-25
+        |export JAVA_HOME=/usr/lib/jvm/java-25-openjdk-arm64
         |export PATH=${'$'}JAVA_HOME/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         |export HOME=/data
         |export USER=shell
         |export TMPDIR=/tmp
         |export VNC_PORT=5901
-        |export DISPLAY=:1
-        |export GDK_BACKEND=x11
         |
-        |# GPU/driver settings for mobile GPU (Zink over Vulkan)
+        |# From u.sh / c.sh
+        |export DISPLAY=:0
+        |export GDK_BACKEND=x11
         |export MESA_LOADER_DRIVER_OVERRIDE=zink
         |export GALLIUM_DRIVER=zink
         |export ZINK_DESCRIPTORS=lazy
         |export TU_DEBUG=noconform
         |
-        |echo "[startup] GAMA Mobile VNC starting"
-        |echo "[startup] Java: $(java -version 2>&1 | head -1 2>/dev/null || echo 'not found')"
+        |mkdir -p /opt/gama/logs /tmp /data /workspace 2>/dev/null
         |
-        |mkdir -p /tmp /data /workspace /opt/gama/logs /tmp/.X11-unix 2>/dev/null
-        |chmod 1777 /tmp /tmp/.X11-unix 2>/dev/null || true
-        |chmod 777 /workspace /data /opt/gama/logs 2>/dev/null || true
-        |
-        |# ─── Start D-Bus (required by X11 and GTK) ─
-        |mkdir -p /run/dbus /var/run/dbus /dev/shm 2>/dev/null
-        |chmod 777 /dev/shm 2>/dev/null || true
-        |service dbus start 2>/dev/null || dbus-daemon --system --fork 2>/dev/null || true
-        |echo "[startup] D-Bus status: $(pgrep dbus-daemon >/dev/null 2>&1 && echo 'OK' || echo 'FAILED')"
-        |
-        |# ─── LD_PRELOAD shim to make link() work (Android kernel blocks hard links) ─
+        |# LD_PRELOAD shim for Android kernel hard link restriction
         |if [ -f /opt/gama/override_link.so ]; then
         |  export LD_PRELOAD=/opt/gama/override_link.so
-        |else
-        |  echo "[startup] override_link.so not found, skipping LD_PRELOAD"
         |fi
         |
-        |# ─── Remove stale X lock files ─
-        |rm -f /tmp/.X1-lock /tmp/.X11-unix/X1 2>/dev/null || true
-        |chmod 1777 /tmp/.X11-unix 2>/dev/null || true
+        |echo "[startup] Ubuntu PRoot starting"
+        |java -version 2>&1 | head -1 || echo "[startup] Java not found"
         |
-        |# ─── Determine which X+VNC server to use ─
-        |USE_XVNC=false
+        |# From c.sh: dbus + /dev/shm (with fallbacks for PRoot)
+        |service dbus start 2>/dev/null || dbus-daemon --system --fork 2>/dev/null || true
+        |mkdir -p /dev/shm 2>/dev/null || true
+        |chmod 777 /dev/shm 2>/dev/null || true
         |
-        |# ─── Try Xvfb (virtual framebuffer X server) ─
-        |echo "[startup] Starting Xvfb on display ${'$'}DISPLAY..."
-        |Xvfb ${'$'}DISPLAY -screen 0 1280x720x16 -pixdepths 8 16 24 32 -noreset +extension GLX +extension RENDER &>/opt/gama/logs/xvfb.log 2>&1 &
-        |XVFB_PID=${'$'}!
-        |sleep 3
+        |# Ensure DNS works inside PRoot for apt-get fallback
+        |if ! grep -qs nameserver /etc/resolv.conf 2>/dev/null; then
+        |  echo "nameserver 8.8.8.8" > /etc/resolv.conf 2>/dev/null || true
+        |  echo "nameserver 8.8.4.4" >> /etc/resolv.conf 2>/dev/null || true
+        |fi
+        |
+        |# X server + VNC: try Xvnc first (tightvncserver), fallback Xvfb+x11vnc
+        |# Xvnc is preferred: it's a combined X+VNC server, no lock file / XKB issues
+        |rm -f /tmp/.X0-lock /tmp/.X11-unix/X0 2>/dev/null || true
+        |mkdir -p /tmp/.X11-unix 2>/dev/null || true
         |
         |X_SERVER_RUNNING=false
-        |if kill -0 ${'$'}XVFB_PID 2>/dev/null; then
-        |  echo "[startup] Xvfb running (PID ${'$'}XVFB_PID)"
-        |  X_SERVER_RUNNING=true
-        |  # ─── Start x11vnc (VNC server attached to Xvfb) ─
-        |  echo "[startup] Starting x11vnc on port ${'$'}VNC_PORT..."
-        |  x11vnc -display ${'$'}DISPLAY -forever -nopw -quiet -rfbport ${'$'}VNC_PORT &>/opt/gama/logs/x11vnc.log 2>&1 &
-        |fi
-        |# Clean lock file in case Xvfb died but left stale lock
-        |rm -f /tmp/.X1-lock /tmp/.X11-unix/X1 2>/dev/null || true
         |
-        |if [ "${'$'}X_SERVER_RUNNING" = false ]; then
-        |  echo "[startup] Xvfb failed, trying Xtightvnc..."
-        |  Xtightvnc ${'$'}DISPLAY -geometry 1280x720 -depth 16 -rfbport ${'$'}VNC_PORT \
-        |    -desktop GAMA -localhost &>/opt/gama/logs/xvnc.log 2>&1 &
+        |if command -v Xvnc &>/dev/null; then
+        |  echo "[startup] Starting Xvnc on display ${'$'}DISPLAY port ${'$'}VNC_PORT..."
+        |  Xvnc ${'$'}DISPLAY -geometry 1280x720 -depth 16 -rfbport ${'$'}VNC_PORT \
+        |    -localhost -ac -desktop GAMA \
+        |    &>/opt/gama/logs/xvnc.log 2>&1 &
         |  XVNC_PID=${'$'}!
-        |  sleep 3
+        |  sleep 4
         |  if kill -0 ${'$'}XVNC_PID 2>/dev/null; then
-        |    echo "[startup] Xtightvnc running (PID ${'$'}XVNC_PID)"
+        |    echo "[startup] Xvnc running (PID ${'$'}XVNC_PID)"
         |    X_SERVER_RUNNING=true
-        |  else
-        |    echo "[startup] Xtightvnc also failed (check /opt/gama/logs/xvnc.log)"
         |  fi
         |fi
         |
-        |# ─── Wait for VNC port (up to 30s) ─
+        |if [ "${'$'}X_SERVER_RUNNING" = false ]; then
+        |  echo "[startup] Xvnc not available, trying to install tightvncserver..."
+        |  export DEBIAN_FRONTEND=noninteractive
+        |  apt-get update -qq 2>/dev/null
+        |  apt-get install -y -qq tightvncserver 2>/dev/null
+        |  if command -v Xvnc &>/dev/null; then
+        |    echo "[startup] Starting Xvnc (after install)..."
+        |    Xvnc ${'$'}DISPLAY -geometry 1280x720 -depth 16 -rfbport ${'$'}VNC_PORT \
+        |      -localhost -ac -desktop GAMA \
+        |      -noreset +extension GLX +extension RENDER \
+        |      &>/opt/gama/logs/xvnc.log 2>&1 &
+        |    XVNC_PID=${'$'}!
+        |    sleep 4
+        |    if kill -0 ${'$'}XVNC_PID 2>/dev/null; then
+        |      echo "[startup] Xvnc running (PID ${'$'}XVNC_PID)"
+        |      X_SERVER_RUNNING=true
+        |    fi
+        |  fi
+        |fi
+        |
+        |if [ "${'$'}X_SERVER_RUNNING" = false ]; then
+        |  echo "[startup] Xvnc failed, trying Xvfb + x11vnc..."
+        |  Xvfb ${'$'}DISPLAY -screen 0 1280x720x16 -pixdepths 8 16 24 32 -noreset +extension GLX +extension RENDER &>/opt/gama/logs/xvfb.log 2>&1 &
+        |  XVFB_PID=${'$'}!
+        |  sleep 3
+        |  if kill -0 ${'$'}XVFB_PID 2>/dev/null; then
+        |    echo "[startup] Xvfb running (PID ${'$'}XVFB_PID)"
+        |    echo "[startup] Starting x11vnc on port ${'$'}VNC_PORT..."
+        |    x11vnc -display ${'$'}DISPLAY -forever -nopw -quiet -rfbport ${'$'}VNC_PORT &>/opt/gama/logs/x11vnc.log 2>&1 &
+        |    X_SERVER_RUNNING=true
+        |  else
+        |    echo "[startup] Xvfb also failed — no X server available"
+        |  fi
+        |fi
+        |
+        |# Wait for VNC port (up to 60s)
         |echo "[startup] Waiting for VNC on port ${'$'}VNC_PORT..."
-        |for i in $(seq 1 30); do
+        |for i in $(seq 1 60); do
         |  python3 -c "import socket; s=socket.socket(); s.settimeout(2); s.connect(('127.0.0.1', ${'$'}VNC_PORT)); s.close()" 2>/dev/null \
         |    && echo "[startup] VNC ready! (attempt ${'$'}i)" && break
-        |  [ ${'$'}i -eq 30 ] && echo "[startup] VNC not ready after 30s"
+        |  [ ${'$'}i -eq 60 ] && echo "[startup] VNC not ready after 60s"
         |  sleep 1
         |done
         |
-        |# ─── Start openbox (window manager) ─
+        |# From c.sh: openbox
         |echo "[startup] Starting openbox..."
-        |openbox &>/opt/gama/logs/openbox.log 2>&1 &
+        |pgrep openbox | openbox &
         |
-        |# ─── Start GAMA GUI ─
+        |# From c.sh: cd gama && ./Gama
         |GAMA_HOME=/opt/gama
         |if [ -f "${'$'}GAMA_HOME/Gama" ]; then
-        |  echo "[startup] Starting GAMA GUI..."
         |  cd "${'$'}GAMA_HOME"
-        |  DISPLAY=${'$'}DISPLAY ./Gama -vmargs \
-        |    -Dosgi.locking=none \
-        |    -Dorg.eclipse.core.resources.disable.workspace.locking=true &>/opt/gama/logs/gama.log 2>&1 &
-        |  GAMA_PID=${'$'}!
-        |  echo "[startup] GAMA PID: ${'$'}GAMA_PID"
-        |elif [ -f "${'$'}GAMA_HOME/headless/Gama" ]; then
-        |  echo "[startup] Starting GAMA headless..."
-        |  cd "${'$'}GAMA_HOME/headless"
-        |  DISPLAY=${'$'}DISPLAY ./Gama -vmargs \
+        |  echo "[startup] Launching GAMA..."
+        |  DISPLAY=:0 ./Gama -vmargs \
         |    -Dosgi.locking=none \
         |    -Dorg.eclipse.core.resources.disable.workspace.locking=true &>/opt/gama/logs/gama.log 2>&1 &
         |  GAMA_PID=${'$'}!
         |  echo "[startup] GAMA PID: ${'$'}GAMA_PID"
         |else
-        |  echo "[startup] GAMA binary not found"
+        |  echo "[startup] GAMA binary not found at ${'$'}GAMA_HOME"
         |fi
         |
-        |# ─── Monitor and keep alive ─
+        |# Keep alive
         |while true; do
         |  sleep 5
         |  if [ -n "${'$'}GAMA_PID" ] && ! kill -0 ${'$'}GAMA_PID 2>/dev/null; then
         |    echo "[startup] GAMA died, restarting..."
         |    cd "${'$'}GAMA_HOME"
-        |    DISPLAY=${'$'}DISPLAY ./Gama -vmargs \
+        |    DISPLAY=:0 ./Gama -vmargs \
         |      -Dosgi.locking=none \
         |      -Dorg.eclipse.core.resources.disable.workspace.locking=true &>/opt/gama/logs/gama.log 2>&1 &
         |    GAMA_PID=${'$'}!
