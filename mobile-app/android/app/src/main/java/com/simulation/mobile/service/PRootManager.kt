@@ -197,6 +197,7 @@ class PRootManager(private val context: Context) {
             if (!File(prootBin).exists()) {
                 Log.e(TAG, "PRoot binary not found at $prootBin")
                 isRunning.set(false)
+                onStarted(-1)
                 return
             }
 
@@ -289,6 +290,7 @@ class PRootManager(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start PRoot", e)
             isRunning.set(false)
+            try { onStarted(-1) } catch (_: Exception) {}
         }
     }
 
@@ -383,7 +385,6 @@ class PRootManager(private val context: Context) {
         |service dbus start 2>/dev/null || dbus-daemon --system --fork 2>/dev/null || true
         |echo "[startup] D-Bus status: $(pgrep dbus-daemon >/dev/null 2>&1 && echo 'OK' || echo 'FAILED')"
         |
-
         |# ─── LD_PRELOAD shim to make link() work (Android kernel blocks hard links) ─
         |if [ -f /opt/gama/override_link.so ]; then
         |  export LD_PRELOAD=/opt/gama/override_link.so
@@ -447,18 +448,18 @@ class PRootManager(private val context: Context) {
         |if [ -f "${'$'}GAMA_HOME/Gama" ]; then
         |  echo "[startup] Starting GAMA GUI..."
         |  cd "${'$'}GAMA_HOME"
-         |  DISPLAY=${'$'}DISPLAY ./Gama -vmargs \
-         |    -Dosgi.locking=none \
-         |    -Dorg.eclipse.core.resources.disable.workspace.locking=true &>/opt/gama/logs/gama.log 2>&1 &
-         |  GAMA_PID=${'$'}!
-         |  echo "[startup] GAMA PID: ${'$'}GAMA_PID"
-         |elif [ -f "${'$'}GAMA_HOME/headless/Gama" ]; then
-         |  echo "[startup] Starting GAMA headless..."
-         |  cd "${'$'}GAMA_HOME/headless"
-         |  DISPLAY=${'$'}DISPLAY ./Gama -vmargs \
-         |    -Dosgi.locking=none \
-         |    -Dorg.eclipse.core.resources.disable.workspace.locking=true &>/opt/gama/logs/gama.log 2>&1 &
-         |  GAMA_PID=${'$'}!
+        |  DISPLAY=${'$'}DISPLAY ./Gama -vmargs \
+        |    -Dosgi.locking=none \
+        |    -Dorg.eclipse.core.resources.disable.workspace.locking=true &>/opt/gama/logs/gama.log 2>&1 &
+        |  GAMA_PID=${'$'}!
+        |  echo "[startup] GAMA PID: ${'$'}GAMA_PID"
+        |elif [ -f "${'$'}GAMA_HOME/headless/Gama" ]; then
+        |  echo "[startup] Starting GAMA headless..."
+        |  cd "${'$'}GAMA_HOME/headless"
+        |  DISPLAY=${'$'}DISPLAY ./Gama -vmargs \
+        |    -Dosgi.locking=none \
+        |    -Dorg.eclipse.core.resources.disable.workspace.locking=true &>/opt/gama/logs/gama.log 2>&1 &
+        |  GAMA_PID=${'$'}!
         |  echo "[startup] GAMA PID: ${'$'}GAMA_PID"
         |else
         |  echo "[startup] GAMA binary not found"

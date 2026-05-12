@@ -103,13 +103,20 @@ class SimulationService : Service() {
                     backendProgress = "Starting VNC + GAMA..."
                     updateNotification("Starting VNC + GAMA...")
                     pm.startPRoot(rootfsDir, workspaceDir) { pid ->
-                        backendPid = pid
-                        backendStatus = "running"
-                        backendProgress = "GAMA VNC at 127.0.0.1:5901"
-                        updateNotification("GAMA VNC ready on port 5901")
-                        Log.i(TAG, "PRoot backend started with PID $pid")
-
-                        startVncProxy()
+                        if (pid >= 0) {
+                            backendPid = pid
+                            backendStatus = "running"
+                            backendProgress = "GAMA VNC at 127.0.0.1:5901"
+                            updateNotification("GAMA VNC ready on port 5901")
+                            Log.i(TAG, "PRoot backend started with PID $pid")
+                            startVncProxy()
+                        } else {
+                            Log.e(TAG, "PRoot failed to start")
+                            backendStatus = "error: PRoot failed to start"
+                            backendProgress = ""
+                            isRunning.set(false)
+                            updateNotification("PRoot failed to start")
+                        }
                     }
                 }
             } catch (e: Exception) {
