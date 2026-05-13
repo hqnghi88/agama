@@ -13,11 +13,11 @@ chmod 777 $SHARED_MEMORY_DIR
 export DISPLAY=:1
 export GDK_BACKEND=x11
 export HOME=/data
-# Zink (OpenGL over Vulkan) for Adreno GPU
-export MESA_LOADER_DRIVER_OVERRIDE=zink
-export GALLIUM_DRIVER=zink
-export ZINK_DESCRIPTORS=lazy
-export TU_DEBUG=noconform
+# # Zink (OpenGL over Vulkan) for Adreno GPU
+# export MESA_LOADER_DRIVER_OVERRIDE=zink
+# export GALLIUM_DRIVER=zink
+# export ZINK_DESCRIPTORS=lazy
+# export TU_DEBUG=noconform
 
 # Install VNC server if not available (inside PRoot Ubuntu)
 if ! command -v vncserver &>/dev/null && ! command -v tightvncserver &>/dev/null; then
