@@ -19,12 +19,29 @@ export GALLIUM_DRIVER=zink
 export ZINK_DESCRIPTORS=lazy
 export TU_DEBUG=noconform
 
-mkdir -p /data/.vnc
-echo -n "" | /usr/bin/vncpasswd -f > /data/.vnc/passwd 2>/dev/null
-chmod 600 /data/.vnc/passwd
+# Install VNC server if not available (tigervnc in Termux)
+if ! command -v vncserver &>/dev/null && ! command -v tightvncserver &>/dev/null; then
+  echo "[c.sh] VNC server not found, installing tigervnc..."
+  pkg install -y tigervnc 2>/dev/null
+fi
 
-echo "[c.sh] Starting VNC server on display :1..."
-tightvncserver :1 -geometry 1280x720 -depth 24 -localhost no -passwd /data/.vnc/passwd 2>&1
+# Determine VNC server binary name
+VNC_BIN=$(command -v tightvncserver || command -v vncserver || echo "")
+if [ -z "${VNC_BIN}" ]; then
+  echo "[c.sh] ERROR: No VNC server available"
+  exit 1
+fi
+
+# vncpasswd path (tigervnc vs tightvnc)
+VNC_PASSWD=$(command -v vncpasswd || echo "")
+mkdir -p /data/.vnc
+if [ -n "${VNC_PASSWD}" ]; then
+  echo -n "" | ${VNC_PASSWD} -f > /data/.vnc/passwd 2>/dev/null
+fi
+chmod 600 /data/.vnc/passwd 2>/dev/null
+
+echo "[c.sh] Starting VNC server (${VNC_BIN}) on display :1..."
+${VNC_BIN} :1 -geometry 1280x720 -depth 24 -localhost no -passwd /data/.vnc/passwd 2>&1
 sleep 2
 
 # Run openbox if not already running
