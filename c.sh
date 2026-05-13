@@ -72,4 +72,4 @@ xrandr --addmode screen 1280x720_60.00 2>/dev/null || true
 xrandr --output screen --mode 1280x720_60.00 2>/dev/null || true
 
 echo "[c.sh] Launching GAMA..."
-./GAMA -vmargs -Djogl.disable.egl=true -Djogl.disable.openglcore=false
+./Gama -vmargs -Djogl.disable.egl=true -Djogl.disable.openglcore=false
