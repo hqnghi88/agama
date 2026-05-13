@@ -2,7 +2,7 @@ cd /data/data/com.termux/files/home/gama
 
 # Download and extract GAMA product if not already present
 if [ ! -f ./Gama ]; then
-  apt install libgl1 libglx-mesa0 libegl1 freeglut3-dev libxcursor1 libxrandr2 libxxf86vm1 -y
+  apt install libgl1 libglx-mesa0 libegl1 freeglut3-dev libxcursor1 libxrandr2 libxxf86vm1 x11-xserver-utils -y
 
   echo "[c.sh] Downloading GAMA..."
   curl -L https://github.com/hqnghi88/agama/releases/download/draft-20260308070312/gama.application-linux.gtk.aarch64.tar.gz | tar -xz --no-same-permissions --no-same-owner
@@ -14,21 +14,23 @@ chmod 777 $SHARED_MEMORY_DIR
 export DISPLAY=:1
 export GDK_BACKEND=x11
 export HOME=/data
-# Enable Zink (OpenGL over Vulkan)
-export DISPLAY=:1
 export GALLIUM_DRIVER=llvmpipe
 export LIBGL_ALWAYS_SOFTWARE=1
+export QT_X11_NO_MITSHM=1
+export _X11_NO_MITSHM=1
 
 
 # Install VNC server if not available (inside PRoot Ubuntu)
-if ! command -v vncserver &>/dev/null && ! command -v tightvncserver &>/dev/null; then
-  echo "[c.sh] VNC server not found, installing tightvncserver..."
+# Prefer tigervnc (supports RANDR extension) over tightvnc
+if ! command -v tigervncserver &>/dev/null && ! command -v vncserver &>/dev/null && ! command -v tightvncserver &>/dev/null; then
+  echo "[c.sh] VNC server not found, installing tigervnc..."
   apt-get update -qq 2>/dev/null
+  printf '\n\n' | apt-get install -y -qq tigervnc-standalone-server 2>/dev/null || \
   printf '\n\n' | apt-get install -y -qq tightvncserver 2>/dev/null
 fi
 
 # Determine VNC server binary name
-VNC_BIN=$(command -v tightvncserver || command -v vncserver || echo "")
+VNC_BIN=$(command -v tigervncserver || command -v tightvncserver || command -v vncserver || echo "")
 if [ -z "${VNC_BIN}" ]; then
   echo "[c.sh] ERROR: No VNC server available"
   exit 1
@@ -63,5 +65,11 @@ done
 # Run fluxbox if not already running
 pgrep fluxbox | fluxbox &
 
+# Configure RANDR extension (missing in tightvnc, present in tigervnc)
+export XLIB_SKIP_ARGB_VISUALS=1
+xrandr --newmode "1280x720_60.00" 74.48 1280 1336 1472 1664 720 721 724 746 -hsync +vsync 2>/dev/null || true
+xrandr --addmode screen 1280x720_60.00 2>/dev/null || true
+xrandr --output screen --mode 1280x720_60.00 2>/dev/null || true
+
 echo "[c.sh] Launching GAMA..."
-./Gama
+./GAMA -vmargs -Djogl.disable.egl=true -Djogl.disable.openglcore=false
