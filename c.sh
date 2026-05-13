@@ -44,6 +44,11 @@ if [ -n "${VNC_PASSWD}" ]; then
 fi
 chmod 600 /data/.vnc/passwd 2>/dev/null
 
+# Pre-create tigervnc config dir to avoid migration error
+mkdir -p /data/.config/tigervnc
+cp /data/.vnc/passwd /data/.config/tigervnc/passwd 2>/dev/null || true
+chmod 600 /data/.config/tigervnc/passwd 2>/dev/null
+
 # Kill any previous VNC session on :1 and clean lock files
 ${VNC_BIN} -kill :1 2>/dev/null || true
 rm -f /tmp/.X1-lock /tmp/.X11-unix/X1 2>/dev/null || true
