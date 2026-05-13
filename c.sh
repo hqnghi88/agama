@@ -14,40 +14,11 @@ export DISPLAY=:1
 export GDK_BACKEND=x11
 export HOME=/data
 # # Zink (OpenGL over Vulkan) for Adreno GPU
-# export MESA_LOADER_DRIVER_OVERRIDE=zink
-# export GALLIUM_DRIVER=zink
-# export ZINK_DESCRIPTORS=lazy
-# export TU_DEBUG=noconform 
-export LIBGL_DRI3_DISABLE=1
-export LIBGL_ALWAYS_SOFTWARE=1
-export GALLIUM_DRIVER=llvmpipe
-export MESA_LOADER_DRIVER_OVERRIDE=swrast
-export GDK_BACKEND=x11
-export MESA_GL_VERSION_OVERRIDE=4.5
-export MESA_GLSL_VERSION_OVERRIDE=450
-# Disable DRI3 completely
-export LIBGL_DRI3_DISABLE=1
+export MESA_LOADER_DRIVER_OVERRIDE=zink
+export GALLIUM_DRIVER=zink
+export ZINK_DESCRIPTORS=lazy
+export TU_DEBUG=noconform 
 
-# Allow indirect GLX rendering (often required for PRoot X11)
-export LIBGL_IGLX=1
-export LIBGL_ALWAYS_INDIRECT=1
-
-# Maintain our software rendering locks
-export LIBGL_ALWAYS_SOFTWARE=1
-export GALLIUM_DRIVER=llvmpipe
-export MESA_LOADER_DRIVER_OVERRIDE=swrast
-# Blind Mesa to any Vulkan drivers
-export VK_ICD_FILENAMES=""
-export DISABLE_VULKAN_FALLBACK=1
-
-# Strictly force the Gallium OpenGL software renderer
-export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe
-export GALLIUM_DRIVER=llvmpipe
-export LIBGL_ALWAYS_SOFTWARE=1
-export LIBGL_KOPPER_DISABLE=1
-
-# Force X11 backend for GTK
-export GDK_BACKEND=x11
 # Install VNC server if not available (inside PRoot Ubuntu)
 if ! command -v vncserver &>/dev/null && ! command -v tightvncserver &>/dev/null; then
   echo "[c.sh] VNC server not found, installing tightvncserver..."
