@@ -11,14 +11,17 @@ service dbus start
 export DISPLAY=:1
 export HOME=/data
 export GDK_BACKEND=x11
-export GALLIUM_DRIVER=llvmpipe
-export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe
-export LIBGL_ALWAYS_SOFTWARE=1
-export GDK_GL=disable
-export LIBGL_DEBUG=quiet
+e
+# Enable Zink (OpenGL over Vulkan)
+export MESA_LOADER_DRIVER_OVERRIDE=zink
+export GALLIUM_DRIVER=zink
 
-export _JAVA_AWT_WM_NONREPARENTING=1
-export J2D_USE_MITSHM=false
+# Optimize Zink for Adreno
+export ZINK_DESCRIPTORS=lazy
+
+# Bypass strict conformance checks for better performance on mobile GPUs
+export TU_DEBUG=noconform
+
 
 tightvncserver -kill :1 2>/dev/null || true
 rm -f /tmp/.X1-lock /tmp/.X11-unix/X1 2>/dev/null
