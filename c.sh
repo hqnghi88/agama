@@ -11,8 +11,8 @@ service dbus start
 export DISPLAY=:1
 export HOME=/data
 export GDK_BACKEND=x11
-export GALLIUM_DRIVER=zink
-export MESA_LOADER_DRIVER_OVERRIDE=zink
+export GALLIUM_DRIVER=llvmpipe
+export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe
 
 export _JAVA_AWT_WM_NONREPARENTING=1
 export J2D_USE_MITSHM=false
@@ -38,4 +38,4 @@ xrandr --addmode screen 1280x720_60.00 2>/dev/null || true
 xrandr --output screen --mode 1280x720_60.00 2>/dev/null || true
 
 echo "[c.sh] Launching GAMA..."
-./Gama
+./Gama -vmargs -Djogl.disable.egl=true -Djogl.disable.openglcore=false
