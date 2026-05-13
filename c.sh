@@ -24,4 +24,4 @@ export GDK_BACKEND=x11
 export QT_X11_NO_MITSHM=1
 
 # 4. Launch with JVM memory fixes
-./Gama -vmargs -Dsun.java2d.opengl=false -XX:-UseCompressedOops
+./Gama
