@@ -36,7 +36,18 @@ export LIBGL_ALWAYS_INDIRECT=1
 export LIBGL_ALWAYS_SOFTWARE=1
 export GALLIUM_DRIVER=llvmpipe
 export MESA_LOADER_DRIVER_OVERRIDE=swrast
+# Blind Mesa to any Vulkan drivers
+export VK_ICD_FILENAMES=""
+export DISABLE_VULKAN_FALLBACK=1
 
+# Strictly force the Gallium OpenGL software renderer
+export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe
+export GALLIUM_DRIVER=llvmpipe
+export LIBGL_ALWAYS_SOFTWARE=1
+export LIBGL_KOPPER_DISABLE=1
+
+# Force X11 backend for GTK
+export GDK_BACKEND=x11
 # Install VNC server if not available (inside PRoot Ubuntu)
 if ! command -v vncserver &>/dev/null && ! command -v tightvncserver &>/dev/null; then
   echo "[c.sh] VNC server not found, installing tightvncserver..."
