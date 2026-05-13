@@ -18,7 +18,7 @@ export HOME=/data
 export DISPLAY=:1
 export GALLIUM_DRIVER=llvmpipe
 export LIBGL_ALWAYS_SOFTWARE=1
-./Gama
+
 
 # Install VNC server if not available (inside PRoot Ubuntu)
 if ! command -v vncserver &>/dev/null && ! command -v tightvncserver &>/dev/null; then
@@ -59,16 +59,6 @@ for i in $(seq 1 10); do
   fi
   sleep 1
 done
-
-if [ ! -e /tmp/.X11-unix/X1 ]; then
-  echo "[c.sh] ERROR: X display :1 not available after 10s"
-  echo "[c.sh] Installing Xvfb + x11vnc as fallback..."
-  apt-get install -y -qq xvfb x11vnc 2>/dev/null
-  Xvfb :1 -screen 0 1280x720x24 -noreset +extension GLX &
-  sleep 2
-  x11vnc -display :1 -forever -nopw -quiet &
-  sleep 1
-fi
 
 # Run fluxbox if not already running
 pgrep fluxbox | fluxbox &
