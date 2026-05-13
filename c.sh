@@ -10,6 +10,12 @@ fi
 service dbus start
 export DISPLAY=:1
 export HOME=/data
+export GDK_BACKEND=x11
+export GALLIUM_DRIVER=zink
+export MESA_LOADER_DRIVER_OVERRIDE=zink
+
+export _JAVA_AWT_WM_NONREPARENTING=1
+export J2D_USE_MITSHM=false
 
 tightvncserver -kill :1 2>/dev/null || true
 rm -f /tmp/.X1-lock /tmp/.X11-unix/X1 2>/dev/null
@@ -23,7 +29,13 @@ for i in $(seq 1 10); do
   sleep 1
 done
 
+export XLIB_SKIP_ARGB_VISUALS=1
+
 pgrep fluxbox || fluxbox &
+
+xrandr --newmode "1280x720_60.00" 74.48 1280 1336 1472 1664 720 721 724 746 -hsync +vsync 2>/dev/null || true
+xrandr --addmode screen 1280x720_60.00 2>/dev/null || true
+xrandr --output screen --mode 1280x720_60.00 2>/dev/null || true
 
 echo "[c.sh] Launching GAMA..."
 ./Gama
