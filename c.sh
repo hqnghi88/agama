@@ -9,9 +9,7 @@ fi
 
 service dbus start
 export DISPLAY=:1
-export GDK_BACKEND=x11
 export HOME=/data
-export LIBGL_ALWAYS_SOFTWARE=1
 
 tightvncserver -kill :1 2>/dev/null || true
 rm -f /tmp/.X1-lock /tmp/.X11-unix/X1 2>/dev/null
