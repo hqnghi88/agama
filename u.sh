@@ -3,7 +3,7 @@ if [ ! -f ./Gama ]; then
     curl -L https://github.com/hqnghi88/agama/releases/download/draft-20260308070312/gama.application-linux.gtk.aarch64.tar.gz | tar -xz --no-same-permissions --no-same-owner
 fi
 # Display routing for Termux-X11
-export DISPLAY=:0
+export DISPLAY=:1
 
 # Enable Zink (OpenGL over Vulkan)
 export MESA_LOADER_DRIVER_OVERRIDE=zink
