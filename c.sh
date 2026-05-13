@@ -33,9 +33,5 @@ export XLIB_SKIP_ARGB_VISUALS=1
 
 pgrep openbox || openbox &
 
-xrandr --newmode "1280x720_60.00" 74.48 1280 1336 1472 1664 720 721 724 746 -hsync +vsync 2>/dev/null || true
-xrandr --addmode screen 1280x720_60.00 2>/dev/null || true
-xrandr --output screen --mode 1280x720_60.00 2>/dev/null || true
-
 echo "[c.sh] Launching GAMA..."
-./Gama -vmargs -Djogl.disable.egl=true -Djogl.disable.openglcore=false
+./Gama 
