@@ -37,7 +37,7 @@ fi
 VNC_PASSWD=$(command -v vncpasswd || echo "")
 mkdir -p /data/.vnc
 if [ -n "${VNC_PASSWD}" ]; then
-  echo -n "" | ${VNC_PASSWD} -f > /data/.vnc/passwd 2>/dev/null
+  echo "123456" | ${VNC_PASSWD} -f > /data/.vnc/passwd 2>/dev/null
 fi
 chmod 600 /data/.vnc/passwd 2>/dev/null
 
