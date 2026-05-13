@@ -40,11 +40,35 @@ if [ -n "${VNC_PASSWD}" ]; then
 fi
 chmod 600 /data/.vnc/passwd 2>/dev/null
 
+# Kill any previous VNC session on :1 and clean lock files
+${VNC_BIN} -kill :1 2>/dev/null || true
+rm -f /tmp/.X1-lock /tmp/.X11-unix/X1 2>/dev/null || true
+mkdir -p /tmp/.X11-unix 2>/dev/null || true
+
 echo "[c.sh] Starting VNC server (${VNC_BIN}) on display :1..."
 ${VNC_BIN} :1 -geometry 1280x720 -depth 24 2>&1
-sleep 2
+
+# Wait for X socket to appear (up to 10s)
+echo "[c.sh] Waiting for X display :1..."
+for i in $(seq 1 10); do
+  if [ -e /tmp/.X11-unix/X1 ]; then
+    echo "[c.sh] X display :1 ready (attempt ${i})"
+    break
+  fi
+  sleep 1
+done
+
+if [ ! -e /tmp/.X11-unix/X1 ]; then
+  echo "[c.sh] ERROR: X display :1 not available after 10s"
+  echo "[c.sh] Trying Xvfb as fallback..."
+  Xvfb :1 -screen 0 1280x720x24 -noreset +extension GLX &
+  sleep 2
+  x11vnc -display :1 -forever -nopw -quiet &
+  sleep 1
+fi
 
 # Run openbox if not already running
 pgrep openbox | openbox &
 
+echo "[c.sh] Launching GAMA..."
 ./Gama
