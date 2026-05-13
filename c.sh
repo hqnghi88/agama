@@ -13,6 +13,8 @@ export HOME=/data
 export GDK_BACKEND=x11
 export GALLIUM_DRIVER=llvmpipe
 export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe
+export LIBGL_ALWAYS_SOFTWARE=1
+export EGL_PLATFORM=x11
 
 export _JAVA_AWT_WM_NONREPARENTING=1
 export J2D_USE_MITSHM=false
