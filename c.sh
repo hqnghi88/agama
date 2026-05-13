@@ -19,10 +19,10 @@ export GALLIUM_DRIVER=zink
 export ZINK_DESCRIPTORS=lazy
 export TU_DEBUG=noconform
 
-# Install VNC server if not available (tigervnc in Termux)
+# Install VNC server if not available (inside PRoot Ubuntu)
 if ! command -v vncserver &>/dev/null && ! command -v tightvncserver &>/dev/null; then
-  echo "[c.sh] VNC server not found, installing tigervnc..."
-  pkg install -y tigervnc 2>/dev/null
+  echo "[c.sh] VNC server not found, installing tightvncserver..."
+  apt-get update -qq && apt-get install -y -qq tightvncserver 2>/dev/null
 fi
 
 # Determine VNC server binary name
