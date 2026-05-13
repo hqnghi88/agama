@@ -22,7 +22,8 @@ export TU_DEBUG=noconform
 # Install VNC server if not available (inside PRoot Ubuntu)
 if ! command -v vncserver &>/dev/null && ! command -v tightvncserver &>/dev/null; then
   echo "[c.sh] VNC server not found, installing tightvncserver..."
-  apt-get update -qq && apt-get install -y -qq tightvncserver 2>/dev/null
+  apt-get update -qq 2>/dev/null
+  printf '\n\n' | apt-get install -y -qq tightvncserver 2>/dev/null
 fi
 
 # Determine VNC server binary name
