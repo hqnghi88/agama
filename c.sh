@@ -25,6 +25,17 @@ export MESA_LOADER_DRIVER_OVERRIDE=swrast
 export GDK_BACKEND=x11
 export MESA_GL_VERSION_OVERRIDE=4.5
 export MESA_GLSL_VERSION_OVERRIDE=450
+# Disable DRI3 completely
+export LIBGL_DRI3_DISABLE=1
+
+# Allow indirect GLX rendering (often required for PRoot X11)
+export LIBGL_IGLX=1
+export LIBGL_ALWAYS_INDIRECT=1
+
+# Maintain our software rendering locks
+export LIBGL_ALWAYS_SOFTWARE=1
+export GALLIUM_DRIVER=llvmpipe
+export MESA_LOADER_DRIVER_OVERRIDE=swrast
 
 # Install VNC server if not available (inside PRoot Ubuntu)
 if ! command -v vncserver &>/dev/null && ! command -v tightvncserver &>/dev/null; then
