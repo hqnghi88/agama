@@ -60,7 +60,8 @@ done
 
 if [ ! -e /tmp/.X11-unix/X1 ]; then
   echo "[c.sh] ERROR: X display :1 not available after 10s"
-  echo "[c.sh] Trying Xvfb as fallback..."
+  echo "[c.sh] Installing Xvfb + x11vnc as fallback..."
+  apt-get install -y -qq xvfb x11vnc 2>/dev/null
   Xvfb :1 -screen 0 1280x720x24 -noreset +extension GLX &
   sleep 2
   x11vnc -display :1 -forever -nopw -quiet &
