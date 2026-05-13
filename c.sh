@@ -41,7 +41,7 @@ fi
 chmod 600 /data/.vnc/passwd 2>/dev/null
 
 echo "[c.sh] Starting VNC server (${VNC_BIN}) on display :1..."
-${VNC_BIN} :1 -geometry 1280x720 -depth 24 -localhost no -passwd /data/.vnc/passwd 2>&1
+${VNC_BIN} :1 -geometry 1280x720 -depth 24 -localhost no 2>&1
 sleep 2
 
 # Run openbox if not already running
