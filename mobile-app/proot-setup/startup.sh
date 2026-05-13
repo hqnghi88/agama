@@ -33,7 +33,7 @@ echo -n "" | /usr/bin/vncpasswd -f > /data/.vnc/passwd 2>/dev/null
 chmod 600 /data/.vnc/passwd
 
 echo "[rootfs] Starting VNC server on display :1 (port ${VNC_PORT})..."
-tightvncserver :1 -geometry 1280x720 -depth 16 -localhost no -passwd /data/.vnc/passwd 2>&1
+tightvncserver :1 -geometry 1280x720 -depth 24 -localhost no -passwd /data/.vnc/passwd 2>&1
 
 echo "[rootfs] Starting fluxbox window manager..."
 fluxbox &>/opt/gama/logs/fluxbox.log 2>&1 &

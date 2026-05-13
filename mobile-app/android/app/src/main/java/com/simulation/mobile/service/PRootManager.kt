@@ -251,6 +251,7 @@ class PRootManager(private val context: Context) {
                 "-b", "/sdcard:/sdcard",
                 "-b", "/system:/system",
                 "-b", "/apex:/apex",
+                "-b", "/vendor:/vendor",
                 "-w", "/",
                 "--kill-on-exit",
                 "/usr/bin/bash", guestStartup
@@ -385,10 +386,42 @@ class PRootManager(private val context: Context) {
         |# From u.sh / c.sh
         |export DISPLAY=:0
         |export GDK_BACKEND=x11
-        |export MESA_LOADER_DRIVER_OVERRIDE=zink
-        |export GALLIUM_DRIVER=zink
-        |export ZINK_DESCRIPTORS=lazy
-        |export TU_DEBUG=noconform
+        |
+        |# GPU device passthrough: symlink Android KGSL device to DRM path
+        |# (turnip driver in mesa-vulkan-drivers expects /dev/dri/renderD128)
+        |if [ -c /dev/kgsl-3d0 ] && [ ! -c /dev/dri/renderD128 ]; then
+        |  mkdir -p /dev/dri 2>/dev/null
+        |  ln -sf /dev/kgsl-3d0 /dev/dri/renderD128 2>/dev/null
+        |  echo "[startup] Symlinked /dev/kgsl-3d0 -> /dev/dri/renderD128"
+        |fi
+        |
+        |# Detect Vulkan driver availability, then pick best OpenGL driver
+        |export GALLIUM_DRIVER=llvmpipe  # safe default (software)
+        |if command -v vulkaninfo &>/dev/null && vulkaninfo --summary 2>/dev/null | grep -qi "turnip\|adreno"; then
+        |  echo "[startup] Vulkan driver found (turnip/Adreno) — enabling Zink GL-on-Vulkan"
+        |  export MESA_LOADER_DRIVER_OVERRIDE=zink
+        |  export GALLIUM_DRIVER=zink
+        |  export ZINK_DESCRIPTORS=lazy
+        |  export TU_DEBUG=noconform
+        |elif ls /vendor/lib64/hw/vulkan* /vendor/lib/hw/vulkan* 2>/dev/null | head -1 >/dev/null; then
+        |  echo "[startup] Android Vulkan HAL found — enabling Zink GL-on-Vulkan"
+        |  export MESA_LOADER_DRIVER_OVERRIDE=zink
+        |  export GALLIUM_DRIVER=zink
+        |  export ZINK_DESCRIPTORS=lazy
+        |  export TU_DEBUG=noconform
+        |  # Point Vulkan loader at Android's ICD
+        |  VK_DRIVER=$(ls /vendor/lib64/hw/vulkan* /vendor/lib/hw/vulkan* 2>/dev/null | head -1)
+        |  if [ -n "${'$'}VK_DRIVER" ]; then
+        |    export VK_ICD_FILENAMES="${'$'}VK_DRIVER"
+        |    echo "[startup] Using Android Vulkan HAL: ${'$'}VK_DRIVER"
+        |  fi
+        |else
+        |  echo "[startup] No Vulkan driver found — using llvmpipe software rendering"
+        |  export LIBGL_ALWAYS_SOFTWARE=1
+        |  export MESA_GL_VERSION_OVERRIDE=3.3
+        |  export MESA_GLSL_VERSION_OVERRIDE=330
+        |  export GALLIUM_DRIVER=llvmpipe
+        |fi
         |
         |mkdir -p /opt/gama/logs /tmp /data /workspace 2>/dev/null
         |
@@ -420,8 +453,9 @@ class PRootManager(private val context: Context) {
         |
         |if command -v Xvnc &>/dev/null; then
         |  echo "[startup] Starting Xvnc on display ${'$'}DISPLAY port ${'$'}VNC_PORT..."
-        |  Xvnc ${'$'}DISPLAY -geometry 1280x720 -depth 16 -rfbport ${'$'}VNC_PORT \
+        |  Xvnc ${'$'}DISPLAY -geometry 1280x720 -depth 24 -rfbport ${'$'}VNC_PORT \
         |    -localhost -ac -desktop GAMA \
+        |    -noreset +extension GLX +extension RENDER +extension COMPOSITE \
         |    &>/opt/gama/logs/xvnc.log 2>&1 &
         |  XVNC_PID=${'$'}!
         |  sleep 4
@@ -438,9 +472,9 @@ class PRootManager(private val context: Context) {
         |  apt-get install -y -qq tightvncserver 2>/dev/null
         |  if command -v Xvnc &>/dev/null; then
         |    echo "[startup] Starting Xvnc (after install)..."
-        |    Xvnc ${'$'}DISPLAY -geometry 1280x720 -depth 16 -rfbport ${'$'}VNC_PORT \
+        |    Xvnc ${'$'}DISPLAY -geometry 1280x720 -depth 24 -rfbport ${'$'}VNC_PORT \
         |      -localhost -ac -desktop GAMA \
-        |      -noreset +extension GLX +extension RENDER \
+        |      -noreset +extension GLX +extension RENDER +extension COMPOSITE \
         |      &>/opt/gama/logs/xvnc.log 2>&1 &
         |    XVNC_PID=${'$'}!
         |    sleep 4
@@ -453,7 +487,7 @@ class PRootManager(private val context: Context) {
         |
         |if [ "${'$'}X_SERVER_RUNNING" = false ]; then
         |  echo "[startup] Xvnc failed, trying Xvfb + x11vnc..."
-        |  Xvfb ${'$'}DISPLAY -screen 0 1280x720x16 -pixdepths 8 16 24 32 -noreset +extension GLX +extension RENDER &>/opt/gama/logs/xvfb.log 2>&1 &
+        |  Xvfb ${'$'}DISPLAY -screen 0 1280x720x24 -pixdepths 8 16 24 32 -noreset +extension GLX +extension RENDER +extension COMPOSITE &>/opt/gama/logs/xvfb.log 2>&1 &
         |  XVFB_PID=${'$'}!
         |  sleep 3
         |  if kill -0 ${'$'}XVFB_PID 2>/dev/null; then
