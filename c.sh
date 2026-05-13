@@ -5,7 +5,7 @@ if [ ! -f ./Gama ]; then
   echo "[c.sh] Downloading GAMA..."
   curl -L https://github.com/hqnghi88/agama/releases/download/draft-20260308070312/gama.application-linux.gtk.aarch64.tar.gz | tar -xz --no-same-permissions --no-same-owner
 fi
-
+apt install libgl1 libglx-mesa0 libegl1 freeglut3-dev libxcursor1 libxrandr2 libxxf86vm1 -y
 service dbus start
 export SHARED_MEMORY_DIR=/dev/shm
 mkdir -p $SHARED_MEMORY_DIR
@@ -13,11 +13,15 @@ chmod 777 $SHARED_MEMORY_DIR
 export DISPLAY=:1
 export GDK_BACKEND=x11
 export HOME=/data
-# # Zink (OpenGL over Vulkan) for Adreno GPU
+# Enable Zink (OpenGL over Vulkan)
 export MESA_LOADER_DRIVER_OVERRIDE=zink
 export GALLIUM_DRIVER=zink
+
+# Optimize Zink for Adreno
 export ZINK_DESCRIPTORS=lazy
-export TU_DEBUG=noconform 
+
+# Bypass strict conformance checks for better performance on mobile GPUs
+export TU_DEBUG=noconform
 
 # Install VNC server if not available (inside PRoot Ubuntu)
 if ! command -v vncserver &>/dev/null && ! command -v tightvncserver &>/dev/null; then
