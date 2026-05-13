@@ -10,7 +10,15 @@ export GAMA_HOME=/opt/gama
 export DISPLAY=:1
 export VNC_PORT=5901
 
-mkdir -p /tmp /data /workspace /opt/gama/logs /data/.vnc 2>/dev/null
+# Software OpenGL via Mesa llvmpipe (no GPU access inside PRoot on Android)
+export GALLIUM_DRIVER=llvmpipe
+export LIBGL_ALWAYS_SOFTWARE=1
+export MESA_GL_VERSION_OVERRIDE=3.3
+export MESA_GLSL_VERSION_OVERRIDE=330
+export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe
+
+# Create /dev/dri for Mesa DRI loader
+mkdir -p /dev/dri /tmp /data /workspace /opt/gama/logs /data/.vnc 2>/dev/null
 
 [ -f /etc/profile.d/gama-env.sh ] && source /etc/profile.d/gama-env.sh
 

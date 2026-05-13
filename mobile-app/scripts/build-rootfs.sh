@@ -86,15 +86,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     x11vnc \
     x11-utils \
     xfonts-base \
-    # GPU-accelerated OpenGL via Zink (OpenGL-on-Vulkan)
-    # mesa-vulkan-drivers provides turnip for Qualcomm Adreno GPUs
+    # Software OpenGL via Mesa llvmpipe (inside PRoot: no GPU access)
+    # libgl1-mesa-glx provides libGL.so.1 + Mesa GLX implementation
+    # libosmesa6 provides OSMesa — JOGL fallback (no X server needed)
     libgl1-mesa-dri \
+    libgl1-mesa-glx \
+    libosmesa6 \
+    libglu1-mesa \
     mesa-utils \
-    mesa-vulkan-drivers \
-    libvulkan1 \
-    vulkan-tools \
-    libegl1-mesa \
-    libgles2-mesa \
+    libegl1 \
+    libgles2 \
     # Python for bridge server
     python3 \
     python3-pip \

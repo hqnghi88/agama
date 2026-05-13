@@ -387,45 +387,19 @@ class PRootManager(private val context: Context) {
         |export DISPLAY=:0
         |export GDK_BACKEND=x11
         |
-        |# GPU device passthrough: symlink Android KGSL device to DRM path
-        |# (turnip driver in mesa-vulkan-drivers expects /dev/dri/renderD128)
-        |if [ -c /dev/kgsl-3d0 ] && [ ! -c /dev/dri/renderD128 ]; then
-        |  mkdir -p /dev/dri 2>/dev/null
-        |  ln -sf /dev/kgsl-3d0 /dev/dri/renderD128 2>/dev/null
-        |  echo "[startup] Symlinked /dev/kgsl-3d0 -> /dev/dri/renderD128"
-        |fi
+        |# Software OpenGL via Mesa llvmpipe (only option inside PRoot on Android)
+        |# Zink/Vulkan not viable: Turnip needs MSM DRM, Android HAL needs hwservicemanager
+        |# OSMesa is also installed as a JOGL fallback (no X server needed).
+        |export GALLIUM_DRIVER=llvmpipe
+        |export LIBGL_ALWAYS_SOFTWARE=1
+        |export MESA_GL_VERSION_OVERRIDE=3.3
+        |export MESA_GLSL_VERSION_OVERRIDE=330
         |
-        |# Detect Vulkan driver availability, then pick best OpenGL driver
-        |export GALLIUM_DRIVER=llvmpipe  # safe default (software)
-        |if command -v vulkaninfo &>/dev/null && vulkaninfo --summary 2>/dev/null | grep -qi "turnip\|adreno"; then
-        |  echo "[startup] Vulkan driver found (turnip/Adreno) — enabling Zink GL-on-Vulkan"
-        |  export MESA_LOADER_DRIVER_OVERRIDE=zink
-        |  export GALLIUM_DRIVER=zink
-        |  export ZINK_DESCRIPTORS=lazy
-        |  export TU_DEBUG=noconform
-        |elif ls /vendor/lib64/hw/vulkan* /vendor/lib/hw/vulkan* 2>/dev/null | head -1 >/dev/null; then
-        |  echo "[startup] Android Vulkan HAL found — enabling Zink GL-on-Vulkan"
-        |  export MESA_LOADER_DRIVER_OVERRIDE=zink
-        |  export GALLIUM_DRIVER=zink
-        |  export ZINK_DESCRIPTORS=lazy
-        |  export TU_DEBUG=noconform
-        |  # Point Vulkan loader at Android's ICD
-        |  VK_DRIVER=$(ls /vendor/lib64/hw/vulkan* /vendor/lib/hw/vulkan* 2>/dev/null | head -1)
-        |  if [ -n "${'$'}VK_DRIVER" ]; then
-        |    export VK_ICD_FILENAMES="${'$'}VK_DRIVER"
-        |    echo "[startup] Using Android Vulkan HAL: ${'$'}VK_DRIVER"
-        |  fi
-        |else
-        |  echo "[startup] No Vulkan driver found — using llvmpipe software rendering"
-        |  export LIBGL_ALWAYS_SOFTWARE=1
-        |  export MESA_GL_VERSION_OVERRIDE=3.3
-        |  export MESA_GLSL_VERSION_OVERRIDE=330
-        |  export GALLIUM_DRIVER=llvmpipe
-        |fi
-        |
+        |# Tell Mesa DRI loader where to find drivers and that /dev/dri may be missing
+        |export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe
         |mkdir -p /opt/gama/logs /tmp /data /workspace 2>/dev/null
         |
-        |# LD_PRELOAD shim for Android kernel hard link restriction
+        |# LD_PRELOAD shim for X servers and GAMA (hard link fix under PRoot)
         |if [ -f /opt/gama/override_link.so ]; then
         |  export LD_PRELOAD=/opt/gama/override_link.so
         |fi
@@ -449,54 +423,83 @@ class PRootManager(private val context: Context) {
         |rm -f /tmp/.X0-lock /tmp/.X11-unix/X0 2>/dev/null || true
         |mkdir -p /tmp/.X11-unix 2>/dev/null || true
         |
+        |# Create /dev/dri for Mesa DRI loader (llvmpipe checks this path)
+        |mkdir -p /dev/dri 2>/dev/null || true
+        |
         |X_SERVER_RUNNING=false
         |
-        |if command -v Xvnc &>/dev/null; then
-        |  echo "[startup] Starting Xvnc on display ${'$'}DISPLAY port ${'$'}VNC_PORT..."
-        |  Xvnc ${'$'}DISPLAY -geometry 1280x720 -depth 24 -rfbport ${'$'}VNC_PORT \
-        |    -localhost -ac -desktop GAMA \
+        |X_SERVER_LOG=/opt/gama/logs/xserver.log
+        |
+        |# Prefer Xvfb over Xvnc: Xvfb supports full GLX for Mesa/llvmpipe.
+        |# tightvnc's Xvnc has no GLX — OpenGL apps (JOGL) won't work with it.
+        |if command -v Xvfb &>/dev/null; then
+        |  echo "[startup] Starting Xvfb on display ${'$'}DISPLAY..."
+        |  XKB_CONFIG_ROOT=/usr/share/X11/xkb \
+        |  Xvfb ${'$'}DISPLAY -screen 0 1280x720x24 -pixdepths 8 16 24 32 \
         |    -noreset +extension GLX +extension RENDER +extension COMPOSITE \
-        |    &>/opt/gama/logs/xvnc.log 2>&1 &
-        |  XVNC_PID=${'$'}!
-        |  sleep 4
-        |  if kill -0 ${'$'}XVNC_PID 2>/dev/null; then
-        |    echo "[startup] Xvnc running (PID ${'$'}XVNC_PID)"
-        |    X_SERVER_RUNNING=true
-        |  fi
-        |fi
-        |
-        |if [ "${'$'}X_SERVER_RUNNING" = false ]; then
-        |  echo "[startup] Xvnc not available, trying to install tightvncserver..."
-        |  export DEBIAN_FRONTEND=noninteractive
-        |  apt-get update -qq 2>/dev/null
-        |  apt-get install -y -qq tightvncserver 2>/dev/null
-        |  if command -v Xvnc &>/dev/null; then
-        |    echo "[startup] Starting Xvnc (after install)..."
-        |    Xvnc ${'$'}DISPLAY -geometry 1280x720 -depth 24 -rfbport ${'$'}VNC_PORT \
-        |      -localhost -ac -desktop GAMA \
-        |      -noreset +extension GLX +extension RENDER +extension COMPOSITE \
-        |      &>/opt/gama/logs/xvnc.log 2>&1 &
-        |    XVNC_PID=${'$'}!
-        |    sleep 4
-        |    if kill -0 ${'$'}XVNC_PID 2>/dev/null; then
-        |      echo "[startup] Xvnc running (PID ${'$'}XVNC_PID)"
-        |      X_SERVER_RUNNING=true
-        |    fi
-        |  fi
-        |fi
-        |
-        |if [ "${'$'}X_SERVER_RUNNING" = false ]; then
-        |  echo "[startup] Xvnc failed, trying Xvfb + x11vnc..."
-        |  Xvfb ${'$'}DISPLAY -screen 0 1280x720x24 -pixdepths 8 16 24 32 -noreset +extension GLX +extension RENDER +extension COMPOSITE &>/opt/gama/logs/xvfb.log 2>&1 &
+        |    -xkbdir /usr/share/X11/xkb \
+        |    &>${'$'}X_SERVER_LOG 2>&1 &
         |  XVFB_PID=${'$'}!
-        |  sleep 3
+        |  sleep 4
         |  if kill -0 ${'$'}XVFB_PID 2>/dev/null; then
         |    echo "[startup] Xvfb running (PID ${'$'}XVFB_PID)"
         |    echo "[startup] Starting x11vnc on port ${'$'}VNC_PORT..."
         |    x11vnc -display ${'$'}DISPLAY -forever -nopw -quiet -rfbport ${'$'}VNC_PORT &>/opt/gama/logs/x11vnc.log 2>&1 &
         |    X_SERVER_RUNNING=true
         |  else
-        |    echo "[startup] Xvfb also failed — no X server available"
+        |    echo "[startup] Xvfb failed, tail of log:"
+        |    tail -10 ${'$'}X_SERVER_LOG 2>/dev/null || true
+        |    # Retry with -kb (no XKB) in case xkb-data is broken under PRoot
+        |    echo "[startup] Retrying Xvfb with -kb (no XKB)..."
+        |    Xvfb ${'$'}DISPLAY -screen 0 1280x720x24 -pixdepths 8 16 24 32 \
+        |      -noreset +extension GLX +extension RENDER +extension COMPOSITE \
+        |      -kb \
+        |      &>${'$'}X_SERVER_LOG 2>&1 &
+        |    XVFB_PID=${'$'}!
+        |    sleep 4
+        |    if kill -0 ${'$'}XVFB_PID 2>/dev/null; then
+        |      echo "[startup] Xvfb running (PID ${'$'}XVFB_PID, no XKB)"
+        |      echo "[startup] Starting x11vnc on port ${'$'}VNC_PORT..."
+        |      x11vnc -display ${'$'}DISPLAY -forever -nopw -quiet -rfbport ${'$'}VNC_PORT &>/opt/gama/logs/x11vnc.log 2>&1 &
+        |      X_SERVER_RUNNING=true
+        |    else
+        |      echo "[startup] Xvfb still fails, tail:"
+        |      tail -10 ${'$'}X_SERVER_LOG 2>/dev/null || true
+        |    fi
+        |  fi
+        |fi
+        |
+        |if [ "${'$'}X_SERVER_RUNNING" = false ]; then
+        |  # Fallback: Xvnc from tightvncserver (no GLX, basic VNC only)
+        |  XVNC_BIN=""
+        |  if command -v Xvnc &>/dev/null; then
+        |    XVNC_BIN=Xvnc
+        |  elif [ -f /usr/bin/Xtightvnc ]; then
+        |    XVNC_BIN=/usr/bin/Xtightvnc
+        |  fi
+        |  if [ -z "${'$'}XVNC_BIN" ]; then
+        |    echo "[startup] Xvnc not found, installing tightvncserver..."
+        |    apt-get install -y -qq tightvncserver 2>/dev/null
+        |    if command -v Xvnc &>/dev/null; then
+        |      XVNC_BIN=Xvnc
+        |    elif [ -f /usr/bin/Xtightvnc ]; then
+        |      XVNC_BIN=/usr/bin/Xtightvnc
+        |    fi
+        |  fi
+        |  if [ -n "${'$'}XVNC_BIN" ]; then
+        |    echo "[startup] Starting Xvnc (${'$'}XVNC_BIN) on display ${'$'}DISPLAY port ${'$'}VNC_PORT..."
+        |    ${'$'}XVNC_BIN ${'$'}DISPLAY -geometry 1280x720 -depth 24 -rfbport ${'$'}VNC_PORT \
+        |      -localhost -desktop GAMA \
+        |      &>${'$'}X_SERVER_LOG 2>&1 &
+        |    XVNC_PID=${'$'}!
+        |    sleep 4
+        |    if kill -0 ${'$'}XVNC_PID 2>/dev/null; then
+        |      echo "[startup] Xvnc running (PID ${'$'}XVNC_PID)"
+        |      X_SERVER_RUNNING=true
+        |    else
+        |      echo "[startup] Xvnc died, tail of log:"
+        |      tail -20 ${'$'}X_SERVER_LOG 2>/dev/null || true
+        |    fi
         |  fi
         |fi
         |
@@ -513,14 +516,48 @@ class PRootManager(private val context: Context) {
         |echo "[startup] Starting openbox..."
         |pgrep openbox | openbox &
         |
+        |# GLX diagnostic: log available OpenGL info before launching GAMA
+        |echo "[startup] === OpenGL/GLX diagnostic ==="
+        |if command -v glxinfo &>/dev/null; then
+        |  LIBGL_DEBUG=verbose glxinfo -B 2>&1 | head -30 || echo "[startup] glxinfo failed"
+        |else
+        |  echo "[startup] glxinfo not available"
+        |fi
+        |if command -v eglinfo &>/dev/null; then
+        |  eglinfo -B 2>&1 | head -20 || echo "[startup] eglinfo failed"
+        |fi
+        |echo "[startup] LIBGL_ALWAYS_SOFTWARE=${'$'}LIBGL_ALWAYS_SOFTWARE"
+        |echo "[startup] GALLIUM_DRIVER=${'$'}GALLIUM_DRIVER"
+        |echo "[startup] === end diagnostic ==="
+        |
         |# From c.sh: cd gama && ./Gama
         |GAMA_HOME=/opt/gama
-        |if [ -f "${'$'}GAMA_HOME/Gama" ]; then
+        |# JOGL common args to force software rendering / avoid GLX issues
+        |JOGL_ARGS="-Djogamp.gluegen.UseTempJarCache=false \
+        |  -Djogamp.opengl.GLContext.nativeGL2=1 \
+        |  -Dnativewindow.ws.name=x11 \
+        |  -Djava.awt.headless=false"
+        |
+        |# Helper: launch GAMA with LD_PRELOAD for hard link fix
+        |run_gama() {
         |  cd "${'$'}GAMA_HOME"
+        |  if [ -f /opt/gama/override_link.so ]; then
+        |    LD_PRELOAD=/opt/gama/override_link.so \
+        |    DISPLAY=:0 ./Gama -vmargs \
+        |      -Dosgi.locking=none \
+        |      -Dorg.eclipse.core.resources.disable.workspace.locking=true \
+        |      ${'$'}JOGL_ARGS &>/opt/gama/logs/gama.log 2>&1
+        |  else
+        |    DISPLAY=:0 ./Gama -vmargs \
+        |      -Dosgi.locking=none \
+        |      -Dorg.eclipse.core.resources.disable.workspace.locking=true \
+        |      ${'$'}JOGL_ARGS &>/opt/gama/logs/gama.log 2>&1
+        |  fi
+        |}
+        |
+        |if [ -f "${'$'}GAMA_HOME/Gama" ]; then
         |  echo "[startup] Launching GAMA..."
-        |  DISPLAY=:0 ./Gama -vmargs \
-        |    -Dosgi.locking=none \
-        |    -Dorg.eclipse.core.resources.disable.workspace.locking=true &>/opt/gama/logs/gama.log 2>&1 &
+        |  run_gama &
         |  GAMA_PID=${'$'}!
         |  echo "[startup] GAMA PID: ${'$'}GAMA_PID"
         |else
@@ -532,10 +569,7 @@ class PRootManager(private val context: Context) {
         |  sleep 5
         |  if [ -n "${'$'}GAMA_PID" ] && ! kill -0 ${'$'}GAMA_PID 2>/dev/null; then
         |    echo "[startup] GAMA died, restarting..."
-        |    cd "${'$'}GAMA_HOME"
-        |    DISPLAY=:0 ./Gama -vmargs \
-        |      -Dosgi.locking=none \
-        |      -Dorg.eclipse.core.resources.disable.workspace.locking=true &>/opt/gama/logs/gama.log 2>&1 &
+        |    run_gama &
         |    GAMA_PID=${'$'}!
         |    echo "[startup] GAMA restarted with PID ${'$'}GAMA_PID"
         |  fi
