@@ -1,7 +1,7 @@
 cd gama
-curl -L https://github.com/hqnghi88/agama/releases/download/draft-20260308070312/gama.application-linux.gtk.aarch64.tar.gz | tar -xz
+[ -f ./Gama ] || curl -L https://github.com/hqnghi88/agama/releases/download/draft-20260308070312/gama.application-linux.gtk.aarch64.tar.gz | tar -xz
 # Display routing for Termux-X11
-export DISPLAY=:0
+export DISPLAY=:0 
 
 # Enable Zink (OpenGL over Vulkan)
 export MESA_LOADER_DRIVER_OVERRIDE=zink
