@@ -9,6 +9,8 @@ on:
     paths-ignore:
       - '.github/**'
       - 'travis/**'
+    tags-ignore:
+      - '*'
 
   workflow_dispatch: # For manual trigger
 
