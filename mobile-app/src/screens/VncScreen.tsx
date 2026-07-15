@@ -1,22 +1,38 @@
 import React, {useState, useEffect, useRef, useCallback} from 'react';
-import {View, Text, StyleSheet, DeviceEventEmitter, requireNativeComponent, BackHandler, TouchableOpacity, NativeModules} from 'react-native';
+import {View, Text, StyleSheet, DeviceEventEmitter, requireNativeComponent, BackHandler, TouchableOpacity, NativeModules, Animated, Easing} from 'react-native';
+import {useResponsive} from '../hooks/useResponsive';
 
 interface VncScreenProps {
   onBack: () => void;
 }
 
-type VncState = 'connecting' | 'connected' | 'error';
+type VncState = 'connecting' | 'connected' | 'error' | 'timeout';
 
 interface NativeVncViewProps {
   style?: object;
 }
 
 const NativeVncView = requireNativeComponent<NativeVncViewProps>('VncView');
+const MAX_RETRIES = 10;
 
 const VncScreen: React.FC<VncScreenProps> = ({onBack}) => {
   const [vncState, setVncState] = useState<VncState>('connecting');
   const connectedRef = useRef(false);
   const listenerRef = useRef<any>(null);
+  const retryCount = useRef(0);
+  const {s} = useResponsive();
+  const shimmer = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.timing(shimmer, {
+        toValue: 1,
+        duration: 1500,
+        easing: Easing.linear,
+        useNativeDriver: false,
+      }),
+    ).start();
+  }, [shimmer]);
 
   const toggleKeyboard = useCallback(() => {
     NativeModules.SimulationModule.toggleKeyboard();
@@ -27,6 +43,7 @@ const VncScreen: React.FC<VncScreenProps> = ({onBack}) => {
       switch (event.state) {
         case 'connected':
           connectedRef.current = true;
+          retryCount.current = 0;
           setVncState('connected');
           break;
         case 'error':
@@ -40,10 +57,21 @@ const VncScreen: React.FC<VncScreenProps> = ({onBack}) => {
           break;
       }
     });
+
+    const retryInterval = setInterval(() => {
+      if (vncState === 'connecting') {
+        retryCount.current += 1;
+        if (retryCount.current >= MAX_RETRIES) {
+          setVncState('timeout');
+        }
+      }
+    }, 3000);
+
     return () => {
       if (listenerRef.current) listenerRef.current.remove();
+      clearInterval(retryInterval);
     };
-  }, []);
+  }, [vncState]);
 
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -53,23 +81,90 @@ const VncScreen: React.FC<VncScreenProps> = ({onBack}) => {
     return () => backHandler.remove();
   }, [onBack]);
 
+  const btnSize = s(52);
+  const btnOffset = s(28);
+  const barWidth = s(180);
+
   return (
     <View style={styles.container}>
       <NativeVncView style={styles.vncView} />
       {vncState !== 'connected' && (
-        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <View style={StyleSheet.absoluteFill}>
           <View style={styles.center}>
-            <Text style={styles.loadingText}>
-              {vncState === 'error' ? 'Connection failed' : 'Connecting to VNC...'}
-            </Text>
+            {vncState === 'connecting' && (
+              <>
+                <Text style={{color: '#94a3b8', fontSize: s(14), fontFamily: 'monospace', fontWeight: '600', marginBottom: s(16)}}>
+                  Starting simulation environment...
+                </Text>
+                <View style={{width: barWidth, height: s(6), backgroundColor: '#1e293b', borderRadius: s(3), overflow: 'hidden'}}>
+                  <Animated.View
+                    style={{
+                      width: barWidth,
+                      height: s(6),
+                      backgroundColor: '#3b82f6',
+                      borderRadius: s(3),
+                      opacity: shimmer.interpolate({
+                        inputRange: [0, 0.5, 1],
+                        outputRange: [0.3, 1, 0.3],
+                      }),
+                      transform: [{
+                        translateX: shimmer.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [-barWidth / 2, barWidth / 2],
+                        }),
+                      }],
+                    }}
+                  />
+                </View>
+                <Text style={{color: '#475569', fontSize: s(11), fontFamily: 'monospace', marginTop: s(12)}}>
+                  Loading X server and VNC...
+                </Text>
+              </>
+            )}
+            {(vncState === 'timeout' || vncState === 'error') && (
+              <>
+                <Text style={{color: '#ef4444', fontSize: s(14), fontFamily: 'monospace', fontWeight: '600', marginBottom: s(8)}}>
+                  {vncState === 'timeout' ? 'Startup timed out' : 'Connection failed'}
+                </Text>
+                <Text style={{color: '#475569', fontSize: s(11), fontFamily: 'monospace', marginBottom: s(20), textAlign: 'center', paddingHorizontal: s(24)}}>
+                  Backend may not have started correctly.
+                </Text>
+                <TouchableOpacity
+                  style={{backgroundColor: '#334155', borderRadius: s(8), paddingHorizontal: s(20), paddingVertical: s(10)}}
+                  onPress={onBack}>
+                  <Text style={{color: '#f8fafc', fontSize: s(12), fontWeight: '700', fontFamily: 'monospace', letterSpacing: 1}}>RETRY</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </View>
       )}
-      <TouchableOpacity style={styles.kbdButton} onPress={toggleKeyboard} activeOpacity={0.6}>
-        <View style={styles.kbdInner}>
-          <Text style={styles.kbdIcon}>⌨</Text>
-        </View>
-      </TouchableOpacity>
+      {vncState === 'connected' && (
+        <TouchableOpacity
+          style={{
+            position: 'absolute',
+            bottom: btnOffset,
+            right: btnOffset,
+            width: btnSize,
+            height: btnSize,
+            borderRadius: btnSize / 2,
+            backgroundColor: 'rgba(30, 41, 59, 0.85)',
+            borderWidth: 1,
+            borderColor: 'rgba(148, 163, 184, 0.3)',
+            elevation: 8,
+            zIndex: 9999,
+            shadowColor: '#000',
+            shadowOffset: {width: 0, height: 4},
+            shadowOpacity: 0.3,
+            shadowRadius: 6,
+          }}
+          onPress={toggleKeyboard}
+          activeOpacity={0.6}>
+          <View style={styles.kbdInner}>
+            <Text style={{color: '#e2e8f0', fontSize: s(22)}}>⌨</Text>
+          </View>
+        </TouchableOpacity>
+      )}
     </View>
   );
 };
@@ -83,41 +178,16 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  loadingText: {
-    color: '#64748b',
-    fontSize: 13,
-    fontFamily: 'monospace',
+    backgroundColor: 'rgba(15, 23, 42, 0.9)',
   },
   vncView: {
     flex: 1,
     backgroundColor: '#000000',
   },
-  kbdButton: {
-    position: 'absolute',
-    bottom: 28,
-    right: 28,
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: 'rgba(30, 41, 59, 0.85)',
-    borderWidth: 1,
-    borderColor: 'rgba(148, 163, 184, 0.3)',
-    elevation: 8,
-    zIndex: 9999,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 4},
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-  },
   kbdInner: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  kbdIcon: {
-    color: '#e2e8f0',
-    fontSize: 22,
   },
 });
 

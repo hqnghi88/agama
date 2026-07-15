@@ -1,6 +1,7 @@
 import React from 'react';
 import {View, Text, FlatList, StyleSheet} from 'react-native';
 import {useSimulationStore, type LogEntry} from '../store/useSimulationStore';
+import {useResponsive} from '../hooks/useResponsive';
 
 const levelColors: Record<string, string> = {
   error: '#ef4444',
@@ -9,14 +10,14 @@ const levelColors: Record<string, string> = {
   debug: '#64748b',
 };
 
-const LogItem: React.FC<{entry: LogEntry}> = React.memo(({entry}) => {
+const LogItem: React.FC<{entry: LogEntry; s: (v: number) => number}> = React.memo(({entry, s}) => {
   const color = levelColors[entry.level] || levelColors.debug;
   const time = entry.timestamp.slice(11, 19);
 
   return (
     <View style={styles.logItem}>
-      <Text style={[styles.logTime, {color}]}>{time}</Text>
-      <Text style={[styles.logLevel, {color}]}>
+      <Text style={{fontFamily: 'monospace', fontSize: s(11), color, width: s(60)}}>{time}</Text>
+      <Text style={{fontFamily: 'monospace', fontSize: s(11), color, width: s(55), fontWeight: '700'}}>
         {entry.level.toUpperCase().padEnd(5)}
       </Text>
       <Text style={styles.logMessage} numberOfLines={2}>
@@ -28,11 +29,12 @@ const LogItem: React.FC<{entry: LogEntry}> = React.memo(({entry}) => {
 
 const LogViewer: React.FC = () => {
   const logs = useSimulationStore(s => s.logs);
+  const {s} = useResponsive();
 
   if (logs.length === 0) {
     return (
       <View style={styles.empty}>
-        <Text style={styles.emptyText}>No logs</Text>
+        <Text style={{color: '#64748b', fontFamily: 'monospace', fontSize: s(12)}}>No logs</Text>
       </View>
     );
   }
@@ -41,7 +43,7 @@ const LogViewer: React.FC = () => {
     <FlatList
       data={logs}
       keyExtractor={(_, i) => String(i)}
-      renderItem={({item}) => <LogItem entry={item} />}
+      renderItem={({item}) => <LogItem entry={item} s={s} />}
       style={styles.list}
       initialNumToRender={20}
       maxToRenderPerBatch={20}
@@ -61,17 +63,6 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     paddingHorizontal: 4,
   },
-  logTime: {
-    fontFamily: 'monospace',
-    fontSize: 11,
-    width: 60,
-  },
-  logLevel: {
-    fontFamily: 'monospace',
-    fontSize: 11,
-    width: 55,
-    fontWeight: '700',
-  },
   logMessage: {
     fontFamily: 'monospace',
     fontSize: 11,
@@ -82,11 +73,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  emptyText: {
-    color: '#64748b',
-    fontFamily: 'monospace',
-    fontSize: 12,
   },
 });
 

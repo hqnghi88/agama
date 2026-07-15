@@ -95,11 +95,8 @@ class VncView @JvmOverloads constructor(
         val vw = width.toFloat(); val vh = height.toFloat()
         val fbw = bitmap.width.toFloat(); val fbh = bitmap.height.toFloat()
         if (vw <= 0 || vh <= 0 || fbw <= 0 || fbh <= 0) return Pair(0, 0)
-        val scale = minOf(vw / fbw, vh / fbh)
-        val bw = fbw * scale; val bh = fbh * scale
-        val ox = (vw - bw) / 2; val oy = (vh - bh) / 2
-        val fx = ((viewX - ox) / scale).toInt().coerceIn(0, fbw.toInt() - 1)
-        val fy = ((viewY - oy) / scale).toInt().coerceIn(0, fbh.toInt() - 1)
+        val fx = ((viewX / vw) * fbw).toInt().coerceIn(0, fbw.toInt() - 1)
+        val fy = ((viewY / vh) * fbh).toInt().coerceIn(0, fbh.toInt() - 1)
         return Pair(fx, fy)
     }
 
@@ -269,13 +266,7 @@ class VncView @JvmOverloads constructor(
         val vw = width.toFloat()
         val vh = height.toFloat()
         if (vw <= 0 || vh <= 0) return
-        val fbw = bitmap.width.toFloat()
-        val fbh = bitmap.height.toFloat()
-        if (fbw <= 0 || fbh <= 0) return
-        val scale = minOf(vw / fbw, vh / fbh)
-        val bw = fbw * scale
-        val bh = fbh * scale
-        destRect.set((vw - bw) / 2, (vh - bh) / 2, (vw + bw) / 2, (vh + bh) / 2)
+        destRect.set(0f, 0f, vw, vh)
         canvas.drawBitmap(bitmap, null, destRect, paint)
     }
 

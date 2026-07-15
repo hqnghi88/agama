@@ -1,5 +1,6 @@
 import React from 'react';
 import {View, Text, StyleSheet} from 'react-native';
+import {useResponsive} from '../hooks/useResponsive';
 
 interface StatusIndicatorProps {
   label: string;
@@ -20,12 +21,14 @@ const StatusIndicator: React.FC<StatusIndicatorProps> = ({
   value,
 }) => {
   const color = statusColors[status] || statusColors.inactive;
+  const {s} = useResponsive();
+  const dotSize = s(10);
 
   return (
     <View style={styles.container}>
-      <View style={[styles.dot, {backgroundColor: color}]} />
-      <Text style={styles.label}>{label}</Text>
-      {value !== undefined && <Text style={styles.value}>{value}</Text>}
+      <View style={{width: dotSize, height: dotSize, borderRadius: dotSize / 2, backgroundColor: color, marginRight: s(8)}} />
+      <Text style={{color: '#94a3b8', fontSize: s(13), fontFamily: 'monospace'}}>{label}</Text>
+      {value !== undefined && <Text style={{color: '#e2e8f0', fontSize: s(13), fontFamily: 'monospace', marginLeft: 'auto'}}>{value}</Text>}
     </View>
   );
 };
@@ -36,23 +39,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 4,
     paddingHorizontal: 8,
-  },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginRight: 8,
-  },
-  label: {
-    color: '#94a3b8',
-    fontSize: 13,
-    fontFamily: 'monospace',
-  },
-  value: {
-    color: '#e2e8f0',
-    fontSize: 13,
-    fontFamily: 'monospace',
-    marginLeft: 'auto',
   },
 });
 

@@ -1,6 +1,7 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {View, TouchableOpacity, Text, StyleSheet, ScrollView} from 'react-native';
 import {useSimulationStore} from '../store/useSimulationStore';
+import {useResponsive} from '../hooks/useResponsive';
 
 const SimulationControls: React.FC = () => {
   const connected = useSimulationStore(s => s.connected);
@@ -18,6 +19,7 @@ const SimulationControls: React.FC = () => {
   const addLog = useSimulationStore(s => s.addLog);
   const modelsFetched = useSimulationStore(s => s.modelsFetched);
   const backendStatus = useSimulationStore(s => s.backendStatus);
+  const {s} = useResponsive();
 
   const [modelOpen, setModelOpen] = useState(false);
   const [expOpen, setExpOpen] = useState(false);
@@ -28,7 +30,6 @@ const SimulationControls: React.FC = () => {
     fetchModels();
   }, [fetchModels]);
 
-  // Retry fetchModels when backend transitions from disconnected to connected
   useEffect(() => {
     if (connected && !wasConnected.current && !modelsFetched) {
       fetchModels();
@@ -36,7 +37,6 @@ const SimulationControls: React.FC = () => {
     wasConnected.current = connected;
   }, [connected, fetchModels, modelsFetched]);
 
-  // Retry fetchModels when native backend transitions to running
   useEffect(() => {
     if (backendStatus === 'running' && !wasBackendRunning.current && !modelsFetched) {
       fetchModels();
@@ -62,30 +62,38 @@ const SimulationControls: React.FC = () => {
   const canStart = connected && !running && selectedModel && selectedExperiment;
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.label}>MODEL</Text>
+    <View style={{paddingVertical: s(8)}}>
+      <Text style={{color: '#64748b', fontSize: s(10), fontWeight: '700', fontFamily: 'monospace', letterSpacing: 1, marginBottom: s(4)}}>MODEL</Text>
       <TouchableOpacity
-        style={[styles.selector, modelOpen && styles.selectorOpen]}
+        style={{
+          flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+          backgroundColor: '#0f172a', borderRadius: s(8), paddingHorizontal: s(12), paddingVertical: s(10),
+          marginBottom: s(8), borderWidth: 1, borderColor: modelOpen ? '#3b82f6' : '#334155',
+        }}
         onPress={() => { setModelOpen(!modelOpen); setExpOpen(false); }}
         disabled={running || loadingModels}>
-        <Text style={[styles.selectorText, !selectedModel && styles.placeholder]}>
+        <Text style={{color: selectedModel ? '#e2e8f0' : '#64748b', fontSize: s(13), fontFamily: 'monospace', flex: 1}}>
           {selectedModel ? selectedModel.name : (loadingModels ? 'Loading...' : 'Select a model...')}
         </Text>
-        <Text style={styles.chevron}>{modelOpen ? '▲' : '▼'}</Text>
+        <Text style={{color: '#64748b', fontSize: s(10), marginLeft: s(8)}}>{modelOpen ? '▲' : '▼'}</Text>
       </TouchableOpacity>
 
       {modelOpen && models.length > 0 && (
-        <View style={styles.dropdown}>
-          <ScrollView style={styles.dropdownScroll} nestedScrollEnabled>
+        <View style={{backgroundColor: '#0f172a', borderRadius: s(8), borderWidth: 1, borderColor: '#334155', marginBottom: s(8), maxHeight: s(200)}}>
+          <ScrollView style={{maxHeight: s(200)}} nestedScrollEnabled>
             {models.map((model, idx) => (
               <TouchableOpacity
                 key={`${model.path}-${idx}`}
-                style={[styles.dropdownItem, selectedModel?.path === model.path && styles.dropdownItemSelected]}
+                style={{
+                  paddingHorizontal: s(12), paddingVertical: s(10),
+                  borderBottomWidth: 1, borderBottomColor: '#1e293b',
+                  backgroundColor: selectedModel?.path === model.path ? '#1e3a5f' : undefined,
+                }}
                 onPress={() => { setSelectedModel(model); setModelOpen(false); }}>
-                <Text style={[styles.dropdownItemText, selectedModel?.path === model.path && styles.dropdownItemTextSelected]}>
+                <Text style={{color: selectedModel?.path === model.path ? '#60a5fa' : '#cbd5e1', fontSize: s(12), fontFamily: 'monospace', fontWeight: selectedModel?.path === model.path ? '700' : '400'}}>
                   {model.name}
                 </Text>
-                <Text style={styles.dropdownItemCategory}>{model.category}</Text>
+                <Text style={{color: '#475569', fontSize: s(10), fontFamily: 'monospace', marginTop: s(2)}}>{model.category}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -93,36 +101,44 @@ const SimulationControls: React.FC = () => {
       )}
 
       {modelOpen && models.length === 0 && !loadingModels && (
-        <View style={styles.dropdown}>
-          <Text style={styles.emptyText}>No models found</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={() => fetchModels()}>
-            <Text style={styles.retryText}>RETRY</Text>
+        <View style={{backgroundColor: '#0f172a', borderRadius: s(8), borderWidth: 1, borderColor: '#334155', marginBottom: s(8)}}>
+          <Text style={{color: '#64748b', fontSize: s(12), fontFamily: 'monospace', padding: s(12), textAlign: 'center'}}>No models found</Text>
+          <TouchableOpacity style={{paddingVertical: s(10), paddingHorizontal: s(16), alignItems: 'center', justifyContent: 'center', borderTopWidth: 1, borderTopColor: '#1e293b'}} onPress={() => fetchModels()}>
+            <Text style={{color: '#3b82f6', fontSize: s(12), fontFamily: 'monospace', fontWeight: '700'}}>RETRY</Text>
           </TouchableOpacity>
         </View>
       )}
 
       {selectedModel && selectedModel.experiments && selectedModel.experiments.length > 0 && (
         <>
-          <Text style={[styles.label, {marginTop: 8}]}>EXPERIMENT</Text>
+          <Text style={{color: '#64748b', fontSize: s(10), fontWeight: '700', fontFamily: 'monospace', letterSpacing: 1, marginBottom: s(4), marginTop: s(8)}}>EXPERIMENT</Text>
           <TouchableOpacity
-            style={[styles.selector, expOpen && styles.selectorOpen]}
+            style={{
+              flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+              backgroundColor: '#0f172a', borderRadius: s(8), paddingHorizontal: s(12), paddingVertical: s(10),
+              marginBottom: s(8), borderWidth: 1, borderColor: expOpen ? '#3b82f6' : '#334155',
+            }}
             onPress={() => { setExpOpen(!expOpen); setModelOpen(false); }}
             disabled={running}>
-            <Text style={[styles.selectorText, !selectedExperiment && styles.placeholder]}>
+            <Text style={{color: selectedExperiment ? '#e2e8f0' : '#64748b', fontSize: s(13), fontFamily: 'monospace', flex: 1}}>
               {selectedExperiment || 'Select an experiment...'}
             </Text>
-            <Text style={styles.chevron}>{expOpen ? '▲' : '▼'}</Text>
+            <Text style={{color: '#64748b', fontSize: s(10), marginLeft: s(8)}}>{expOpen ? '▲' : '▼'}</Text>
           </TouchableOpacity>
 
           {expOpen && (
-            <View style={styles.dropdown}>
-              <ScrollView style={styles.dropdownScroll} nestedScrollEnabled>
+            <View style={{backgroundColor: '#0f172a', borderRadius: s(8), borderWidth: 1, borderColor: '#334155', marginBottom: s(8), maxHeight: s(200)}}>
+              <ScrollView style={{maxHeight: s(200)}} nestedScrollEnabled>
                 {selectedModel.experiments.map((exp, idx) => (
                   <TouchableOpacity
                     key={`${exp}-${idx}`}
-                    style={[styles.dropdownItem, selectedExperiment === exp && styles.dropdownItemSelected]}
+                    style={{
+                      paddingHorizontal: s(12), paddingVertical: s(10),
+                      borderBottomWidth: 1, borderBottomColor: '#1e293b',
+                      backgroundColor: selectedExperiment === exp ? '#1e3a5f' : undefined,
+                    }}
                     onPress={() => { setSelectedExperiment(exp); setExpOpen(false); }}>
-                    <Text style={[styles.dropdownItemText, selectedExperiment === exp && styles.dropdownItemTextSelected]}>
+                    <Text style={{color: selectedExperiment === exp ? '#60a5fa' : '#cbd5e1', fontSize: s(12), fontFamily: 'monospace', fontWeight: selectedExperiment === exp ? '700' : '400'}}>
                       {exp}
                     </Text>
                   </TouchableOpacity>
@@ -134,79 +150,43 @@ const SimulationControls: React.FC = () => {
       )}
 
       {selectedModel && (!selectedModel.experiments || selectedModel.experiments.length === 0) && (
-        <Text style={styles.noExp}>No experiments found in this model</Text>
+        <Text style={{color: '#ef4444', fontSize: s(11), fontFamily: 'monospace', marginBottom: s(8)}}>No experiments found in this model</Text>
       )}
 
-      <View style={styles.row}>
+      <View style={{flexDirection: 'row', gap: s(8)}}>
         <TouchableOpacity
-          style={[styles.button, styles.startButton, !canStart && styles.buttonDisabled]}
+          style={{
+            flex: 1, paddingVertical: s(12), borderRadius: s(8), alignItems: 'center', justifyContent: 'center',
+            backgroundColor: '#15803d', opacity: canStart ? 1 : 0.4,
+          }}
           onPress={handleStart}
           disabled={!canStart}>
-          <Text style={styles.buttonText}>{running ? 'RUNNING...' : 'START'}</Text>
+          <Text style={{color: '#f8fafc', fontSize: s(13), fontWeight: '700', fontFamily: 'monospace', letterSpacing: 1}}>{running ? 'RUNNING...' : 'START'}</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.button, styles.stopButton, !running && styles.buttonDisabled]}
+          style={{
+            flex: 1, paddingVertical: s(12), borderRadius: s(8), alignItems: 'center', justifyContent: 'center',
+            backgroundColor: '#b91c1c', opacity: running ? 1 : 0.4,
+          }}
           onPress={handleStop}
           disabled={!running}>
-          <Text style={styles.buttonText}>STOP</Text>
+          <Text style={{color: '#f8fafc', fontSize: s(13), fontWeight: '700', fontFamily: 'monospace', letterSpacing: 1}}>STOP</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.button, styles.clearButton]}
+          style={{
+            flex: 0.5, paddingVertical: s(12), borderRadius: s(8), alignItems: 'center', justifyContent: 'center',
+            backgroundColor: '#334155',
+          }}
           onPress={() => {
             const count = logs.length;
             useSimulationStore.getState().clearLogs();
             addLog('info', `Cleared ${count} log entries`);
           }}>
-          <Text style={styles.buttonText}>CLEAR</Text>
+          <Text style={{color: '#f8fafc', fontSize: s(13), fontWeight: '700', fontFamily: 'monospace', letterSpacing: 1}}>CLEAR</Text>
         </TouchableOpacity>
       </View>
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {paddingVertical: 8},
-  label: {
-    color: '#64748b', fontSize: 10, fontWeight: '700',
-    fontFamily: 'monospace', letterSpacing: 1, marginBottom: 4,
-  },
-  selector: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: '#0f172a', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10,
-    marginBottom: 8, borderWidth: 1, borderColor: '#334155',
-  },
-  selectorOpen: {borderColor: '#3b82f6'},
-  selectorText: {color: '#e2e8f0', fontSize: 13, fontFamily: 'monospace', flex: 1},
-  placeholder: {color: '#64748b'},
-  chevron: {color: '#64748b', fontSize: 10, marginLeft: 8},
-  dropdown: {
-    backgroundColor: '#0f172a', borderRadius: 8, borderWidth: 1,
-    borderColor: '#334155', marginBottom: 8, maxHeight: 200,
-  },
-  dropdownScroll: {maxHeight: 200},
-  dropdownItem: {
-    paddingHorizontal: 12, paddingVertical: 10,
-    borderBottomWidth: 1, borderBottomColor: '#1e293b',
-  },
-  dropdownItemSelected: {backgroundColor: '#1e3a5f'},
-  dropdownItemText: {color: '#cbd5e1', fontSize: 12, fontFamily: 'monospace'},
-  dropdownItemTextSelected: {color: '#60a5fa', fontWeight: '700'},
-  dropdownItemCategory: {color: '#475569', fontSize: 10, fontFamily: 'monospace', marginTop: 2},
-  emptyText: {color: '#64748b', fontSize: 12, fontFamily: 'monospace', padding: 12, textAlign: 'center'},
-  retryButton: {
-    paddingVertical: 10, paddingHorizontal: 16,
-    alignItems: 'center', justifyContent: 'center',
-    borderTopWidth: 1, borderTopColor: '#1e293b',
-  },
-  retryText: {color: '#3b82f6', fontSize: 12, fontFamily: 'monospace', fontWeight: '700'},
-  noExp: {color: '#ef4444', fontSize: 11, fontFamily: 'monospace', marginBottom: 8},
-  row: {flexDirection: 'row', gap: 8},
-  button: {flex: 1, paddingVertical: 12, borderRadius: 8, alignItems: 'center', justifyContent: 'center'},
-  startButton: {backgroundColor: '#15803d'},
-  stopButton: {backgroundColor: '#b91c1c'},
-  clearButton: {backgroundColor: '#334155', flex: 0.5},
-  buttonDisabled: {opacity: 0.4},
-  buttonText: {color: '#f8fafc', fontSize: 13, fontWeight: '700', fontFamily: 'monospace', letterSpacing: 1},
-});
 
 export default SimulationControls;

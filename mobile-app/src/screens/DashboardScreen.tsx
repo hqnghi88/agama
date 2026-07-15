@@ -11,6 +11,7 @@ import {
 import {useBackendHealth} from '../hooks/useBackendHealth';
 import {useSimulationStore} from '../store/useSimulationStore';
 import {api} from '../services/api';
+import {useResponsive} from '../hooks/useResponsive';
 import StatusIndicator from '../components/StatusIndicator';
 import SimulationControls from '../components/SimulationControls';
 import LogViewer from '../components/LogViewer';
@@ -23,6 +24,7 @@ interface DashboardScreenProps {
 
 const DashboardScreen: React.FC<DashboardScreenProps> = ({onOpenVnc}) => {
   useBackendHealth();
+  const {s, width} = useResponsive();
 
   const connected = useSimulationStore(s => s.connected);
   const backendStatus = useSimulationStore(s => s.backendStatus);
@@ -36,10 +38,8 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({onOpenVnc}) => {
   const checkStatus = useSimulationStore(s => s.checkStatus);
   const addLog = useSimulationStore(s => s.addLog);
 
-  // Frame refresh counter (increment to force Image re-render)
   const [frameTs, setFrameTs] = useState(0);
 
-  // Poll simulation status every 2s while running
   const statusInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => {
     if (running && !statusInterval.current) {
@@ -56,7 +56,6 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({onOpenVnc}) => {
     };
   }, [running, checkStatus]);
 
-  // Poll simulation frame every 1.5s while running
   const frameInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => {
     if (running && !frameInterval.current) {
@@ -76,12 +75,12 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({onOpenVnc}) => {
   }, [running]);
 
   const formatUptime = useCallback((ms: number): string => {
-    const s = Math.floor(ms / 1000);
-    const m = Math.floor(s / 60);
+    const sec = Math.floor(ms / 1000);
+    const m = Math.floor(sec / 60);
     const h = Math.floor(m / 60);
     if (h > 0) return `${h}h ${m % 60}m`;
-    if (m > 0) return `${m}m ${s % 60}s`;
-    return `${s}s`;
+    if (m > 0) return `${m}m ${sec % 60}s`;
+    return `${sec}s`;
   }, []);
 
   const [restarting, setRestarting] = useState(false);
@@ -110,13 +109,17 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({onOpenVnc}) => {
         ? 'error'
         : 'inactive';
 
+  const pad = s(16);
+  const logHeight = Math.max(s(160), Math.round(width * 0.22));
+  const simFrameH = Math.max(s(160), Math.round(width * 0.25));
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>GAMA Mobile</Text>
-      <Text style={styles.subtitle}>Simulation Backend</Text>
+    <ScrollView style={styles.container} contentContainerStyle={{padding: pad, paddingBottom: s(40)}}>
+      <Text style={{color: '#f8fafc', fontSize: s(28), fontWeight: '800', fontFamily: 'monospace'}}>GAMA Mobile</Text>
+      <Text style={{color: '#64748b', fontSize: s(14), fontFamily: 'monospace', marginBottom: s(20)}}>Simulation Backend</Text>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>System Status</Text>
+        <Text style={{color: '#e2e8f0', fontSize: s(14), fontWeight: '700', fontFamily: 'monospace', marginBottom: s(8)}}>System Status</Text>
         <StatusIndicator
           label="Backend"
           status={backendColor}
@@ -132,17 +135,17 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({onOpenVnc}) => {
         />
         {!connected && SimulationModule && (
           <TouchableOpacity
-            style={styles.restartBtn}
+            style={{backgroundColor: '#334155', borderRadius: s(8), padding: s(10), alignItems: 'center', marginTop: s(8)}}
             onPress={handleRestartBackend}
             disabled={restarting}>
-            <Text style={styles.restartBtnText}>
+            <Text style={{color: '#f8fafc', fontSize: s(11), fontWeight: '700', fontFamily: 'monospace', letterSpacing: 1}}>
               {restarting ? 'RESTARTING...' : 'RESTART BACKEND'}
             </Text>
           </TouchableOpacity>
         )}
         {connected && onOpenVnc && (
-          <TouchableOpacity style={styles.vncBtn} onPress={onOpenVnc}>
-            <Text style={styles.vncBtnText}>OPEN VNC VIEWER</Text>
+          <TouchableOpacity style={{backgroundColor: '#7c3aed', borderRadius: s(8), padding: s(12), alignItems: 'center', marginTop: s(8)}} onPress={onOpenVnc}>
+            <Text style={{color: '#f8fafc', fontSize: s(12), fontWeight: '800', fontFamily: 'monospace', letterSpacing: 1}}>OPEN VNC VIEWER</Text>
           </TouchableOpacity>
         )}
         <StatusIndicator
@@ -163,13 +166,13 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({onOpenVnc}) => {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Controls</Text>
+        <Text style={{color: '#e2e8f0', fontSize: s(14), fontWeight: '700', fontFamily: 'monospace', marginBottom: s(8)}}>Controls</Text>
         <SimulationControls />
       </View>
 
       {jobs.length > 0 && (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>
+          <Text style={{color: '#e2e8f0', fontSize: s(14), fontWeight: '700', fontFamily: 'monospace', marginBottom: s(8)}}>
             {jobs.some(j => j.state === 'running' || j.state === 'starting')
               ? 'Running Simulations'
               : 'Simulation Results'
@@ -178,62 +181,61 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({onOpenVnc}) => {
           {jobs.map(job => {
             const frameUrl = api.getFrameUrl(job.id, frameTs);
             return (
-              <View key={job.id} style={styles.jobBlock}>
-                <View style={styles.jobRow}>
-                  <Text style={styles.jobId}>{job.id}</Text>
+              <View key={job.id} style={{marginBottom: s(8)}}>
+                <View style={{flexDirection: 'row', alignItems: 'center', paddingVertical: s(4)}}>
+                  <Text style={{color: '#94a3b8', fontSize: s(12), fontFamily: 'monospace', flex: 1}}>{job.id}</Text>
                   <Text style={[
-                    styles.jobState,
-                    job.state === 'completed' && styles.completed,
-                    job.state === 'stopped' && styles.stopped,
+                    {color: '#fbbf24', fontSize: s(12), fontFamily: 'monospace', width: s(80)},
+                    job.state === 'completed' && {color: '#22c55e'},
+                    job.state === 'stopped' && {color: '#ef4444'},
                   ]}>
                     {job.state === 'completed' ? '✓ Complete' : job.state}
                   </Text>
                   <Text style={[
-                    styles.jobProgress,
-                    job.state === 'completed' && styles.completedText,
+                    {color: '#e2e8f0', fontSize: s(12), fontFamily: 'monospace', width: s(40), textAlign: 'right' as const},
+                    job.state === 'completed' && {color: '#22c55e'},
                   ]}>{job.progress}%</Text>
                 </View>
                 {job.model || job.experiment ? (
-                  <Text style={styles.jobModel}>
+                  <Text style={{color: '#60a5fa', fontSize: s(10), fontFamily: 'monospace', marginTop: s(2)}}>
                     {[String(job.model ?? ''), String(job.experiment ?? '')].filter(Boolean).join(' # ')}
                   </Text>
                 ) : null}
-              <View style={styles.progressBarBg}>
-                <View style={[
-                  styles.progressBarFill,
-                  {width: `${job.progress}%`},
-                  job.state === 'completed' && styles.progressComplete,
-                  job.state === 'stopped' && styles.progressStopped,
-                ]} />
-              </View>
-              {job.has_frame && (
-                <View style={styles.frameContainer}>
-                  <Image
-                    source={{uri: frameUrl}}
-                    style={styles.simFrame}
-                    resizeMode="contain"
-                  />
+                <View style={{height: s(6), backgroundColor: '#334155', borderRadius: s(3), overflow: 'hidden', marginTop: s(2)}}>
+                  <View style={[
+                    {height: s(6), backgroundColor: '#3b82f6', borderRadius: s(3), width: `${job.progress}%` as unknown as number},
+                    job.state === 'completed' && {backgroundColor: '#22c55e'},
+                    job.state === 'stopped' && {backgroundColor: '#ef4444'},
+                  ]} />
                 </View>
-              )}
-              {job.current_step != null && job.state !== 'completed' && (
-                <Text style={styles.jobStep}>Step {job.current_step}/{job.steps || 100}</Text>
-              )}
-              {job.state === 'completed' && (
-                <Text style={styles.jobResult}>Simulation finished successfully</Text>
-              )}
-              {job.state === 'stopped' && (
-                <Text style={styles.jobResult}>Simulation stopped by user</Text>
-              )}
-              {!job.has_frame && job.state === 'running' && (
-                <Text style={styles.jobStep}>Waiting for display frame...</Text>
-              )}
-              {job.has_frame && (
-                <Text style={styles.jobStep}>Live display — refreshes every 1.5s</Text>
-              )}
-            </View>
+                {job.has_frame && (
+                  <View style={{marginTop: s(8), backgroundColor: '#0f172a', borderRadius: s(8), overflow: 'hidden', alignItems: 'center', justifyContent: 'center', minHeight: s(120)}}>
+                    <Image
+                      source={{uri: frameUrl}}
+                      style={{width: '100%', height: simFrameH}}
+                      resizeMode="contain"
+                    />
+                  </View>
+                )}
+                {job.current_step != null && job.state !== 'completed' && (
+                  <Text style={{color: '#64748b', fontSize: s(10), fontFamily: 'monospace', marginTop: s(2)}}>Step {job.current_step}/{job.steps || 100}</Text>
+                )}
+                {job.state === 'completed' && (
+                  <Text style={{color: '#64748b', fontSize: s(11), fontFamily: 'monospace', marginTop: s(4), fontStyle: 'italic'}}>Simulation finished successfully</Text>
+                )}
+                {job.state === 'stopped' && (
+                  <Text style={{color: '#64748b', fontSize: s(11), fontFamily: 'monospace', marginTop: s(4), fontStyle: 'italic'}}>Simulation stopped by user</Text>
+                )}
+                {!job.has_frame && job.state === 'running' && (
+                  <Text style={{color: '#64748b', fontSize: s(10), fontFamily: 'monospace', marginTop: s(2)}}>Waiting for display frame...</Text>
+                )}
+                {job.has_frame && (
+                  <Text style={{color: '#64748b', fontSize: s(10), fontFamily: 'monospace', marginTop: s(2)}}>Live display — refreshes every 1.5s</Text>
+                )}
+              </View>
             );
           })}
-          <Text style={styles.jobsSummary}>
+          <Text style={{color: '#475569', fontSize: s(11), fontFamily: 'monospace', marginTop: s(8), textAlign: 'center'}}>
             {jobs.filter(j => j.state === 'completed').length} completed,{' '}
             {jobs.filter(j => j.state === 'running' || j.state === 'starting').length} active
           </Text>
@@ -242,23 +244,23 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({onOpenVnc}) => {
 
       <View style={styles.card}>
         <View style={styles.logHeader}>
-          <Text style={styles.cardTitle}>Logs</Text>
+          <Text style={{color: '#e2e8f0', fontSize: s(14), fontWeight: '700', fontFamily: 'monospace', marginBottom: s(8)}}>Logs</Text>
           <TouchableOpacity
             onPress={() => {
               addLog('info', 'Refreshed connection');
               checkHealth();
             }}
-            style={styles.refreshButton}>
-            <Text style={styles.refreshText}>REFRESH</Text>
+            style={{paddingHorizontal: s(8), paddingVertical: s(4)}}>
+            <Text style={{color: '#3b82f6', fontSize: s(11), fontFamily: 'monospace', fontWeight: '700'}}>REFRESH</Text>
           </TouchableOpacity>
         </View>
-        <View style={styles.logContainer}>
+        <View style={{height: logHeight}}>
           <LogViewer />
         </View>
       </View>
 
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>v0.1.0 | ARM64 | PRoot</Text>
+      <View style={{alignItems: 'center', paddingTop: s(8)}}>
+        <Text style={{color: '#475569', fontSize: s(11), fontFamily: 'monospace'}}>v0.1.0 | ARM64 | PRoot</Text>
       </View>
     </ScrollView>
   );
@@ -269,182 +271,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0f172a',
   },
-  content: {
-    padding: 16,
-    paddingBottom: 40,
-  },
-  title: {
-    color: '#f8fafc',
-    fontSize: 28,
-    fontWeight: '800',
-    fontFamily: 'monospace',
-  },
-  subtitle: {
-    color: '#64748b',
-    fontSize: 14,
-    fontFamily: 'monospace',
-    marginBottom: 20,
-  },
   card: {
     backgroundColor: '#1e293b',
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
   },
-  cardTitle: {
-    color: '#e2e8f0',
-    fontSize: 14,
-    fontWeight: '700',
-    fontFamily: 'monospace',
-    marginBottom: 8,
-  },
   logHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  refreshButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  refreshText: {
-    color: '#3b82f6',
-    fontSize: 11,
-    fontFamily: 'monospace',
-    fontWeight: '700',
-  },
-  logContainer: {
-    height: 200,
-  },
-  jobBlock: {
-    marginBottom: 8,
-  },
-  jobRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-  jobId: {
-    color: '#94a3b8',
-    fontSize: 12,
-    fontFamily: 'monospace',
-    flex: 1,
-  },
-  jobState: {
-    color: '#fbbf24',
-    fontSize: 12,
-    fontFamily: 'monospace',
-    width: 80,
-  },
-  completed: {
-    color: '#22c55e',
-  },
-  jobProgress: {
-    color: '#e2e8f0',
-    fontSize: 12,
-    fontFamily: 'monospace',
-    width: 40,
-    textAlign: 'right',
-  },
-  progressBarBg: {
-    height: 6,
-    backgroundColor: '#334155',
-    borderRadius: 3,
-    overflow: 'hidden',
-    marginTop: 2,
-  },
-  progressBarFill: {
-    height: 6,
-    backgroundColor: '#3b82f6',
-    borderRadius: 3,
-  },
-  jobModel: {
-    color: '#60a5fa',
-    fontSize: 10,
-    fontFamily: 'monospace',
-    marginTop: 2,
-  },
-  jobStep: {
-    color: '#64748b',
-    fontSize: 10,
-    fontFamily: 'monospace',
-    marginTop: 2,
-  },
-  stopped: {
-    color: '#ef4444',
-  },
-  completedText: {
-    color: '#22c55e',
-  },
-  progressComplete: {
-    backgroundColor: '#22c55e',
-  },
-  progressStopped: {
-    backgroundColor: '#ef4444',
-  },
-  frameContainer: {
-    marginTop: 8,
-    backgroundColor: '#0f172a',
-    borderRadius: 8,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 120,
-  },
-  simFrame: {
-    width: '100%',
-    height: 200,
-  },
-  jobResult: {
-    color: '#64748b',
-    fontSize: 11,
-    fontFamily: 'monospace',
-    marginTop: 4,
-    fontStyle: 'italic',
-  },
-  jobsSummary: {
-    color: '#475569',
-    fontSize: 11,
-    fontFamily: 'monospace',
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  restartBtn: {
-    backgroundColor: '#334155',
-    borderRadius: 8,
-    padding: 10,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  restartBtnText: {
-    color: '#f8fafc',
-    fontSize: 11,
-    fontWeight: '700',
-    fontFamily: 'monospace',
-    letterSpacing: 1,
-  },
-  vncBtn: {
-    backgroundColor: '#7c3aed',
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  vncBtnText: {
-    color: '#f8fafc',
-    fontSize: 12,
-    fontWeight: '800',
-    fontFamily: 'monospace',
-    letterSpacing: 1,
-  },
-  footer: {
-    alignItems: 'center',
-    paddingTop: 8,
-  },
-  footerText: {
-    color: '#475569',
-    fontSize: 11,
-    fontFamily: 'monospace',
   },
 });
 

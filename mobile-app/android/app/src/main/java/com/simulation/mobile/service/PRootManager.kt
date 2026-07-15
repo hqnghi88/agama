@@ -1,7 +1,9 @@
 package com.simulation.mobile.service
 
 import android.content.Context
+import android.util.DisplayMetrics
 import android.util.Log
+import android.view.WindowManager
 import java.io.BufferedReader
 import java.io.File
 import java.io.FileOutputStream
@@ -326,7 +328,9 @@ class PRootManager(private val context: Context) {
             optDir.mkdirs()
 
             val script = File(optDir, "startup.sh")
-            script.writeText(generateStartupScript())
+            val vncW = 1280
+            val vncH = 720
+            script.writeText(generateStartupScript(vncW, vncH))
             script.setExecutable(true)
 
             Log.i(TAG, "Startup script written to ${script.absolutePath}")
@@ -369,7 +373,7 @@ class PRootManager(private val context: Context) {
         }
     }
 
-    private fun generateStartupScript(): String = """
+    private fun generateStartupScript(vncW: Int = 1920, vncH: Int = 1080): String = """
         |#!/bin/bash
         |
         |# GAMA Mobile startup — Ubuntu PRoot
@@ -382,6 +386,8 @@ class PRootManager(private val context: Context) {
         |export USER=shell
         |export TMPDIR=/tmp
         |export VNC_PORT=5901
+        |export VNC_WIDTH=${vncW}
+        |export VNC_HEIGHT=${vncH}
         |
         |# From u.sh / c.sh
         |export DISPLAY=:0
@@ -435,7 +441,7 @@ class PRootManager(private val context: Context) {
         |if command -v Xvfb &>/dev/null; then
         |  echo "[startup] Starting Xvfb on display ${'$'}DISPLAY..."
         |  XKB_CONFIG_ROOT=/usr/share/X11/xkb \
-        |  Xvfb ${'$'}DISPLAY -screen 0 1280x720x24 -pixdepths 8 16 24 32 \
+        |  Xvfb ${'$'}DISPLAY -screen 0 ${'$'}{VNC_WIDTH}x${'$'}{VNC_HEIGHT}x24 -pixdepths 8 16 24 32 \
         |    -noreset +extension GLX +extension RENDER +extension COMPOSITE \
         |    -xkbdir /usr/share/X11/xkb \
         |    &>${'$'}X_SERVER_LOG 2>&1 &
@@ -451,7 +457,7 @@ class PRootManager(private val context: Context) {
         |    tail -10 ${'$'}X_SERVER_LOG 2>/dev/null || true
         |    # Retry with -kb (no XKB) in case xkb-data is broken under PRoot
         |    echo "[startup] Retrying Xvfb with -kb (no XKB)..."
-        |    Xvfb ${'$'}DISPLAY -screen 0 1280x720x24 -pixdepths 8 16 24 32 \
+        |    Xvfb ${'$'}DISPLAY -screen 0 ${'$'}{VNC_WIDTH}x${'$'}{VNC_HEIGHT}x24 -pixdepths 8 16 24 32 \
         |      -noreset +extension GLX +extension RENDER +extension COMPOSITE \
         |      -kb \
         |      &>${'$'}X_SERVER_LOG 2>&1 &
@@ -488,7 +494,7 @@ class PRootManager(private val context: Context) {
         |  fi
         |  if [ -n "${'$'}XVNC_BIN" ]; then
         |    echo "[startup] Starting Xvnc (${'$'}XVNC_BIN) on display ${'$'}DISPLAY port ${'$'}VNC_PORT..."
-        |    ${'$'}XVNC_BIN ${'$'}DISPLAY -geometry 1280x720 -depth 24 -rfbport ${'$'}VNC_PORT \
+        |    ${'$'}XVNC_BIN ${'$'}DISPLAY -geometry ${'$'}{VNC_WIDTH}x${'$'}{VNC_HEIGHT} -depth 24 -rfbport ${'$'}VNC_PORT \
         |      -localhost -desktop GAMA \
         |      &>${'$'}X_SERVER_LOG 2>&1 &
         |    XVNC_PID=${'$'}!

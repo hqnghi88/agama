@@ -2,6 +2,7 @@ import React from 'react';
 import {View, Text, TouchableOpacity, StyleSheet} from 'react-native';
 import {NativeModules} from 'react-native';
 import {useSimulationStore} from '../store/useSimulationStore';
+import {useResponsive} from '../hooks/useResponsive';
 
 const {SimulationModule} = NativeModules;
 
@@ -10,6 +11,7 @@ const SettingsScreen: React.FC = () => {
   const backendPid = useSimulationStore(s => s.backendPid);
   const clearLogs = useSimulationStore(s => s.clearLogs);
   const checkHealth = useSimulationStore(s => s.checkHealth);
+  const {s} = useResponsive();
 
   const handleRestart = async () => {
     try {
@@ -23,89 +25,43 @@ const SettingsScreen: React.FC = () => {
     }
   };
 
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Settings</Text>
+  const cardStyle = {backgroundColor: '#1e293b', borderRadius: s(12), padding: s(16), marginBottom: s(12)};
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Backend</Text>
-        <Text style={styles.infoText}>
+  return (
+    <View style={{flex: 1, backgroundColor: '#0f172a', padding: s(16)}}>
+      <Text style={{color: '#f8fafc', fontSize: s(24), fontWeight: '800', fontFamily: 'monospace', marginBottom: s(20)}}>Settings</Text>
+
+      <View style={cardStyle}>
+        <Text style={{color: '#e2e8f0', fontSize: s(14), fontWeight: '700', fontFamily: 'monospace', marginBottom: s(8)}}>Backend</Text>
+        <Text style={{color: '#94a3b8', fontSize: s(12), fontFamily: 'monospace', marginVertical: s(2)}}>
           Status: {connected ? 'Connected' : 'Disconnected'}
         </Text>
-        <Text style={styles.infoText}>PID: {backendPid ?? 'N/A'}</Text>
-        <Text style={styles.infoText}>Port: 8080</Text>
+        <Text style={{color: '#94a3b8', fontSize: s(12), fontFamily: 'monospace', marginVertical: s(2)}}>PID: {backendPid ?? 'N/A'}</Text>
+        <Text style={{color: '#94a3b8', fontSize: s(12), fontFamily: 'monospace', marginVertical: s(2)}}>Port: 8080</Text>
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Actions</Text>
-        <TouchableOpacity style={styles.button} onPress={handleRestart}>
-          <Text style={styles.buttonText}>RESTART BACKEND</Text>
+      <View style={cardStyle}>
+        <Text style={{color: '#e2e8f0', fontSize: s(14), fontWeight: '700', fontFamily: 'monospace', marginBottom: s(8)}}>Actions</Text>
+        <TouchableOpacity style={{backgroundColor: '#334155', borderRadius: s(8), padding: s(12), alignItems: 'center', marginVertical: s(4)}} onPress={handleRestart}>
+          <Text style={{color: '#f8fafc', fontSize: s(12), fontWeight: '700', fontFamily: 'monospace', letterSpacing: 1}}>RESTART BACKEND</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.button} onPress={clearLogs}>
-          <Text style={styles.buttonText}>CLEAR LOGS</Text>
+        <TouchableOpacity style={{backgroundColor: '#334155', borderRadius: s(8), padding: s(12), alignItems: 'center', marginVertical: s(4)}} onPress={clearLogs}>
+          <Text style={{color: '#f8fafc', fontSize: s(12), fontWeight: '700', fontFamily: 'monospace', letterSpacing: 1}}>CLEAR LOGS</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.button} onPress={checkHealth}>
-          <Text style={styles.buttonText}>CHECK HEALTH</Text>
+        <TouchableOpacity style={{backgroundColor: '#334155', borderRadius: s(8), padding: s(12), alignItems: 'center', marginVertical: s(4)}} onPress={checkHealth}>
+          <Text style={{color: '#f8fafc', fontSize: s(12), fontWeight: '700', fontFamily: 'monospace', letterSpacing: 1}}>CHECK HEALTH</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>About</Text>
-        <Text style={styles.infoText}>GAMA Mobile v0.1.0</Text>
-        <Text style={styles.infoText}>Architecture: ARM64</Text>
-        <Text style={styles.infoText}>Runtime: PRoot + OpenJDK 17</Text>
-        <Text style={styles.infoText}>Communication: localhost:8080</Text>
+      <View style={cardStyle}>
+        <Text style={{color: '#e2e8f0', fontSize: s(14), fontWeight: '700', fontFamily: 'monospace', marginBottom: s(8)}}>About</Text>
+        <Text style={{color: '#94a3b8', fontSize: s(12), fontFamily: 'monospace', marginVertical: s(2)}}>GAMA Mobile v0.1.0</Text>
+        <Text style={{color: '#94a3b8', fontSize: s(12), fontFamily: 'monospace', marginVertical: s(2)}}>Architecture: ARM64</Text>
+        <Text style={{color: '#94a3b8', fontSize: s(12), fontFamily: 'monospace', marginVertical: s(2)}}>Runtime: PRoot + OpenJDK 17</Text>
+        <Text style={{color: '#94a3b8', fontSize: s(12), fontFamily: 'monospace', marginVertical: s(2)}}>Communication: localhost:8080</Text>
       </View>
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0f172a',
-    padding: 16,
-  },
-  title: {
-    color: '#f8fafc',
-    fontSize: 24,
-    fontWeight: '800',
-    fontFamily: 'monospace',
-    marginBottom: 20,
-  },
-  card: {
-    backgroundColor: '#1e293b',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-  },
-  cardTitle: {
-    color: '#e2e8f0',
-    fontSize: 14,
-    fontWeight: '700',
-    fontFamily: 'monospace',
-    marginBottom: 8,
-  },
-  infoText: {
-    color: '#94a3b8',
-    fontSize: 12,
-    fontFamily: 'monospace',
-    marginVertical: 2,
-  },
-  button: {
-    backgroundColor: '#334155',
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
-    marginVertical: 4,
-  },
-  buttonText: {
-    color: '#f8fafc',
-    fontSize: 12,
-    fontWeight: '700',
-    fontFamily: 'monospace',
-    letterSpacing: 1,
-  },
-});
 
 export default SettingsScreen;
