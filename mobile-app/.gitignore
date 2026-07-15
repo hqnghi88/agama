@@ -13,3 +13,4 @@ ios/
 dist/
 .env
 *.local
+rootfs_tar_gz
