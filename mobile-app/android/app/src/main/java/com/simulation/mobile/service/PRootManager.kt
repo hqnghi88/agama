@@ -19,7 +19,7 @@ class PRootManager(private val context: Context) {
         const val TAG = "PRootManager"
         const val ROOTFS_ARCHIVE = "rootfs.tar.gz"
         const val PROOT_BINARY = "libproot.so"
-        const val ROOTFS_URL = "https://github.com/hqnghi88/agama/releases/download/rootfs/rootfs.tar.gz"
+        const val ROOTFS_URL = "https://github.com/hqnghi88/agama/releases/download/rootfs/rootfs_tar_gz"
     }
 
     private var prootProcess: Process? = null
