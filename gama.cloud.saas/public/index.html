@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GAMA Cloud SaaS</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --secondary: #ec4899;
+            --surface: rgba(255, 255, 255, 0.05);
+            --border: rgba(255, 255, 255, 0.1);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+            background: radial-gradient(circle at top right, #1e1b4b, var(--bg-color)), var(--bg-color);
+            background-attachment: fixed;
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        header {
+            width: 100%;
+            padding: 1.5rem 0;
+            text-align: center;
+            background: rgba(11, 15, 25, 0.6);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin: 0;
+            background: linear-gradient(135deg, #a855f7, #ec4899);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -1px;
+        }
+
+        .container {
+            max-width: 900px;
+            width: 90%;
+            margin: 3rem auto;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 2.5rem;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+        }
+
+        .card-header {
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+
+        h2 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.8rem;
+            margin: 0 0 0.5rem 0;
+            color: #fff;
+        }
+
+        p.subtitle {
+            color: var(--text-muted);
+            margin: 0;
+            font-size: 1.05rem;
+        }
+
+        button {
+            appearance: none;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            border: none;
+            padding: 1rem 2.5rem;
+            font-size: 1.1rem;
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+            border-radius: 100px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 20px rgba(99, 102, 241, 0.3);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            margin: 0 auto;
+        }
+
+        button::before {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%;
+            width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s ease;
+        }
+
+        button:hover { transform: scale(1.05); box-shadow: 0 15px 30px rgba(99, 102, 241, 0.5); }
+        button:hover::before { left: 100%; }
+        button:active { transform: scale(0.98); }
+        button:disabled { background: #334155; box-shadow: none; cursor: not-allowed; transform: none; }
+
+        .console {
+            background: #0f172a;
+            border: 1px solid #1e293b;
+            border-radius: 12px;
+            padding: 1.5rem;
+            height: 350px;
+            overflow-y: auto;
+            font-family: 'Fira Code', 'Courier New', monospace;
+            font-size: 0.85rem;
+            color: #10b981;
+            line-height: 1.6;
+            box-shadow: inset 0 4px 6px rgba(0,0,0,0.5);
+        }
+
+        .console p { margin: 0 0 0.3rem 0; word-break: break-all; }
+        .console .system { color: #94a3b8; }
+        .console .error { color: #ef4444; }
+        .console .user { color: #3b82f6; }
+
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
+
+        .status {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-top: 1.5rem;
+            justify-content: center;
+            width: 100%;
+        }
+
+        .indicator {
+            width: 10px; height: 10px; border-radius: 50%;
+            background: #64748b; box-shadow: 0 0 10px #64748b;
+            transition: all 0.3s ease;
+        }
+        .indicator.active { background: #10b981; box-shadow: 0 0 15px #10b981; animation: pulse 2s infinite; }
+        .indicator.connecting { background: #eab308; box-shadow: 0 0 15px #eab308; animation: pulse 1s infinite; }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .btn-row { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--border);
+            box-shadow: none;
+        }
+        .btn-outline:hover { background: rgba(255,255,255,0.1); box-shadow: none; }
+
+        .cmd-row {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .cmd-row input {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: rgba(0,0,0,0.3);
+            color: white;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.9rem;
+            outline: none;
+            transition: border-color 0.2s ease;
+        }
+        .cmd-row input:focus { border-color: var(--primary); }
+        .cmd-row input::placeholder { color: #475569; }
+
+        .cmd-row button {
+            padding: 0.75rem 1.5rem;
+            font-size: 0.95rem;
+        }
+
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>GAMA Cloud SaaS</h1>
+    </header>
+
+    <div class="container">
+        <div class="card">
+            <div class="card-header">
+                <h2>Simulation Orchestrator</h2>
+                <p class="subtitle">Deploy and run GAMA models on demand — anywhere</p>
+            </div>
+
+            <button id="launchBtn" onclick="launchInstance()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                Launch GAMA Engine
+            </button>
+
+            <div class="status" id="statusText">
+                <div class="indicator" id="statusIndicator"></div>
+                <span>Status: Disconnected</span>
+            </div>
+
+            <div class="controls" id="controls" style="display: none;">
+                <div class="btn-row">
+                    <button class="btn-outline" onclick="sendPing()">Ping</button>
+                    <button class="btn-outline" style="color: #ef4444; border-color: rgba(239, 68, 68, 0.3);" onclick="terminateInstance()">Terminate</button>
+                </div>
+                <div class="cmd-row">
+                    <input type="text" id="commandInput" placeholder='{"type": "load", "model": "...", "experiment": "..."}' onkeydown="if(event.key==='Enter') sendCommand()">
+                    <button class="btn-outline" onclick="sendCommand()">Send</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Terminal Output</h2>
+            <div class="console" id="console">
+                <p class="system">> Ready to launch a new GAMA instance...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+
+        const launchBtn = document.getElementById('launchBtn');
+        const consoleEl = document.getElementById('console');
+        const statusIndicator = document.getElementById('statusIndicator');
+        const controls = document.getElementById('controls');
+
+        function log(message, type = '') {
+            const p = document.createElement('p');
+            p.className = type;
+            const time = new Date().toLocaleTimeString();
+            p.textContent = `[${time}] ${message}`;
+            consoleEl.appendChild(p);
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        }
+
+        function setStatus(text, indicatorClass) {
+            statusIndicator.className = 'indicator ' + (indicatorClass || '');
+            statusIndicator.nextElementSibling.textContent = 'Status: ' + text;
+        }
+
+        async function launchInstance() {
+            try {
+                launchBtn.disabled = true;
+                launchBtn.innerHTML = `<svg style="animation: spin 1s linear infinite" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Launching...`;
+                log('Requesting GAMA engine startup...', 'system');
+                setStatus('Starting GAMA Engine...', 'connecting');
+
+                const response = await fetch('/launch', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+                const data = await response.json();
+
+                if (data.success) {
+                    log('GAMA engine is ready! Connecting WebSocket...', 'system');
+                    connectWebSocket();
+                } else {
+                    throw new Error(data.error || 'Launch failed');
+                }
+            } catch (error) {
+                log(`Error: ${error.message}`, 'error');
+                resetUI();
+            }
+        }
+
+        let retryCount = 0;
+        const maxRetries = 5;
+
+        function connectWebSocket() {
+            setStatus('Connecting WebSocket...', 'connecting');
+            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${location.host}/ws`);
+
+            ws.onopen = () => {
+                log('WebSocket connection established!', 'system');
+                setStatus('Connected & Running', 'active');
+                launchBtn.style.display = 'none';
+                controls.style.display = 'flex';
+                retryCount = 0;
+            };
+
+            ws.onmessage = (event) => {
+                log(`> ${event.data}`);
+            };
+
+            ws.onerror = () => {
+                log('WebSocket error.', 'error');
+            };
+
+            ws.onclose = () => {
+                if (retryCount < maxRetries) {
+                    retryCount++;
+                    log(`Connection lost. Retrying... (${retryCount}/${maxRetries})`, 'system');
+                    setTimeout(() => connectWebSocket(), 2000);
+                } else {
+                    log('WebSocket closed.', 'system');
+                    resetUI();
+                }
+            };
+        }
+
+        function sendPing() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const msg = JSON.stringify({ type: "ping" });
+                ws.send(msg);
+                log(`Sent: ${msg}`, 'user');
+            }
+        }
+
+        function sendCommand() {
+            const input = document.getElementById('commandInput');
+            const cmd = input.value.trim();
+            if (cmd && ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(cmd);
+                log(`Sent: ${cmd}`, 'user');
+                input.value = '';
+            }
+        }
+
+        async function terminateInstance() {
+            log('Terminating GAMA engine...', 'system');
+            if (ws) ws.close();
+            try {
+                await fetch('/terminate', { method: 'POST' });
+                log('GAMA engine terminated.', 'system');
+            } catch (err) {
+                log(`Error: ${err.message}`, 'error');
+            }
+            resetUI();
+        }
+
+        function resetUI() {
+            launchBtn.disabled = false;
+            launchBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg> Launch GAMA Engine`;
+            launchBtn.style.display = 'flex';
+            controls.style.display = 'none';
+            setStatus('Disconnected', '');
+        }
+
+        window.addEventListener('beforeunload', () => {
+            navigator.sendBeacon('/terminate');
+        });
+    </script>
+</body>
+</html>
