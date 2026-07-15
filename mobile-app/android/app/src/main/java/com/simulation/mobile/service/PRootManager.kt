@@ -328,8 +328,8 @@ class PRootManager(private val context: Context) {
             optDir.mkdirs()
 
             val script = File(optDir, "startup.sh")
-            val vncW = 1280
-            val vncH = 720
+            val vncW = 960
+            val vncH = 540
             script.writeText(generateStartupScript(vncW, vncH))
             script.setExecutable(true)
 
