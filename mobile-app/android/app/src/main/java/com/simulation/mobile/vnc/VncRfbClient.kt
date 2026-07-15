@@ -332,7 +332,7 @@ class VncRfbClient(
                     out.writeShort(fy)
                     out.flush()
                 }
-                Log.d(TAG, "PointerEvent: btn=$buttonMask ($fx,$fy)")
+
             } catch (e: Exception) {
                 Log.w(TAG, "sendPointerEvent failed", e)
             }
@@ -353,8 +353,7 @@ class VncRfbClient(
                     out.writeInt(keysym)
                     out.flush()
                 }
-                val dir = if (downFlag) "down" else "up"
-                Log.d(TAG, "KeyEvent: keysym=0x${keysym.toString(16)} $dir")
+
             } catch (e: Exception) {
                 Log.w(TAG, "sendKeyEvent failed", e)
             }

@@ -118,19 +118,16 @@ class VncView @JvmOverloads constructor(
 
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                Log.d(TAG, "Touch DOWN at view=(${event.x},${event.y}) fb=($fx,$fy)")
                 requestFocus()
                 pointerButtonMask = LEFT_BUTTON
                 client.sendPointerEvent(fx, fy, pointerButtonMask)
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
-                Log.d(TAG, "Touch MOVE at fb=($fx,$fy)")
                 client.sendPointerEvent(fx, fy, pointerButtonMask)
                 return true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                Log.d(TAG, "Touch UP at fb=($fx,$fy)")
                 client.sendPointerEvent(fx, fy, 0)
                 pointerButtonMask = 0
                 return true
@@ -232,18 +229,17 @@ class VncView @JvmOverloads constructor(
         rfbClient = null
     }
 
-    override fun onCheckIsTextEditor(): Boolean = keyboardShowing
+    override fun onCheckIsTextEditor(): Boolean = true
 
     fun toggleKeyboard() {
-        post {
-            keyboardShowing = !keyboardShowing
-            val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-            if (keyboardShowing) {
-                requestFocus()
-                imm.showSoftInput(this, 0)
-            } else {
-                imm.hideSoftInputFromWindow(windowToken, 0)
-            }
+        keyboardShowing = !keyboardShowing
+        val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        if (keyboardShowing) {
+            requestFocus()
+            imm.showSoftInput(this, 0)
+        } else {
+            clearFocus()
+            imm.hideSoftInputFromWindow(windowToken, 0)
         }
     }
 
