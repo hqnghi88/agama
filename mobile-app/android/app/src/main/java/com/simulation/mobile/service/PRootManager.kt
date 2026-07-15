@@ -8,6 +8,8 @@ import java.io.BufferedReader
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStreamReader
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -17,6 +19,7 @@ class PRootManager(private val context: Context) {
         const val TAG = "PRootManager"
         const val ROOTFS_ARCHIVE = "rootfs.tar.gz"
         const val PROOT_BINARY = "libproot.so"
+        const val ROOTFS_URL = "https://github.com/hqnghi88/agama/releases/download/rootfs/rootfs.tar.gz"
     }
 
     private var prootProcess: Process? = null
@@ -29,14 +32,13 @@ class PRootManager(private val context: Context) {
             } else {
                 Log.i(TAG, "Setting up rootfs at $rootfsDir")
                 rootfsDir.mkdirs()
-                onProgress?.invoke("copying rootfs archive from APK")
 
-                val archiveFile = extractRawResource(ROOTFS_ARCHIVE, rootfsDir.parentFile!!)
+                // Try to get rootfs: download from GitHub or extract from APK
+                val archiveFile = downloadOrExtractRootfs(rootfsDir.parentFile!!, onProgress)
                     ?: return false
 
-                Log.i(TAG, "Extracting rootfs archive: ${archiveFile.absolutePath}")
                 onProgress?.invoke("extracting rootfs (this may take several minutes)")
-
+                Log.i(TAG, "Extracting rootfs archive: ${archiveFile.absolutePath}")
                 Log.i(TAG, "Archive size: ${archiveFile.length()} bytes")
                 val pb = ProcessBuilder(
                     "tar", "xzf", archiveFile.absolutePath,
@@ -581,6 +583,56 @@ class PRootManager(private val context: Context) {
         |  fi
         |done
         |""".trimMargin()
+
+    private fun downloadOrExtractRootfs(destDir: File, onProgress: ((String) -> Unit)? = null): File? {
+        val destFile = File(destDir, ROOTFS_ARCHIVE)
+
+        // Check if already downloaded (>10MB means real file, not pointer)
+        if (destFile.exists() && destFile.length() > 10_000_000) {
+            Log.i(TAG, "Rootfs archive already downloaded: ${destFile.length()} bytes")
+            return destFile
+        }
+
+        // Try downloading from GitHub Releases
+        onProgress?.invoke("downloading rootfs from GitHub")
+        Log.i(TAG, "Downloading rootfs from $ROOTFS_URL")
+        try {
+            val url = URL(ROOTFS_URL)
+            val conn = url.openConnection() as HttpURLConnection
+            conn.connectTimeout = 30_000
+            conn.readTimeout = 300_000
+            conn.connect()
+
+            val totalSize = conn.contentLength
+            Log.i(TAG, "Download size: $totalSize bytes")
+
+            conn.inputStream.use { input ->
+                FileOutputStream(destFile).use { output ->
+                    val buffer = ByteArray(8192)
+                    var bytesRead: Int
+                    var totalRead = 0L
+                    while (input.read(buffer).also { bytesRead = it } != -1) {
+                        output.write(buffer, 0, bytesRead)
+                        totalRead += bytesRead
+                        if (totalSize > 0) {
+                            val pct = (totalRead * 100 / totalSize).toInt()
+                            if (pct % 10 == 0) {
+                                onProgress?.invoke("downloading rootfs: $pct%")
+                            }
+                        }
+                    }
+                }
+            }
+            Log.i(TAG, "Download complete: ${destFile.length()} bytes")
+            return destFile
+        } catch (e: Exception) {
+            Log.e(TAG, "Download failed: ${e.message}")
+            destFile.delete()
+        }
+
+        // Fallback: try extracting from APK raw resource
+        return extractRawResource(ROOTFS_ARCHIVE, destDir)
+    }
 
     private fun extractRawResource(name: String, destDir: File): File? {
         return try {
