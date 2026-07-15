@@ -37,6 +37,15 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
+      - name: Generate debug keystore
+        run: |
+          keytool -genkeypair -v \
+            -keystore android/app/debug.keystore \
+            -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
+
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
