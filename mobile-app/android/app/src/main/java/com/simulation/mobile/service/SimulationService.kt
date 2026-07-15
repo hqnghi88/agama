@@ -10,6 +10,9 @@ import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.facebook.react.bridge.Arguments
+import com.facebook.react.bridge.ReactContext
+import com.facebook.react.modules.core.DeviceEventManagerModule
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -38,6 +41,21 @@ class SimulationService : Service() {
         @Volatile
         var vncWsPort: Int = -1
             private set
+
+        @Volatile
+        private var _reactContext: ReactContext? = null
+        @Volatile
+        private var pendingStart = false
+        @Volatile
+        private var instance: SimulationService? = null
+
+        fun setReactContext(ctx: ReactContext?) {
+            _reactContext = ctx
+            if (ctx != null && pendingStart) {
+                pendingStart = false
+                instance?.startBackend()
+            }
+        }
     }
 
     private var prootManager: PRootManager? = null
@@ -50,6 +68,7 @@ class SimulationService : Service() {
         Log.d(TAG, "Creating simulation service")
         createNotificationChannel()
         prootManager = PRootManager(this)
+        instance = this
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -57,7 +76,12 @@ class SimulationService : Service() {
             ACTION_START -> {
                 startForeground(NOTIFICATION_ID, createNotification("Starting backend..."))
                 acquireWakeLock()
-                startBackend()
+                if (_reactContext != null) {
+                    startBackend()
+                } else {
+                    pendingStart = true
+                    Log.d(TAG, "ReactContext not ready, deferring backend start")
+                }
             }
             ACTION_STOP -> {
                 stopBackend()
@@ -90,6 +114,7 @@ class SimulationService : Service() {
                     val success = pm.setupRootfs(rootfsDir) { stage ->
                         backendProgress = stage
                         updateNotification(stage.replaceFirstChar { it.uppercase() })
+                        emitProgress(stage)
                     }
                     if (!success) {
                         Log.e(TAG, "Failed to setup rootfs")
@@ -218,5 +243,23 @@ class SimulationService : Service() {
     override fun onDestroy() {
         stopBackend()
         super.onDestroy()
+    }
+
+    private fun emitProgress(message: String) {
+        Log.d(TAG, "Progress: $message")
+        try {
+            val map = Arguments.createMap().apply {
+                putString("message", message)
+            }
+            val ctx = _reactContext
+            if (ctx == null) {
+                Log.w(TAG, "ReactContext null, cannot emit: $message")
+                return
+            }
+            ctx.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+                .emit("SetupProgress", map)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to emit progress: ${e.message}")
+        }
     }
 }

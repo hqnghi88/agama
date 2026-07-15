@@ -17,8 +17,10 @@ const MAX_RETRIES = 10;
 
 const VncScreen: React.FC<VncScreenProps> = ({onBack}) => {
   const [vncState, setVncState] = useState<VncState>('connecting');
+  const [setupLog, setSetupLog] = useState<string[]>([]);
   const connectedRef = useRef(false);
   const listenerRef = useRef<any>(null);
+  const progressRef = useRef<any>(null);
   const retryCount = useRef(0);
   const {s} = useResponsive();
   const shimmer = useRef(new Animated.Value(0)).current;
@@ -39,6 +41,13 @@ const VncScreen: React.FC<VncScreenProps> = ({onBack}) => {
   }, []);
 
   useEffect(() => {
+    progressRef.current = DeviceEventEmitter.addListener('SetupProgress', (event: {message: string}) => {
+      setSetupLog(prev => {
+        const next = [...prev, event.message];
+        return next.slice(-20);
+      });
+    });
+
     listenerRef.current = DeviceEventEmitter.addListener('VncStateChange', (event: {state: string}) => {
       switch (event.state) {
         case 'connected':
@@ -69,6 +78,7 @@ const VncScreen: React.FC<VncScreenProps> = ({onBack}) => {
 
     return () => {
       if (listenerRef.current) listenerRef.current.remove();
+      if (progressRef.current) progressRef.current.remove();
       clearInterval(retryInterval);
     };
   }, [vncState]);
@@ -83,7 +93,8 @@ const VncScreen: React.FC<VncScreenProps> = ({onBack}) => {
 
   const btnSize = s(52);
   const btnOffset = s(28);
-  const barWidth = s(180);
+
+  const lastLog = setupLog[setupLog.length - 1] || '';
 
   return (
     <View style={styles.container}>
@@ -93,16 +104,25 @@ const VncScreen: React.FC<VncScreenProps> = ({onBack}) => {
           <View style={styles.center}>
             {vncState === 'connecting' && (
               <>
-                <Text style={{color: '#94a3b8', fontSize: s(14), fontFamily: 'monospace', fontWeight: '600', marginBottom: s(16)}}>
-                  Starting simulation environment...
+                <Text style={{color: '#3b82f6', fontSize: s(13), fontFamily: 'monospace', fontWeight: '700', marginBottom: s(20)}}>
+                  GAMA Mobile
                 </Text>
-                <View style={{width: barWidth, height: s(6), backgroundColor: '#1e293b', borderRadius: s(3), overflow: 'hidden'}}>
+                {setupLog.length > 0 && (
+                  <View style={{width: '85%', maxHeight: s(200), backgroundColor: '#0c0f1a', borderRadius: s(8), padding: s(10), marginBottom: s(16), borderWidth: 1, borderColor: '#1e293b'}}>
+                    {setupLog.map((line, i) => (
+                      <Text key={i} style={{color: line.includes('error') || line.includes('fail') ? '#ef4444' : line.includes('complete') || line.includes('ready') ? '#22c55e' : '#94a3b8', fontSize: s(10), fontFamily: 'monospace', lineHeight: s(16)}}>
+                        {line}
+                      </Text>
+                    ))}
+                  </View>
+                )}
+                <View style={{width: s(200), height: s(4), backgroundColor: '#1e293b', borderRadius: s(2), overflow: 'hidden'}}>
                   <Animated.View
                     style={{
-                      width: barWidth,
-                      height: s(6),
+                      width: s(200),
+                      height: s(4),
                       backgroundColor: '#3b82f6',
-                      borderRadius: s(3),
+                      borderRadius: s(2),
                       opacity: shimmer.interpolate({
                         inputRange: [0, 0.5, 1],
                         outputRange: [0.3, 1, 0.3],
@@ -110,15 +130,21 @@ const VncScreen: React.FC<VncScreenProps> = ({onBack}) => {
                       transform: [{
                         translateX: shimmer.interpolate({
                           inputRange: [0, 1],
-                          outputRange: [-barWidth / 2, barWidth / 2],
+                          outputRange: [-s(100), s(100)],
                         }),
                       }],
                     }}
                   />
                 </View>
-                <Text style={{color: '#475569', fontSize: s(11), fontFamily: 'monospace', marginTop: s(12)}}>
-                  Loading X server and VNC...
-                </Text>
+                {lastLog ? (
+                  <Text style={{color: '#64748b', fontSize: s(10), fontFamily: 'monospace', marginTop: s(12), textAlign: 'center', paddingHorizontal: s(20)}}>
+                    {lastLog}
+                  </Text>
+                ) : (
+                  <Text style={{color: '#64748b', fontSize: s(10), fontFamily: 'monospace', marginTop: s(12)}}>
+                    Initializing...
+                  </Text>
+                )}
               </>
             )}
             {(vncState === 'timeout' || vncState === 'error') && (
@@ -178,7 +204,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+    backgroundColor: 'rgba(15, 23, 42, 0.95)',
   },
   vncView: {
     flex: 1,

@@ -19,6 +19,7 @@ import android.view.inputmethod.InputMethodManager
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.ReactContext
 import com.facebook.react.modules.core.DeviceEventManagerModule
+import com.simulation.mobile.service.SimulationService
 
 class VncView @JvmOverloads constructor(
     context: Context,
@@ -272,6 +273,14 @@ class VncView @JvmOverloads constructor(
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        Log.d(TAG, "onAttachedToWindow: context=${context.javaClass.name}")
+        try {
+            val ctx = context as ReactContext
+            Log.d(TAG, "onAttachedToWindow: setting ReactContext")
+            SimulationService.setReactContext(ctx)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get ReactContext", e)
+        }
         start()
     }
 

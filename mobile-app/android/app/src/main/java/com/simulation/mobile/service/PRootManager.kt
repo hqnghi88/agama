@@ -599,8 +599,8 @@ class PRootManager(private val context: Context) {
         try {
             val url = URL(ROOTFS_URL)
             val conn = url.openConnection() as HttpURLConnection
-            conn.connectTimeout = 30_000
-            conn.readTimeout = 300_000
+            conn.connectTimeout = 60_000
+            conn.readTimeout = 0
             conn.connect()
 
             val totalSize = conn.contentLength
@@ -611,14 +611,19 @@ class PRootManager(private val context: Context) {
                     val buffer = ByteArray(8192)
                     var bytesRead: Int
                     var totalRead = 0L
+                    var lastPct = -1
                     while (input.read(buffer).also { bytesRead = it } != -1) {
                         output.write(buffer, 0, bytesRead)
                         totalRead += bytesRead
                         if (totalSize > 0) {
                             val pct = (totalRead * 100 / totalSize).toInt()
-                            if (pct % 10 == 0) {
+                            if (pct >= lastPct + 10) {
+                                lastPct = pct
                                 onProgress?.invoke("downloading rootfs: $pct%")
                             }
+                        } else if (totalRead % (10 * 1024 * 1024) < 8192) {
+                            val mb = totalRead / (1024 * 1024)
+                            onProgress?.invoke("downloading rootfs: ${mb}MB downloaded")
                         }
                     }
                 }
