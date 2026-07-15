@@ -37,14 +37,14 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
-      - name: Generate debug keystore
+      - name: Generate release keystore
         run: |
           keytool -genkeypair -v \
-            -keystore android/app/debug.keystore \
-            -alias androiddebugkey \
+            -keystore android/app/release.keystore \
+            -alias gama-release \
             -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass android -keypass android \
-            -dname "CN=Android Debug,O=Android,C=US"
+            -storepass gama2026 -keypass gama2026 \
+            -dname "CN=GAMA Mobile,OU=Development,O=UMMISCO,L=Paris,ST=France,C=FR"
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew
