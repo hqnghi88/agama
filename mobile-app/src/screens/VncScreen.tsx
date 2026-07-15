@@ -13,7 +13,8 @@ interface NativeVncViewProps {
 }
 
 const NativeVncView = requireNativeComponent<NativeVncViewProps>('VncView');
-const MAX_RETRIES = 10;
+const MAX_RETRIES = 40;
+const RETRY_INTERVAL = 3000;
 
 const VncScreen: React.FC<VncScreenProps> = ({onBack}) => {
   const [vncState, setVncState] = useState<VncState>('connecting');
@@ -42,6 +43,7 @@ const VncScreen: React.FC<VncScreenProps> = ({onBack}) => {
 
   useEffect(() => {
     progressRef.current = DeviceEventEmitter.addListener('SetupProgress', (event: {message: string}) => {
+      retryCount.current = 0;
       setSetupLog(prev => {
         const next = [...prev, event.message];
         return next.slice(-20);
