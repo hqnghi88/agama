@@ -167,7 +167,7 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
             if (drawScope == null || drawScope.interrupted()) return;
             gama.core.metamodel.agent.IMacroAgent sim = drawScope.getSimulation();
             if (sim == null) {
-                if (framesSinceLastDraw <= 3) android.util.Log.w("AndroidDisplaySurface", "Manual draw: no simulation");
+                if (frames < 5 || frames % 100 == 0) android.util.Log.w("AndroidDisplaySurface", "Manual draw: no simulation. frame=" + frames);
                 return;
             }
 
@@ -175,7 +175,17 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
             speciesNames.add("test_agent");
             for (String speciesName : speciesNames) {
                 gama.core.metamodel.population.IPopulation pop = sim.getMicroPopulation(speciesName);
-                if (pop == null || pop.size() == 0) continue;
+                if (pop == null) {
+                    if (frames < 5 || frames % 100 == 0) android.util.Log.w("AndroidDisplaySurface", "Manual draw: pop is null for " + speciesName + " frame=" + frames);
+                    continue;
+                }
+                int popSize = pop.size();
+                if (popSize == 0) {
+                    if (frames < 5 || frames % 100 == 0) {
+                        android.util.Log.w("AndroidDisplaySurface", "Manual draw: pop size=0 for " + speciesName + " frame=" + frames + " host=" + pop.getHost());
+                    }
+                    continue;
+                }
 
                 agentPaint.setStyle(Paint.Style.FILL);
                 agentPaint.setColor(0xFF0000FF);
@@ -204,12 +214,12 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
                         canvas.drawCircle(sx, sy, radius, agentPaint);
                     }
                 }
-                if (framesSinceLastDraw <= 3) {
-                    android.util.Log.d("AndroidDisplaySurface", "Manual draw: " + pop.size() + " agents at scale=" + scale);
+                if (frames < 5 || frames % 100 == 0) {
+                    android.util.Log.d("AndroidDisplaySurface", "Manual draw: " + pop.size() + " agents at scale=" + scale + " frame=" + frames);
                 }
             }
         } catch (Throwable t) {
-            if (framesSinceLastDraw <= 3) {
+            if (frames < 5 || frames % 100 == 0) {
                 android.util.Log.e("AndroidDisplaySurface", "Manual draw error", t);
             }
         }
