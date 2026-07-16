@@ -179,6 +179,25 @@ public class GamaNativeBootstrap {
             callback.onProgress("GAML compiler init failed: " + e.getMessage());
         }
 
+        // Manually register draw delegates (normally loaded via Eclipse extension points)
+        try {
+            Class<?> drawStatementClass = Class.forName("gama.gaml.statements.draw.DrawStatement");
+            Class<?> shapeDrawerClass = Class.forName("gama.gaml.statements.draw.ShapeDrawer");
+            Class<?> textDrawerClass = Class.forName("gama.gaml.statements.draw.TextDrawer");
+            Class<?> assetDrawerClass = Class.forName("gama.gaml.statements.draw.AssetDrawer");
+            Class<?> aspectDrawerClass = Class.forName("gama.gaml.statements.draw.AspectDrawer");
+            Method addDelegate = drawStatementClass.getMethod("addDelegate", Class.forName("gama.core.common.interfaces.IDrawDelegate"));
+            addDelegate.invoke(null, shapeDrawerClass.getDeclaredConstructor().newInstance());
+            addDelegate.invoke(null, textDrawerClass.getDeclaredConstructor().newInstance());
+            addDelegate.invoke(null, assetDrawerClass.getDeclaredConstructor().newInstance());
+            addDelegate.invoke(null, aspectDrawerClass.getDeclaredConstructor().newInstance());
+            Log.i(TAG, "Draw delegates registered (shape, text, asset, aspect)");
+            callback.onProgress("Draw delegates registered");
+        } catch (Throwable e) {
+            Log.w(TAG, "Failed to register draw delegates", e);
+            callback.onProgress("Draw delegates registration skipped: " + e.getMessage());
+        }
+
         // Register GAML parser, info provider, ecore utils, model builder, validator
         // (equivalent to GamlActivator.start() in OSGi)
         try {

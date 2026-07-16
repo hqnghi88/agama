@@ -14,6 +14,20 @@ public class Color {
     public static final Color LIGHT_GRAY = new Color(192, 192, 192);
     public static final Color ORANGE = new Color(255, 200, 0);
     public static final Color PINK = new Color(255, 175, 175);
+    // Lowercase aliases used by GAMA
+    public static final Color black = BLACK;
+    public static final Color blue = BLUE;
+    public static final Color cyan = CYAN;
+    public static final Color darkGray = DARK_GRAY;
+    public static final Color gray = GRAY;
+    public static final Color green = GREEN;
+    public static final Color lightGray = LIGHT_GRAY;
+    public static final Color magenta = MAGENTA;
+    public static final Color orange = ORANGE;
+    public static final Color pink = PINK;
+    public static final Color red = RED;
+    public static final Color white = WHITE;
+    public static final Color yellow = YELLOW;
 
     private final int value;
 

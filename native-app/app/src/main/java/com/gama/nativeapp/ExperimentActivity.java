@@ -191,14 +191,15 @@ public class ExperimentActivity extends Activity {
                 Object guiHandler = guiHandlerClass.getMethod("getInstance").invoke(null);
 
                 Class<?> gamaClass = Class.forName("gama.core.runtime.GAMA");
-                Object controllers = gamaClass.getMethod("getControllers").invoke(null);
+                gamaClass.getMethod("setHeadlessGui", Class.forName("gama.core.common.interfaces.IGui")).invoke(null, guiHandler);
+                gamaClass.getMethod("setRegularGui", Class.forName("gama.core.common.interfaces.IGui")).invoke(null, guiHandler);
 
                 Class<?> expClass = Class.forName("gama.core.kernel.experiment.IExperimentPlan");
                 expClass.getMethod("setHeadless", boolean.class).invoke(expPlan, false);
-                expClass.getMethod("open", double.class).invoke(expPlan, 0.0);
+                expClass.getMethod("open").invoke(expPlan);
 
                 Object controller = expClass.getMethod("getController").invoke(expPlan);
-                Class<?> controllerClass = Class.forName("gama.core.kernel.experiment.ExperimentController");
+                Class<?> controllerClass = Class.forName("gama.core.kernel.experiment.DefaultExperimentController");
                 controllerClass.getMethod("processStart", boolean.class).invoke(controller, false);
 
                 log("Experiment started successfully");

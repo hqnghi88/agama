@@ -31,11 +31,12 @@ public class RenderingHints extends java.util.AbstractMap<RenderingHints.Key, Ob
     @Override public java.util.Set<Entry<Key, Object>> entrySet() { return new java.util.HashSet<>(); }
 
     public void add(RenderingHints.Key key, Object value) {}
+    public void add(RenderingHints hints) {}
     public boolean isKey(Object key) { return false; }
 
     public static class Key {
         private int key;
-        Key(int key) { this.key = key; }
+        public Key(int key) { this.key = key; }
         public int getKey() { return key; }
     }
 }

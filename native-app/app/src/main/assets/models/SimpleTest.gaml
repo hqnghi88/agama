@@ -8,23 +8,20 @@ global {
 	}
 }
 
-species test_agent skills: [moving] {
-	geometry shape <- circle(3.0);
-	point location <- any_point_in(world.shape);
+species test_agent {
+	int age <- 0;
 	
-	reflex move {
-		do wander;
+	reflex aging {
+		age <- age + 1;
 	}
 	
 	aspect default {
-		draw shape color: rgb(0, 0, 255);
+		draw circle(3.0) color: rgb(0, 0, 255);
 	}
 }
 
 experiment test_experiment type: gui {
 	output {
-		display map type: 2d {
-			species test_agent;
-		}
+		monitor "Counter" value: cycle;
 	}
 }
