@@ -97,6 +97,8 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
 
         setClickable(true);
         setFocusable(true);
+        setWillNotDraw(false);
+        setLayerType(LAYER_TYPE_NONE, null);
         android.util.Log.i("AndroidDisplaySurface", "Created, bg=" + bgPaint.getColor() + ", envW=" + getEnvWidth() + ", envH=" + getEnvHeight());
     }
 
@@ -119,6 +121,7 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
 
     @Override
     protected void onDraw(Canvas canvas) {
+        if (frames < 5) android.util.Log.i("AndroidDisplaySurface", "onDraw called! frame=" + frames + " canvas=" + canvas.getWidth() + "x" + canvas.getHeight() + " attached=" + isAttachedToWindow());
         super.onDraw(canvas);
         if (disposed || output == null) return;
 
@@ -138,6 +141,9 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
             if (drawScope != null && !drawScope.interrupted()) {
                 layerManager.drawLayersOn(androidGraphics);
                 drewShapes = androidGraphics.getDrawnShapesCount() > 0;
+                if (frames < 5) android.util.Log.i("AndroidDisplaySurface", "onDraw: drewShapes=" + drewShapes + " shapesCount=" + androidGraphics.getDrawnShapesCount() + " scope=" + drawScope.getClass().getSimpleName());
+            } else {
+                if (frames < 5) android.util.Log.w("AndroidDisplaySurface", "onDraw: scope=" + drawScope + " interrupted=" + (drawScope != null && drawScope.interrupted()));
             }
         } catch (Throwable t) {
             android.util.Log.e("AndroidDisplaySurface", "Error drawing layers", t);
@@ -145,6 +151,7 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
 
         if (!drewShapes) {
             framesSinceLastDraw++;
+            if (frames < 5) android.util.Log.i("AndroidDisplaySurface", "onDraw: no shapes drawn, trying manual draw. frame=" + frames);
             drawAgentsManually(canvas);
         } else {
             framesSinceLastDraw = 0;
@@ -159,7 +166,10 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
             IGraphicsScope drawScope = scope;
             if (drawScope == null || drawScope.interrupted()) return;
             gama.core.metamodel.agent.IMacroAgent sim = drawScope.getSimulation();
-            if (sim == null) return;
+            if (sim == null) {
+                if (framesSinceLastDraw <= 3) android.util.Log.w("AndroidDisplaySurface", "Manual draw: no simulation");
+                return;
+            }
 
             java.util.List<String> speciesNames = new java.util.ArrayList<>();
             speciesNames.add("test_agent");
@@ -268,8 +278,13 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
     @Override
     public void updateDisplay(boolean force, GeneralSynchronizer synchronizer) {
         if (disposed) return;
-        android.util.Log.d("AndroidDisplaySurface", "updateDisplay called, force=" + force);
-        uiHandler.post(() -> {
+        post(() -> {
+            if (!isAttachedToWindow()) {
+                if (frames < 5) android.util.Log.w("AndroidDisplaySurface", "updateDisplay: NOT attached to window");
+                return;
+            }
+            if (frames < 5) android.util.Log.i("AndroidDisplaySurface", "updateDisplay: requesting layout+invalidate, attached=" + isAttachedToWindow());
+            requestLayout();
             invalidate();
             if (synchronizer != null) synchronizer.release();
         });
