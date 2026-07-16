@@ -22,6 +22,8 @@ species test_agent {
 
 experiment test_experiment type: gui {
 	output {
-		monitor "Counter" value: cycle;
+		display map type: 2d {
+			species test_agent;
+		}
 	}
 }

@@ -62,9 +62,37 @@ public class AndroidGuiHandler implements IGui {
             Log.w(TAG, "No activity available for display surface creation");
             return null;
         }
-        AndroidDisplaySurface surface = new AndroidDisplaySurface(activity, output);
-        Log.i(TAG, "Created AndroidDisplaySurface for: " + output.getName());
-        return surface;
+
+        final AndroidDisplaySurface[] surfaceHolder = new AndroidDisplaySurface[1];
+        try {
+            java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+            activity.runOnUiThread(() -> {
+                try {
+                    surfaceHolder[0] = new AndroidDisplaySurface(activity, output);
+                    Log.i(TAG, "Created AndroidDisplaySurface for: " + output.getName());
+
+                    if (activity instanceof ExperimentActivity) {
+                        ExperimentActivity expActivity = (ExperimentActivity) activity;
+                        android.widget.FrameLayout container = expActivity.getDisplayContainer();
+                        if (container != null) {
+                            container.removeAllViews();
+                            container.addView(surfaceHolder[0], new android.widget.FrameLayout.LayoutParams(
+                                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
+                        }
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Error creating display surface on UI thread", e);
+                } finally {
+                    latch.countDown();
+                }
+            });
+            latch.await(5, java.util.concurrent.TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Log.e(TAG, "Interrupted waiting for UI thread", e);
+        }
+
+        return surfaceHolder[0];
     }
 
     @Override
@@ -115,6 +143,12 @@ public class AndroidGuiHandler implements IGui {
     }
 
     @Override
+    public IGamaView showView(IScope scope, String viewId, String name, int code) {
+        Log.i(TAG, "showView called: viewId=" + viewId + ", name=" + name);
+        return new AndroidGamaView(name);
+    }
+
+    @Override
     public void exit() {
         Activity activity = currentActivity;
         if (activity != null) {
@@ -143,6 +177,13 @@ public class AndroidGuiHandler implements IGui {
             Boolean showParameters, Boolean showNavigator, Boolean showControls,
             Boolean keepTray, Supplier<GamaColor> color, boolean showEditors) {
         Log.i(TAG, "Arranging experiment views for: " + (experimentPlan != null ? experimentPlan.getName() : "null"));
+        Activity activity = currentActivity;
+        if (activity instanceof ExperimentActivity) {
+            ExperimentActivity expActivity = (ExperimentActivity) activity;
+            expActivity.runOnUiThread(() -> {
+                expActivity.updateCycleInfo(0, 0);
+            });
+        }
     }
 
     @Override

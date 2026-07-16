@@ -95,6 +95,7 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
 
         setClickable(true);
         setFocusable(true);
+        android.util.Log.i("AndroidDisplaySurface", "Created, bg=" + bgPaint.getColor() + ", envW=" + getEnvWidth() + ", envH=" + getEnvHeight());
     }
 
     public AndroidDisplaySurface(Context context, AttributeSet attrs) {
@@ -106,6 +107,7 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
+        android.util.Log.i("AndroidDisplaySurface", "onSizeChanged: " + w + "x" + h);
         if (w > 0 && h > 0) {
             if (zoomFit) {
                 zoomFit();
@@ -126,7 +128,23 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
         }
 
         androidGraphics.setCanvas(canvas);
-        layerManager.drawLayersOn(androidGraphics);
+        try {
+            IGraphicsScope drawScope = scope;
+            if (drawScope == null) drawScope = output.getScope().copyForGraphics("draw");
+            if (drawScope != null && !drawScope.interrupted()) {
+                layerManager.drawLayersOn(androidGraphics);
+                int layerCount = layerManager.getItems().size();
+                if (frames % 30 == 0) {
+                    android.util.Log.d("AndroidDisplaySurface", "Drew frame " + frames + ", layers=" + layerCount + ", scopeOK=" + (drawScope != null) + ", interrupted=" + drawScope.interrupted());
+                }
+            } else {
+                if (frames % 30 == 0) {
+                    android.util.Log.w("AndroidDisplaySurface", "Frame " + frames + ": scope=" + drawScope + " interrupted=" + (drawScope != null ? drawScope.interrupted() : "null"));
+                }
+            }
+        } catch (Throwable t) {
+            android.util.Log.e("AndroidDisplaySurface", "Error drawing layers", t);
+        }
         frames++;
         rendered = true;
     }
@@ -194,6 +212,7 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
     @Override
     public void updateDisplay(boolean force, GeneralSynchronizer synchronizer) {
         if (disposed) return;
+        android.util.Log.d("AndroidDisplaySurface", "updateDisplay called, force=" + force);
         uiHandler.post(() -> {
             invalidate();
             if (synchronizer != null) synchronizer.release();
@@ -233,6 +252,7 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
     public void zoomFit() {
         int w = getWidth();
         int h = getHeight();
+        android.util.Log.i("AndroidDisplaySurface", "zoomFit: view=" + w + "x" + h + ", envW=" + getEnvWidth() + ", envH=" + getEnvHeight());
         if (w <= 0 || h <= 0) return;
         mousePosition.set(w / 2f, h / 2f);
         if (resizeImage(w, h, false)) {

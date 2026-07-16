@@ -50,6 +50,7 @@ public class AndroidDisplayGraphics extends AbstractDisplayGraphics {
 
     private float currentAlpha = 1f;
     private Rectangle2D.Double rect = new Rectangle2D.Double();
+    private int framesLogged = 0;
 
     public AndroidDisplayGraphics() {
         fillPaint.setStyle(Paint.Style.FILL);
@@ -86,6 +87,15 @@ public class AndroidDisplayGraphics extends AbstractDisplayGraphics {
     @Override
     public Rectangle2D drawShape(Geometry gg, DrawingAttributes attributes) {
         if (gg == null || canvas == null) return null;
+        
+        if (framesLogged < 5) {
+            android.util.Log.d("AndroidDisplayGraphics", "drawShape: geomType=" + gg.getClass().getSimpleName() 
+                + ", coords=" + gg.getCoordinates().length 
+                + ", envW=" + getSurface().getEnvWidth() + ", envH=" + getSurface().getEnvHeight()
+                + ", dispW=" + getDisplayWidth() + ", dispH=" + getDisplayHeight());
+            framesLogged++;
+        }
+        
         Geometry geometry = gg;
 
         if (geometry instanceof GeometryCollection && !(geometry instanceof MultiPolygon) && !(geometry instanceof MultiLineString)) {

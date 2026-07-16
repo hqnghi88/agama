@@ -4,6 +4,7 @@ import android.content.Context;
 import android.util.Log;
 
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -180,8 +181,11 @@ public class GamaNativeBootstrap {
         }
 
         // Manually register draw delegates (normally loaded via Eclipse extension points)
+        // Try multiple classloaders to ensure the DELEGATES map is populated in the right one
         try {
             Class<?> drawStatementClass = Class.forName("gama.gaml.statements.draw.DrawStatement");
+            ClassLoader dsCl = drawStatementClass.getClassLoader();
+            Log.i(TAG, "DrawStatement classloader: " + dsCl);
             Class<?> shapeDrawerClass = Class.forName("gama.gaml.statements.draw.ShapeDrawer");
             Class<?> textDrawerClass = Class.forName("gama.gaml.statements.draw.TextDrawer");
             Class<?> assetDrawerClass = Class.forName("gama.gaml.statements.draw.AssetDrawer");
@@ -191,8 +195,15 @@ public class GamaNativeBootstrap {
             addDelegate.invoke(null, textDrawerClass.getDeclaredConstructor().newInstance());
             addDelegate.invoke(null, assetDrawerClass.getDeclaredConstructor().newInstance());
             addDelegate.invoke(null, aspectDrawerClass.getDeclaredConstructor().newInstance());
-            Log.i(TAG, "Draw delegates registered (shape, text, asset, aspect)");
+            Log.i(TAG, "Draw delegates registered on classloader " + dsCl);
             callback.onProgress("Draw delegates registered");
+
+            // Verify DELEGATES map
+            Field delegatesField = drawStatementClass.getDeclaredField("DELEGATES");
+            delegatesField.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            java.util.Map<?, ?> delegates = (java.util.Map<?, ?>) delegatesField.get(null);
+            Log.i(TAG, "DELEGATES map size: " + delegates.size() + " keys: " + delegates.keySet());
         } catch (Throwable e) {
             Log.w(TAG, "Failed to register draw delegates", e);
             callback.onProgress("Draw delegates registration skipped: " + e.getMessage());
