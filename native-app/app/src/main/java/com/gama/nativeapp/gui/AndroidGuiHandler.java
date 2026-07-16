@@ -43,6 +43,7 @@ public class AndroidGuiHandler implements IGui {
     private static Activity currentActivity;
     private static AndroidGuiHandler instance;
     private ConsoleListener consoleListener;
+    private static AndroidDisplaySurface pendingSurface;
 
     public static void setActivity(Activity activity) {
         currentActivity = activity;
@@ -69,7 +70,7 @@ public class AndroidGuiHandler implements IGui {
             activity.runOnUiThread(() -> {
                 try {
                     surfaceHolder[0] = new AndroidDisplaySurface(activity, output);
-                    Log.i(TAG, "Created AndroidDisplaySurface for: " + output.getName());
+                    Log.i(TAG, "Created AndroidDisplaySurface for: " + output.getName() + " on " + activity.getClass().getSimpleName());
 
                     if (activity instanceof ExperimentActivity) {
                         ExperimentActivity expActivity = (ExperimentActivity) activity;
@@ -79,7 +80,11 @@ public class AndroidGuiHandler implements IGui {
                             container.addView(surfaceHolder[0], new android.widget.FrameLayout.LayoutParams(
                                     android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
                                     android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
+                            Log.i(TAG, "Surface added to container directly");
                         }
+                    } else {
+                        pendingSurface = surfaceHolder[0];
+                        Log.i(TAG, "Holding surface as pending (activity is " + activity.getClass().getSimpleName() + ")");
                     }
                 } catch (Exception e) {
                     Log.e(TAG, "Error creating display surface on UI thread", e);
@@ -145,7 +150,25 @@ public class AndroidGuiHandler implements IGui {
     @Override
     public IGamaView showView(IScope scope, String viewId, String name, int code) {
         Log.i(TAG, "showView called: viewId=" + viewId + ", name=" + name);
-        return new AndroidGamaView(name);
+        AndroidGamaView view = new AndroidGamaView(name);
+
+        Activity activity = currentActivity;
+        if (activity instanceof ExperimentActivity) {
+            ExperimentActivity expActivity = (ExperimentActivity) activity;
+            expActivity.runOnUiThread(() -> {
+                android.widget.FrameLayout container = expActivity.getDisplayContainer();
+                if (container != null && pendingSurface != null && container.getChildCount() == 0) {
+                    container.addView(pendingSurface, new android.widget.FrameLayout.LayoutParams(
+                            android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                            android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
+                    Log.i(TAG, "Added pending surface to container in showView");
+                    pendingSurface = null;
+                } else if (container != null) {
+                    Log.i(TAG, "Container has " + container.getChildCount() + " children, pendingSurface=" + (pendingSurface != null));
+                }
+            });
+        }
+        return view;
     }
 
     @Override

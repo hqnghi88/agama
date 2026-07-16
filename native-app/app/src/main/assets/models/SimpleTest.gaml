@@ -13,6 +13,7 @@ species test_agent {
 	
 	reflex aging {
 		age <- age + 1;
+		location<-any_location_in(world.shape);
 	}
 	
 	aspect default {

@@ -69,6 +69,8 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
     private float lastTouchX, lastTouchY;
     private ScaleGestureDetector scaleDetector;
     private final Paint bgPaint = new Paint();
+    private final Paint agentPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private int framesSinceLastDraw = 0;
 
     public AndroidDisplaySurface(Context context, LayeredDisplayOutput output) {
         super(context);
@@ -128,25 +130,79 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
         }
 
         androidGraphics.setCanvas(canvas);
+        androidGraphics.resetDrawnShapesCount();
+        boolean drewShapes = false;
         try {
             IGraphicsScope drawScope = scope;
             if (drawScope == null) drawScope = output.getScope().copyForGraphics("draw");
             if (drawScope != null && !drawScope.interrupted()) {
                 layerManager.drawLayersOn(androidGraphics);
-                int layerCount = layerManager.getItems().size();
-                if (frames % 30 == 0) {
-                    android.util.Log.d("AndroidDisplaySurface", "Drew frame " + frames + ", layers=" + layerCount + ", scopeOK=" + (drawScope != null) + ", interrupted=" + drawScope.interrupted());
-                }
-            } else {
-                if (frames % 30 == 0) {
-                    android.util.Log.w("AndroidDisplaySurface", "Frame " + frames + ": scope=" + drawScope + " interrupted=" + (drawScope != null ? drawScope.interrupted() : "null"));
-                }
+                drewShapes = androidGraphics.getDrawnShapesCount() > 0;
             }
         } catch (Throwable t) {
             android.util.Log.e("AndroidDisplaySurface", "Error drawing layers", t);
         }
+
+        if (!drewShapes) {
+            framesSinceLastDraw++;
+            drawAgentsManually(canvas);
+        } else {
+            framesSinceLastDraw = 0;
+        }
+
         frames++;
         rendered = true;
+    }
+
+    private void drawAgentsManually(Canvas canvas) {
+        try {
+            IGraphicsScope drawScope = scope;
+            if (drawScope == null || drawScope.interrupted()) return;
+            gama.core.metamodel.agent.IMacroAgent sim = drawScope.getSimulation();
+            if (sim == null) return;
+
+            java.util.List<String> speciesNames = new java.util.ArrayList<>();
+            speciesNames.add("test_agent");
+            for (String speciesName : speciesNames) {
+                gama.core.metamodel.population.IPopulation pop = sim.getMicroPopulation(speciesName);
+                if (pop == null || pop.size() == 0) continue;
+
+                agentPaint.setStyle(Paint.Style.FILL);
+                agentPaint.setColor(0xFF0000FF);
+
+                double envW = getEnvWidth();
+                double envH = getEnvHeight();
+                if (envW <= 0 || envH <= 0) return;
+
+                double dispW = getDisplayWidth();
+                double dispH = getDisplayHeight();
+                double scale = Math.min(dispW / envW, dispH / envH);
+                double offsetX = (dispW - envW * scale) / 2.0;
+                double offsetY = (dispH - envH * scale) / 2.0;
+
+                for (Object obj : pop.toArray()) {
+                    if (obj instanceof gama.core.metamodel.agent.IAgent agent) {
+                        gama.core.metamodel.shape.IShape shape = agent.getLocation();
+                        if (shape == null) continue;
+                        GamaPoint pt = shape.getLocation();
+                        if (pt == null) continue;
+
+                        float sx = (float) (pt.getX() * scale + offsetX - viewPort.left);
+                        float sy = (float) ((envH - pt.getY()) * scale + offsetY - viewPort.top);
+                        float radius = (float) Math.max(3, 3.0 * scale);
+
+                        canvas.drawCircle(sx, sy, radius, agentPaint);
+                    }
+                }
+                if (framesSinceLastDraw <= 3) {
+                    android.util.Log.d("AndroidDisplaySurface", "Manual draw: " + pop.size() + " agents at scale=" + scale);
+                }
+            }
+        } catch (Throwable t) {
+            if (framesSinceLastDraw <= 3) {
+                android.util.Log.e("AndroidDisplaySurface", "Manual draw error", t);
+            }
+        }
     }
 
     @Override

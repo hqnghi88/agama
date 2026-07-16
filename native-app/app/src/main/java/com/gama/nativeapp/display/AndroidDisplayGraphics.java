@@ -23,6 +23,7 @@ import org.locationtech.jts.geom.Puntal;
 import gama.core.common.interfaces.IAsset;
 import gama.core.common.interfaces.ILayer;
 import gama.core.common.interfaces.IImageProvider;
+import gama.core.metamodel.agent.IAgent;
 import gama.core.outputs.display.AbstractDisplayGraphics;
 import gama.core.outputs.layers.OverlayLayer;
 import gama.core.outputs.layers.charts.ChartOutput;
@@ -51,6 +52,10 @@ public class AndroidDisplayGraphics extends AbstractDisplayGraphics {
     private float currentAlpha = 1f;
     private Rectangle2D.Double rect = new Rectangle2D.Double();
     private int framesLogged = 0;
+    private int drawnShapesCount = 0;
+
+    public int getDrawnShapesCount() { return drawnShapesCount; }
+    public void resetDrawnShapesCount() { drawnShapesCount = 0; }
 
     public AndroidDisplayGraphics() {
         fillPaint.setStyle(Paint.Style.FILL);
@@ -87,12 +92,14 @@ public class AndroidDisplayGraphics extends AbstractDisplayGraphics {
     @Override
     public Rectangle2D drawShape(Geometry gg, DrawingAttributes attributes) {
         if (gg == null || canvas == null) return null;
+        drawnShapesCount++;
         
-        if (framesLogged < 5) {
-            android.util.Log.d("AndroidDisplayGraphics", "drawShape: geomType=" + gg.getClass().getSimpleName() 
-                + ", coords=" + gg.getCoordinates().length 
+        if (framesLogged < 10) {
+            android.util.Log.d("AndroidDisplayGraphics", "drawShape called! geomType=" + gg.getClass().getSimpleName() 
+                + ", numCoords=" + gg.getCoordinates().length 
                 + ", envW=" + getSurface().getEnvWidth() + ", envH=" + getSurface().getEnvHeight()
-                + ", dispW=" + getDisplayWidth() + ", dispH=" + getDisplayHeight());
+                + ", dispW=" + getDisplayWidth() + ", dispH=" + getDisplayHeight()
+                + ", canvas=" + (canvas != null ? canvas.getWidth() + "x" + canvas.getHeight() : "null"));
             framesLogged++;
         }
         
@@ -347,6 +354,24 @@ public class AndroidDisplayGraphics extends AbstractDisplayGraphics {
     @Override
     public boolean beginDrawingLayers() {
         return true;
+    }
+
+    @Override
+    public void beginDrawingLayer(final ILayer layer) {
+        currentLayer = layer;
+    }
+
+    public void manuallyDrawAgents(IAgent[] agents) {
+        if (canvas == null || agents == null) return;
+        fillPaint.setColor(0xFF0000FF);
+        fillPaint.setStyle(Paint.Style.FILL);
+        for (IAgent a : agents) {
+            if (a == null || a.dead()) continue;
+            float x = toPixelX(a.getLocation().getX());
+            float y = toPixelY(a.getLocation().getY());
+            float r = (float) toPixelW(3.0);
+            canvas.drawCircle(x, y, r, fillPaint);
+        }
     }
 
     @Override
