@@ -64,20 +64,18 @@ public class GamaListType extends GamaContainerType<IList> {
 	public static IList staticCast(final IScope scope, final Object obj, final IType ct, final boolean copy)
 			throws GamaRuntimeException {
 		final IType contentsType = ct == null ? Types.NO_TYPE : ct;
-		return switch (obj) {
-			case null -> GamaListFactory.create(contentsType, 0);
-			case GamaDate gd -> gd.listValue(scope, contentsType);
-			// Explicitly set copy to true if we deal with a population
-			case IPopulation ip -> ip.listValue(scope, contentsType, true);
-			case IContainer ic -> ic.listValue(scope, contentsType, copy);
-			case Collection coll -> GamaListFactory.create(scope, contentsType, coll);
-			case Color c -> GamaListFactory.create(scope, contentsType,
-					new int[] { c.getRed(), c.getGreen(), c.getBlue(), c.getAlpha() });
-			case GamaPoint point -> GamaListFactory.create(scope, contentsType,
-					new double[] { point.x, point.y, point.z });
-			case String s -> GamaListFactory.create(scope, contentsType, s.toCharArray());
-			default -> GamaListFactory.create(scope, contentsType, obj);
-		};
+		if (obj == null) return GamaListFactory.create(contentsType, 0);
+		if (obj instanceof GamaDate gd) return gd.listValue(scope, contentsType);
+		// Explicitly set copy to true if we deal with a population
+		if (obj instanceof IPopulation ip) return ip.listValue(scope, contentsType, true);
+		if (obj instanceof IContainer ic) return ic.listValue(scope, contentsType, copy);
+		if (obj instanceof Collection coll) return GamaListFactory.create(scope, contentsType, coll);
+		if (obj instanceof Color c) return GamaListFactory.create(scope, contentsType,
+				new int[] { c.getRed(), c.getGreen(), c.getBlue(), c.getAlpha() });
+		if (obj instanceof GamaPoint point) return GamaListFactory.create(scope, contentsType,
+				new double[] { point.x, point.y, point.z });
+		if (obj instanceof String s) return GamaListFactory.create(scope, contentsType, s.toCharArray());
+		return GamaListFactory.create(scope, contentsType, obj);
 
 	}
 

@@ -60,18 +60,16 @@ public class GamaBoolType extends GamaType<Boolean> {
 	 */
 	@SuppressWarnings ("rawtypes")
 	public static Boolean staticCast(final IScope scope, final Object obj, final Object param, final boolean copy) {
-		return switch (obj) {
-			case null -> false;
-			case Boolean b -> b;
-			case IAgent a -> !a.dead();
-			case GamaFile f -> f.exists(scope);
-			case IContainer c -> !c.isEmpty(scope);
-			case File f -> f.exists();
-			case Integer i -> i != 0;
-			case Double d -> d != 0d;
-			case String s -> "true".equals(s);
-			default -> false;
-		};
+		if (obj == null) return false;
+		if (obj instanceof Boolean b) return b;
+		if (obj instanceof IAgent a) return !a.dead();
+		if (obj instanceof GamaFile f) return f.exists(scope);
+		if (obj instanceof IContainer c) return !c.isEmpty(scope);
+		if (obj instanceof File f) return f.exists();
+		if (obj instanceof Integer i) return i != 0;
+		if (obj instanceof Double d) return d != 0d;
+		if (obj instanceof String s) return "true".equals(s);
+		return false;
 	}
 
 	@Override

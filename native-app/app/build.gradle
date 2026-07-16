@@ -1,0 +1,124 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Strip Java 21 pattern-matching classes from GAMA JARs that conflict with app source patches
+tasks.register('patchGamaJars') {
+    doLast {
+        def libsDir = file("$buildDir/../../app/libs")
+        def patchedClasses = ['gama/gaml/descriptions/SkillDescription.class']
+        fileTree(libsDir).matching { include '*.jar' }.each { jarFile ->
+            def tmpDir = file("$buildDir/tmp/jar_patch/${jarFile.name}")
+            tmpDir.mkdirs()
+            exec {
+                commandLine 'jar', 'xf', jarFile.absolutePath
+                workingDir tmpDir
+            }
+            def removed = false
+            patchedClasses.each { cls ->
+                def f = file("${tmpDir}/${cls}")
+                if (f.exists()) { f.delete(); removed = true }
+            }
+            if (removed) {
+                exec {
+                    commandLine 'jar', 'cf', jarFile.absolutePath, '-C', tmpDir, '.'
+                }
+                logger.lifecycle("Patched JAR: ${jarFile.name}")
+            }
+            tmpDir.deleteDir()
+        }
+    }
+}
+
+tasks.configureEach { task ->
+    if (task.name.startsWith('merge') && task.name.endsWith('JniLibFolders')) {
+        task.dependsOn 'patchGamaJars'
+    }
+}
+
+android {
+    namespace 'com.gama.nativeapp'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.gama.nativeapp"
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    packaging {
+        resources {
+            excludes += ['about.ini', 'about.mappings', 'about.properties', 'plugin.xml', 'plugin.properties',
+                         'modeling32.png', 'lib/native/**', 'META-INF/**', '*.exsd', 'schema/*.exsd',
+                         '*.namespaces', '*.imports', '*.extensions', '*.launch', '*.target']
+            pickFirsts += ['META-INF/MANIFEST.MF']
+        }
+        jniLibs {
+            excludes += ['**']
+        }
+    }
+}
+
+configurations.all {
+    resolutionStrategy {
+        force 'com.google.inject:guice:5.1.0'
+        force 'aopalliance:aopalliance:1.0'
+    }
+}
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'], exclude: ['gama.extension.physics*'])
+
+    implementation 'org.locationtech.jts:jts-core:1.19.0'
+    implementation 'org.jgrapht:jgrapht-core:1.5.2'
+    implementation 'org.jfree:jfreechart:1.5.4'
+    implementation 'org.java-websocket:Java-WebSocket:1.5.4'
+    implementation 'org.locationtech.jts:jts-io:1.19.0'
+    implementation 'com.google.guava:guava:33.2.1-jre'
+    implementation 'one.util:streamex:0.8.3'
+    implementation 'org.apache.commons:commons-math3:3.6.1'
+
+    implementation files('libs/guice-5.1.0-patched.jar')
+    implementation 'javax.inject:javax.inject:1'
+    implementation 'aopalliance:aopalliance:1.0'
+
+    implementation('org.eclipse.xtext:org.eclipse.xtext:2.35.0') {
+        exclude group: 'org.eclipse.platform'
+        exclude group: 'org.ow2.asm'
+        exclude group: 'ch.qos.reload4j'
+        exclude group: 'com.google.inject'
+        exclude group: 'aopalliance'
+    }
+    implementation('org.eclipse.xtext:org.eclipse.xtext.xbase:2.35.0') {
+        exclude group: 'org.eclipse.platform'
+        exclude group: 'org.ow2.asm'
+        exclude group: 'com.google.inject'
+    }
+    implementation('org.eclipse.xtext:org.eclipse.xtext.util:2.35.0') {
+        exclude group: 'org.eclipse.platform'
+        exclude group: 'com.google.inject'
+    }
+    implementation('org.eclipse.xtend:org.eclipse.xtend.lib:2.35.0') {
+        exclude group: 'org.eclipse.platform'
+        exclude group: 'com.google.inject'
+    }
+    implementation 'org.eclipse.emf:org.eclipse.emf.ecore:2.31.0'
+    implementation 'org.eclipse.emf:org.eclipse.emf.common:2.31.0'
+    implementation 'org.eclipse.emf:org.eclipse.emf.ecore.xmi:2.18.0'
+
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.10.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+}

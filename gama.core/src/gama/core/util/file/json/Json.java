@@ -59,23 +59,21 @@ public final class Json implements IJsonConstants {
 		firstPass = false;
 		JsonValue result = NULL;
 		try {
-			result = switch (object) {
-				case JsonValue jv -> jv;
-				case IJsonable j -> j.serializeToJson(this);
-				case String s -> valueOf(s);
-				case Character c -> valueOf(c);
-				case Double d -> valueOf(d.doubleValue());
-				case Float f -> valueOf(f.doubleValue());
-				case Integer n -> valueOf(n.intValue());
-				case Long n -> valueOf((int) n.longValue());
-				case Boolean b -> valueOf(b.booleanValue());
-				case Collection<?> c -> GamaListFactory.wrap(Types.NO_TYPE, c).serializeToJson(this);
-				case Map<?, ?> m -> GamaMapFactory.wrap(m).serializeToJson(this);
-				case Exception ex -> object("exception", ex.getClass().getName(), "message", ex.getMessage(), "stack",
-						array(Arrays.asList(ex.getStackTrace())));
-				case null -> NULL;
-				default -> valueOf(object.toString());
-			};
+			if (object == null) result = NULL;
+			else if (object instanceof JsonValue jv) result = jv;
+			else if (object instanceof IJsonable j) result = j.serializeToJson(this);
+			else if (object instanceof String s) result = valueOf(s);
+			else if (object instanceof Character c) result = valueOf(c);
+			else if (object instanceof Double d) result = valueOf(d.doubleValue());
+			else if (object instanceof Float f) result = valueOf(f.doubleValue());
+			else if (object instanceof Integer n) result = valueOf(n.intValue());
+			else if (object instanceof Long n) result = valueOf((int) n.longValue());
+			else if (object instanceof Boolean b) result = valueOf(b.booleanValue());
+			else if (object instanceof Collection<?> c) result = GamaListFactory.wrap(Types.NO_TYPE, c).serializeToJson(this);
+			else if (object instanceof Map<?, ?> m) result = GamaMapFactory.wrap(m).serializeToJson(this);
+			else if (object instanceof Exception ex) result = object("exception", ex.getClass().getName(), "message", ex.getMessage(), "stack",
+					array(Arrays.asList(ex.getStackTrace())));
+			else result = valueOf(object.toString());
 		} finally {
 			if (initial) {
 				if (!agentReferences.isEmpty()) { result = contents(result, agentReferences); }

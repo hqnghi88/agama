@@ -1183,36 +1183,34 @@ public class GeometryUtils {
 	 */
 	public static Envelope3D computeEnvelopeFrom(final IScope scope, final Object obj) {
 
-		switch (obj) {
-			case IEnvelopeProvider ep:
-				return ep.computeEnvelope(scope);
-			case ISpecies s:
-				return computeEnvelopeFrom(scope, s.getPopulation(scope));
-			case Number n:
-				double size = n.doubleValue();
-				return Envelope3D.of(0, size, 0, size, 0, size);
-			case Envelope e:
-				return Envelope3D.of(e);
-			case String s:
-				return computeEnvelopeFrom(scope, Files.from(scope, s));
-			case IList l: {
-				Envelope3D result = null;
-				for (final Object bounds : l) {
-					final Envelope3D env = computeEnvelopeFrom(scope, bounds);
-					if (result == null) {
-						result = Envelope3D.of(env);
-					} else {
-						result.expandToInclude(env);
-					}
+		if (obj instanceof IEnvelopeProvider ep) {
+			return ep.computeEnvelope(scope);
+		} else if (obj instanceof ISpecies s) {
+			return computeEnvelopeFrom(scope, s.getPopulation(scope));
+		} else if (obj instanceof Number n) {
+			double size = n.doubleValue();
+			return Envelope3D.of(0, size, 0, size, 0, size);
+		} else if (obj instanceof Envelope e) {
+			return Envelope3D.of(e);
+		} else if (obj instanceof String s) {
+			return computeEnvelopeFrom(scope, Files.from(scope, s));
+		} else if (obj instanceof IList l) {
+			Envelope3D result = null;
+			for (final Object bounds : l) {
+				final Envelope3D env = computeEnvelopeFrom(scope, bounds);
+				if (result == null) {
+					result = Envelope3D.of(env);
+				} else {
+					result.expandToInclude(env);
 				}
-				return result;
 			}
-			default:
-				for (final IEnvelopeComputer ec : envelopeComputers) {
-					Envelope3D result = ec.computeEnvelopeFrom(scope, obj);
-					if (result != null) return result;
-				}
-				return null;
+			return result;
+		} else {
+			for (final IEnvelopeComputer ec : envelopeComputers) {
+				Envelope3D result = ec.computeEnvelopeFrom(scope, obj);
+				if (result != null) return result;
+			}
+			return null;
 		}
 	}
 
@@ -1695,18 +1693,12 @@ public class GeometryUtils {
 
 			for (int i = 0; i < nb; i++) {
 				final Geometry g = gc.getGeometryN(i);
-				switch (g) {
-					case Polygon p:
-						polys.add(p);
-						break;
-					case LineString ls:
-						lines.add(ls);
-						break;
-					case Point p:
-						points.add(p);
-						break;
-					case null, default:
-						break;
+			if (g instanceof Polygon p) {
+					polys.add(p);
+				} else if (g instanceof LineString ls) {
+					lines.add(ls);
+				} else if (g instanceof Point p) {
+					points.add(p);
 				}
 			}
 			int size = polys.size();

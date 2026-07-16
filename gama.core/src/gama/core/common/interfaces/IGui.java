@@ -110,7 +110,7 @@ public interface IGui {
 	ISnapshotMaker NULL_SNAPSHOT_MAKER = new ISnapshotMaker() {};
 
 	/** The displays. */
-	Map<String, DisplayDescription> DISPLAYS = GamaMapFactory.createOrdered();
+	Map<String, DisplayDescription> DISPLAYS = new java.util.LinkedHashMap<>();
 
 	/** The monitor view id. */
 	String MONITOR_VIEW_ID = "gama.ui.application.view.MonitorView";

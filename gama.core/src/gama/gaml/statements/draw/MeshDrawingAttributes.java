@@ -94,15 +94,13 @@ public class MeshDrawingAttributes extends AssetDrawingAttributes {
 	 */
 	@SuppressWarnings ("unchecked")
 	public static IMeshColorProvider computeColors(final Object colors, final boolean isGrayscale) {
-		return switch (colors) {
-			case GamaColor gc -> new ColorBasedMeshColorProvider(gc);
-			case GamaPalette gp -> new PaletteBasedMeshColorProvider(gp);
-			case GamaScale gs -> new ScaleBasedMeshColorProvider(gs);
-			case GamaGradient gg -> new GradientBasedMeshColorProvider(gg);
-			case IList list -> list.get(0) instanceof GamaField ? new BandsBasedMeshColorProvider(list)
-					: new ListBasedMeshColorProvider((IList<Color>) colors);
-			case null, default -> isGrayscale ? IMeshColorProvider.GRAYSCALE : IMeshColorProvider.DEFAULT;
-		};
+		if (colors instanceof GamaColor gc) return new ColorBasedMeshColorProvider(gc);
+		if (colors instanceof GamaPalette gp) return new PaletteBasedMeshColorProvider(gp);
+		if (colors instanceof GamaScale gs) return new ScaleBasedMeshColorProvider(gs);
+		if (colors instanceof GamaGradient gg) return new GradientBasedMeshColorProvider(gg);
+		if (colors instanceof IList list) return list.get(0) instanceof GamaField ? new BandsBasedMeshColorProvider(list)
+				: new ListBasedMeshColorProvider((IList<Color>) colors);
+		return isGrayscale ? IMeshColorProvider.GRAYSCALE : IMeshColorProvider.DEFAULT;
 	}
 
 	// Rules are a bit different for the fill color for fields.

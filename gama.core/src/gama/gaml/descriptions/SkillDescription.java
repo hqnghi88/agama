@@ -64,15 +64,10 @@ public class SkillDescription extends TypeDescription {
 	@Override
 	public IDescription addChild(final IDescription child) {
 		child.setEnclosingDescription(this);
-		switch (child) {
-			case ActionDescription ad:
-				addAction(ad);
-				break;
-			case VariableDescription vd:
-				addOwnAttribute(vd);
-				break;
-			default:
-				break;
+		if (child instanceof ActionDescription ad) {
+			addAction(ad);
+		} else if (child instanceof VariableDescription vd) {
+			addOwnAttribute(vd);
 		}
 		return child;
 	}

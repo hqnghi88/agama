@@ -65,11 +65,9 @@ public class GamaRuntimeException extends RuntimeException {
 	 */
 
 	public static GamaRuntimeException create(final Throwable ex, final IScope scope) {
-		return switch (ex) {
-			case GamaRuntimeException gre -> gre;
-			case IOException io -> new GamaRuntimeFileException(scope, io);
-			default -> new GamaRuntimeException(scope, ex);
-		};
+		if (ex instanceof GamaRuntimeException gre) return gre;
+		if (ex instanceof IOException io) return new GamaRuntimeFileException(scope, io);
+		return new GamaRuntimeException(scope, ex);
 	}
 
 	/**
@@ -143,15 +141,13 @@ public class GamaRuntimeException extends RuntimeException {
 		if (s.contains("jogamp")) return "exception in JOGL library";
 		if (s.contains("weka")) return "exception in Weka library";
 		if (s.contains("math3")) return "exception in Math library";
-		return switch (ex) {
-			case NullPointerException npe -> "nil value detected";
-			case IndexOutOfBoundsException ioobe -> "index out of bounds";
-			case IOException ioe -> "I/O error";
-			case CoreException ce -> "exception in Eclipse";
-			case ClassCastException cce -> "wrong casting";
-			case IllegalArgumentException iae -> "illegal argument";
-			default -> ex.getClass().getSimpleName();
-		};
+		if (ex instanceof NullPointerException npe) return "nil value detected";
+		if (ex instanceof IndexOutOfBoundsException ioobe) return "index out of bounds";
+		if (ex instanceof IOException ioe) return "I/O error";
+		if (ex instanceof CoreException ce) return "exception in Eclipse";
+		if (ex instanceof ClassCastException cce) return "wrong casting";
+		if (ex instanceof IllegalArgumentException iae) return "illegal argument";
+		return ex.getClass().getSimpleName();
 
 	}
 

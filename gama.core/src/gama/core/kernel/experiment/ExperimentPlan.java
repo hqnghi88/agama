@@ -644,53 +644,43 @@ public class ExperimentPlan extends GamlSpecies implements IExperimentPlan {
 
 		LayoutStatement layout = null;
 		for (final ISymbol s : children) {
-			switch (s) {
-				case null:
-					continue;
-				case ICategory c:
-					displayables.add(c);
-					break;
-				case TextStatement t:
-					displayables.add(t);
-					break;
-				case LayoutStatement ls:
-					layout = ls;
-					break;
-				case IExploration ie:
-					exploration = ie;
-					break;
-				case SimulationOutputManager som: {
-					if (originalSimulationOutputs != null) {
-						originalSimulationOutputs.setChildren(som);
-					} else {
-						originalSimulationOutputs = som;
-					}
+			if (s == null) {
+				continue;
+			} else if (s instanceof ICategory c) {
+				displayables.add(c);
+			} else if (s instanceof TextStatement t) {
+				displayables.add(t);
+			} else if (s instanceof LayoutStatement ls) {
+				layout = ls;
+			} else if (s instanceof IExploration ie) {
+				exploration = ie;
+			} else if (s instanceof SimulationOutputManager som) {
+				if (originalSimulationOutputs != null) {
+					originalSimulationOutputs.setChildren(som);
+				} else {
+					originalSimulationOutputs = som;
 				}
-					break;
-				case IParameter.Batch pb: {
-					if (isBatch() && pb.canBeExplored()) {
-						pb.setEditable(false);
-						addExplorableParameter(pb);
-						displayables.add(pb);
-						continue;
-					}
-					final String parameterName = pb.getName();
-					final boolean already = parameters.containsKey(parameterName);
-					if (!already) {
-						displayables.add(pb);
-						parameters.put(parameterName, pb);
-					}
-				}
-					break;
-				case ExperimentOutputManager eom:
-					if (experimentOutputs != null) {
-						experimentOutputs.setChildren(eom);
-					} else {
-						experimentOutputs = eom;
-					}
-					break;
-				default:
+			} else if (s instanceof IParameter.Batch pb) {
+				if (isBatch() && pb.canBeExplored()) {
+					pb.setEditable(false);
+					addExplorableParameter(pb);
+					displayables.add(pb);
 					continue;
+				}
+				final String parameterName = pb.getName();
+				final boolean already = parameters.containsKey(parameterName);
+				if (!already) {
+					displayables.add(pb);
+					parameters.put(parameterName, pb);
+				}
+			} else if (s instanceof ExperimentOutputManager eom) {
+				if (experimentOutputs != null) {
+					experimentOutputs.setChildren(eom);
+				} else {
+					experimentOutputs = eom;
+				}
+			} else {
+				continue;
 			}
 
 		}

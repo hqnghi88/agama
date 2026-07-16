@@ -66,20 +66,18 @@ public class GamaPointType extends GamaType<GamaPoint> {
 	 * @return the gama point
 	 */
 	public static GamaPoint staticCast(final IScope scope, final Object obj, final boolean copy) {
-		return switch (obj) {
-			case null -> null;
-			case GamaPoint gp -> copy ? new GamaPoint(gp) : gp;
-			case IShape s -> s.getLocation();
-			case List l -> castFromList(scope, l, copy);
-			case GamaColor c -> new GamaPoint(c.getRed(), c.getGreen(), c.getBlue());
-			case Map m -> castFromMap(scope, m);
-			case String s -> castFromString(scope, s);
-			case GamaPair p -> new GamaPoint(Cast.asFloat(scope, p.first()), Cast.asFloat(scope, p.last()));
-			default -> {
-				Double dval = Cast.asFloat(scope, obj);
-				yield new GamaPoint(dval, dval, dval);
-			}
-		};
+		if (obj == null) return null;
+		if (obj instanceof GamaPoint gp) return copy ? new GamaPoint(gp) : gp;
+		if (obj instanceof IShape s) return s.getLocation();
+		if (obj instanceof List l) return castFromList(scope, l, copy);
+		if (obj instanceof GamaColor c) return new GamaPoint(c.getRed(), c.getGreen(), c.getBlue());
+		if (obj instanceof Map m) return castFromMap(scope, m);
+		if (obj instanceof String s) return castFromString(scope, s);
+		if (obj instanceof GamaPair p) return new GamaPoint(Cast.asFloat(scope, p.first()), Cast.asFloat(scope, p.last()));
+		{
+			Double dval = Cast.asFloat(scope, obj);
+			return new GamaPoint(dval, dval, dval);
+		}
 	}
 
 	/**

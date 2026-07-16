@@ -127,24 +127,22 @@ public class GamaGeometryType extends GamaType<IShape> {
 	 */
 	public static IShape staticCast(final IScope scope, final Object obj, final Object param, final boolean copy)
 			throws GamaRuntimeException {
-		return switch (obj) {
-			case null -> null;
-			case IShape is -> copy ? is.copy(scope) : is;
-			case ISpecies s -> geometriesToGeometry(scope, s.getPopulation(scope));
-			case GamaPair p -> pairToGeometry(scope, p);
-			case GamaGeometryFile f -> f.getGeometry(scope);
-			case IContainer c -> isPoints(scope, c) ? pointsToGeometry(scope, c) : geometriesToGeometry(scope, c);
-			case String s -> {
-				try {
-					yield GamaShapeFactory.createFrom(SHAPE_READER.read(s));
-				} catch (final ParseException e) {
-					GAMA.reportError(scope,
-							GamaRuntimeException.warning("WKT Parsing exception: " + e.getMessage(), scope), false);
-					yield null;
-				}
+		if (obj == null) return null;
+		if (obj instanceof IShape is) return copy ? is.copy(scope) : is;
+		if (obj instanceof ISpecies s) return geometriesToGeometry(scope, s.getPopulation(scope));
+		if (obj instanceof GamaPair p) return pairToGeometry(scope, p);
+		if (obj instanceof GamaGeometryFile f) return f.getGeometry(scope);
+		if (obj instanceof IContainer c) return isPoints(scope, c) ? pointsToGeometry(scope, c) : geometriesToGeometry(scope, c);
+		if (obj instanceof String s) {
+			try {
+				return GamaShapeFactory.createFrom(SHAPE_READER.read(s));
+			} catch (final ParseException e) {
+				GAMA.reportError(scope,
+						GamaRuntimeException.warning("WKT Parsing exception: " + e.getMessage(), scope), false);
+				return null;
 			}
-			default -> null;
-		};
+		}
+		return null;
 	}
 
 	/**

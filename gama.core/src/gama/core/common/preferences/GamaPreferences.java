@@ -282,7 +282,9 @@ public class GamaPreferences {
 		 * @date 19 août 2023
 		 */
 		public static void setColorScheme(final String scheme) {
-			switch (scheme) {
+			if (scheme == null) {
+				setPivot(CORE_PIVOT_COLOR.getValue());
+			} else switch (scheme) {
 				case DIVERGING:
 					SIMULATION_COLORS = new GamaColor[DIVERGING_COLORS.length];
 					for (int i = 0; i < DIVERGING_COLORS.length; i++) {
@@ -299,7 +301,6 @@ public class GamaPreferences {
 						SIMULATION_COLORS[i] = QUALITATIVE_COLORS[i].get();
 					}
 					break;
-				case null:
 				default:
 					setPivot(CORE_PIVOT_COLOR.getValue());
 					break;

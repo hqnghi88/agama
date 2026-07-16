@@ -59,15 +59,13 @@ public class GamaIntegerType extends GamaType<Integer> {
 	 * @return the integer
 	 */
 	public static Integer staticCast(final IScope scope, final Object obj, final Object param, final boolean copy) {
-		return switch (obj) {
-			case null -> 0;
-			case Integer i -> i;
-			case Number n -> n.intValue();
-			case String s -> castFromString(s, param);
-			case Boolean b -> b ? 1 : 0;
-			case IValue v -> v.intValue(scope);
-			default -> 0;
-		};
+		if (obj == null) return 0;
+		if (obj instanceof Integer i) return i;
+		if (obj instanceof Number n) return n.intValue();
+		if (obj instanceof String s) return castFromString(s, param);
+		if (obj instanceof Boolean b) return b ? 1 : 0;
+		if (obj instanceof IValue v) return v.intValue(scope);
+		return 0;
 	}
 
 	/**

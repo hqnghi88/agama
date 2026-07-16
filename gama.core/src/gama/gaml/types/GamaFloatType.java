@@ -57,15 +57,13 @@ public class GamaFloatType extends GamaType<Double> {
 	 * @return the double
 	 */
 	public static Double staticCast(final IScope scope, final Object obj, final Object param, final boolean copy) {
-		return switch (obj) {
-			case null -> 0d;
-			case Double d -> d;
-			case Number n -> n.doubleValue();
-			case String s -> castFromString(s);
-			case Boolean b -> b ? 1d : 0d;
-			case IValue v -> v.floatValue(scope);
-			default -> 0d;
-		};
+		if (obj == null) return 0d;
+		if (obj instanceof Double d) return d;
+		if (obj instanceof Number n) return n.doubleValue();
+		if (obj instanceof String s) return castFromString(s);
+		if (obj instanceof Boolean b) return b ? 1d : 0d;
+		if (obj instanceof IValue v) return v.floatValue(scope);
+		return 0d;
 	}
 
 	/**

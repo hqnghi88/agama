@@ -495,14 +495,10 @@ public class LayeredDisplayOutput extends AbstractOutput {
 	public void setChildren(final Iterable<? extends ISymbol> commands) {
 		final List<AbstractLayerStatement> list = new ArrayList<>();
 		for (final ISymbol s : commands) {
-			switch (s) {
-				case CameraStatement cs -> cameras.add(cs);
-				case RotationStatement rs -> rotation = rs;
-				case LightStatement ls -> lights.add(ls);
-				case null, default -> {
-					list.add((AbstractLayerStatement) s);
-				}
-			}
+			if (s instanceof CameraStatement cs) cameras.add(cs);
+			else if (s instanceof RotationStatement rs) rotation = rs;
+			else if (s instanceof LightStatement ls) lights.add(ls);
+			else { list.add((AbstractLayerStatement) s); }
 
 		}
 		setLayers(list);

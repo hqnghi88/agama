@@ -61,13 +61,11 @@ public class GamaStringType extends GamaType<String> {
 	 */
 	public static String staticCast(final IScope scope, final Object obj, final boolean copy)
 			throws GamaRuntimeException {
-		return switch (obj) {
-			case null -> null;
-			case String s -> s;
-			case IValue i -> i.stringValue(scope);
-			case INamed n -> n.getName();
-			default -> obj.toString();
-		};
+		if (obj == null) return null;
+		if (obj instanceof String s) return s;
+		if (obj instanceof IValue i) return i.stringValue(scope);
+		if (obj instanceof INamed n) return n.getName();
+		return obj.toString();
 	}
 
 	@Override
