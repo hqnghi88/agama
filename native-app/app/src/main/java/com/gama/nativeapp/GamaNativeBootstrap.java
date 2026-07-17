@@ -145,6 +145,26 @@ public class GamaNativeBootstrap {
             Log.w(TAG, "Failed to init Dates", e);
         }
 
+        // Initialize the ForkJoinPool for parallel agent execution
+        // On desktop this is triggered by preference change listeners, but on Android prefs are no-op
+        try {
+            Class<?> executorClass = Class.forName("gama.core.runtime.concurrent.GamaExecutorService");
+            Method resetMethod = executorClass.getMethod("reset");
+            resetMethod.invoke(null);
+
+            Field poolField = executorClass.getField("AGENT_PARALLEL_EXECUTOR");
+            Object pool = poolField.get(null);
+            if (pool != null) {
+                Log.i(TAG, "ForkJoinPool initialized: " + pool);
+                callback.onProgress("ForkJoinPool initialized for parallel execution");
+            } else {
+                Log.w(TAG, "ForkJoinPool still null after reset()");
+            }
+        } catch (Throwable e) {
+            Log.e(TAG, "Failed to init ForkJoinPool", e);
+            callback.onProgress("ForkJoinPool init failed: " + e.getMessage());
+        }
+
         // Register the Android GUI handler as the GAMA GUI
         try {
             Class<?> gamaClass = Class.forName("gama.core.runtime.GAMA");
@@ -285,8 +305,32 @@ public class GamaNativeBootstrap {
 
             callback.onProgress("GAML services registered (parser, info, ecore, builder, validator)");
         } catch (Throwable e) {
-            Log.w(TAG, "Failed to register GAML services", e);
+            Log.e(TAG, "Failed to register GAML services", e);
             callback.onProgress("GAML registration skipped: " + e.getMessage());
+        }
+
+        // Register GAML constants (units, colors, etc.)
+        // Normally done via OSGi extension points in GamaBundleLoader.loadConstants()
+        try {
+            Class<?> gamlClass = Class.forName("gama.gaml.compilation.GAML");
+            Class<?> acceptorClass = Class.forName("gama.gaml.constants.IConstantAcceptor");
+            Method getAcceptor = gamlClass.getMethod("getConstantAcceptor");
+            Object acceptor = getAcceptor.invoke(null);
+
+            Class<?> supplierClass = Class.forName("gama.gaml.constants.CoreConstantsSupplier");
+            Object supplier = supplierClass.getDeclaredConstructor().newInstance();
+            Method supply = supplierClass.getMethod("supplyConstantsTo", acceptorClass);
+            supply.invoke(supplier, acceptor);
+
+            // Check how many constants were registered
+            Field unitsField = gamlClass.getField("UNITS");
+            @SuppressWarnings("unchecked")
+            java.util.Map<?, ?> units = (java.util.Map<?, ?>) unitsField.get(null);
+            Log.i(TAG, "GAML constants registered: " + units.size() + " entries (includes colors, units)");
+            callback.onProgress("GAML constants registered: " + units.size() + " entries");
+        } catch (Throwable e) {
+            Log.e(TAG, "Failed to register GAML constants", e);
+            callback.onProgress("Constants registration failed: " + e.getMessage());
         }
 
         callback.onSuccess("GAMA engine initialized! " + loaded + " plugins loaded.");
