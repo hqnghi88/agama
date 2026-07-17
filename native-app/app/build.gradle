@@ -30,8 +30,43 @@ tasks.register('patchGamaJars') {
             tmpDir.deleteDir()
         }
 
-        // Note: SimulationRunner$1 deadlock fix is pre-applied to gama.core JAR
-        // via SimulationRunnerPatcher (run separately before build)
+        // Compile AndroidTaskWrapper.java (needs gama.core on classpath for ParallelAgentRunner)
+        def wrapperOutDir = file("$buildDir/tmp/android_wrapper")
+        wrapperOutDir.mkdirs()
+        exec {
+            commandLine 'javac',
+                '-cp', "${libsDir}/gama.core_0.0.0.202605140230.jar",
+                '-d', wrapperOutDir.absolutePath,
+                "${projectDir}/../tools/AndroidTaskWrapper.java"
+        }
+        logger.lifecycle("Compiled AndroidTaskWrapper.java")
+
+        // Find ASM JARs in Gradle cache
+        def asmJar = fileTree("${System.getProperty('user.home')}/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm/9.6")
+            .matching { include '**/*.jar' }.files.first()
+        def asmTreeJar = fileTree("${System.getProperty('user.home')}/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm-tree/9.6")
+            .matching { include '**/*.jar' }.files.first()
+
+        // Compile ParallelRunnerPatcher.java
+        def patcherOutDir = file("$buildDir/tmp/patcher")
+        patcherOutDir.mkdirs()
+        exec {
+            commandLine 'javac',
+                '-cp', "${asmJar.absolutePath}:${asmTreeJar.absolutePath}",
+                '-d', patcherOutDir.absolutePath,
+                "${projectDir}/../tools/ParallelRunnerPatcher.java"
+        }
+        logger.lifecycle("Compiled ParallelRunnerPatcher.java")
+
+        // Run ParallelRunnerPatcher to patch GamaExecutorService + ParallelAgentRunner
+        exec {
+            commandLine 'java', '-cp',
+                "${patcherOutDir.absolutePath}:${wrapperOutDir.absolutePath}:${asmJar.absolutePath}:${asmTreeJar.absolutePath}",
+                'ParallelRunnerPatcher',
+                "${libsDir}/gama.core_0.0.0.202605140230.jar",
+                "${wrapperOutDir.absolutePath}/gama/core/runtime/concurrent/AndroidTaskWrapper.class"
+        }
+        logger.lifecycle("ParallelRunnerPatcher completed")
     }
 }
 

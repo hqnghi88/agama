@@ -160,6 +160,19 @@ public class GamaNativeBootstrap {
             } else {
                 Log.w(TAG, "ForkJoinPool still null after reset()");
             }
+
+            // Verify ANDROID_PARALLEL_EXECUTOR (our ExecutorService replacement)
+            try {
+                Field androidPoolField = executorClass.getField("ANDROID_PARALLEL_EXECUTOR");
+                Object androidPool = androidPoolField.get(null);
+                if (androidPool != null) {
+                    Log.i(TAG, "ANDROID_PARALLEL_EXECUTOR initialized: " + androidPool.getClass().getSimpleName());
+                } else {
+                    Log.w(TAG, "ANDROID_PARALLEL_EXECUTOR is null");
+                }
+            } catch (NoSuchFieldException e) {
+                Log.w(TAG, "ANDROID_PARALLEL_EXECUTOR field not found (patcher may not have run)");
+            }
         } catch (Throwable e) {
             Log.e(TAG, "Failed to init ForkJoinPool", e);
             callback.onProgress("ForkJoinPool init failed: " + e.getMessage());
