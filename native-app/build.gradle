@@ -5,5 +5,8 @@ buildscript {
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:8.5.2'
+        classpath 'org.ow2.asm:asm:9.6'
+        classpath 'org.ow2.asm:asm-tree:9.6'
+        classpath 'org.ow2.asm:asm-util:9.6'
     }
 }

@@ -209,6 +209,26 @@ public class GamaNativeBootstrap {
             callback.onProgress("Draw delegates registration skipped: " + e.getMessage());
         }
 
+        // Register create delegates (normally loaded via Eclipse extension points)
+        try {
+            Class<?> createStatementClass = Class.forName("gama.gaml.statements.CreateStatement");
+            Class<?> nullDelegateClass = Class.forName("gama.gaml.statements.create.CreateFromNullDelegate");
+            Class<?> csvDelegateClass = Class.forName("gama.gaml.statements.create.CreateFromCSVDelegate");
+            Class<?> geomDelegateClass = Class.forName("gama.gaml.statements.create.CreateFromGeometriesDelegate");
+            Class<?> gridDelegateClass = Class.forName("gama.gaml.statements.create.CreateFromGridFileDelegate");
+            Class<?> icdInterface = Class.forName("gama.core.common.interfaces.ICreateDelegate");
+            Method addCreateDelegate = createStatementClass.getMethod("addDelegate", icdInterface);
+            addCreateDelegate.invoke(null, nullDelegateClass.getDeclaredConstructor().newInstance());
+            addCreateDelegate.invoke(null, csvDelegateClass.getDeclaredConstructor().newInstance());
+            addCreateDelegate.invoke(null, geomDelegateClass.getDeclaredConstructor().newInstance());
+            addCreateDelegate.invoke(null, gridDelegateClass.getDeclaredConstructor().newInstance());
+            Log.i(TAG, "Create delegates registered (4)");
+            callback.onProgress("Create delegates registered");
+        } catch (Throwable e) {
+            Log.w(TAG, "Failed to register create delegates", e);
+            callback.onProgress("Create delegates registration skipped: " + e.getMessage());
+        }
+
         // Register GAML parser, info provider, ecore utils, model builder, validator
         // (equivalent to GamlActivator.start() in OSGi)
         try {

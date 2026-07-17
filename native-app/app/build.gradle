@@ -2,11 +2,12 @@ plugins {
     id 'com.android.application'
 }
 
-// Strip Java 21 pattern-matching classes from GAMA JARs that conflict with app source patches
+// Strip Java 21 pattern-matching classes + ASM-patch SimulationRunner$1 to fix deadlock
 tasks.register('patchGamaJars') {
     doLast {
         def libsDir = file("$buildDir/../../app/libs")
         def patchedClasses = ['gama/gaml/descriptions/SkillDescription.class']
+
         fileTree(libsDir).matching { include '*.jar' }.each { jarFile ->
             def tmpDir = file("$buildDir/tmp/jar_patch/${jarFile.name}")
             tmpDir.mkdirs()
@@ -25,8 +26,12 @@ tasks.register('patchGamaJars') {
                 }
                 logger.lifecycle("Patched JAR: ${jarFile.name}")
             }
+
             tmpDir.deleteDir()
         }
+
+        // Note: SimulationRunner$1 deadlock fix is pre-applied to gama.core JAR
+        // via SimulationRunnerPatcher (run separately before build)
     }
 }
 

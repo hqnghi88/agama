@@ -5,19 +5,20 @@ global {
 	
 	init {
 		create test_agent number: nb_agents;
+		write "INIT: after create, length(test_agent)=" + length(test_agent);
 	}
 }
 
-species test_agent {
+species test_agent skills:[moving]{
 	int age <- 0;
 	
 	reflex aging {
 		age <- age + 1;
-		location<-any_location_in(world.shape);
+		do wander();
 	}
 	
 	aspect default {
-		draw circle(3.0) color: rgb(0, 0, 255);
+		draw triangle(3.0) color: rgb(0, 0, 255);
 	}
 }
 

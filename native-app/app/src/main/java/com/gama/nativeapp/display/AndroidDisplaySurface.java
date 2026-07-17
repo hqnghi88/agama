@@ -165,10 +165,36 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
         try {
             IGraphicsScope drawScope = scope;
             if (drawScope == null || drawScope.interrupted()) return;
+
+            // Matches SpeciesLayer.privateDraw: scope.getSimulation() returns IMacroAgent "world"
             gama.core.metamodel.agent.IMacroAgent sim = drawScope.getSimulation();
             if (sim == null) {
                 if (frames < 5 || frames % 100 == 0) android.util.Log.w("AndroidDisplaySurface", "Manual draw: no simulation. frame=" + frames);
                 return;
+            }
+
+            // Log all micro-populations on the simulation agent
+            if (frames < 10) {
+                gama.core.metamodel.population.IPopulation<?>[] microPops = sim.getMicroPopulations();
+                android.util.Log.i("AndroidDisplaySurface", "Manual draw: sim=" + sim.getClass().getSimpleName() +
+                    " simName=" + sim.getName() + " microPopCount=" + (microPops == null ? 0 : microPops.length));
+                if (microPops != null) {
+                    for (gama.core.metamodel.population.IPopulation<?> mp : microPops) {
+                        android.util.Log.i("AndroidDisplaySurface", "  microPop: species=" + mp.getSpecies().getName() + " size=" + mp.size());
+                    }
+                }
+                // Also check root agent (ITopLevelAgent extends IMacroAgent)
+                gama.core.kernel.experiment.ITopLevelAgent rootTLA = drawScope.getRoot();
+                if (rootTLA != null && rootTLA instanceof gama.core.metamodel.agent.IMacroAgent) {
+                    gama.core.metamodel.agent.IMacroAgent macroRoot = (gama.core.metamodel.agent.IMacroAgent) rootTLA;
+                    gama.core.metamodel.population.IPopulation<?>[] rootPops = macroRoot.getMicroPopulations();
+                    android.util.Log.i("AndroidDisplaySurface", "  rootAgent=" + macroRoot.getClass().getSimpleName() + " name=" + macroRoot.getName() + " microPopCount=" + (rootPops == null ? 0 : rootPops.length));
+                    if (rootPops != null) {
+                        for (gama.core.metamodel.population.IPopulation<?> mp : rootPops) {
+                            android.util.Log.i("AndroidDisplaySurface", "  root microPop: species=" + mp.getSpecies().getName() + " size=" + mp.size());
+                        }
+                    }
+                }
             }
 
             java.util.List<String> speciesNames = new java.util.ArrayList<>();

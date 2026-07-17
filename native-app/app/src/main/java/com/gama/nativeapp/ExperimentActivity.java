@@ -47,6 +47,8 @@ public class ExperimentActivity extends Activity {
     private volatile boolean isPaused = false;
     private Object currentExpPlan;
     private Object currentController;
+    private volatile boolean isHeadlessMode = false;
+    private Runnable diagnosticRunnable;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -285,6 +287,9 @@ public class ExperimentActivity extends Activity {
         if (!isRunning) return;
         isRunning = false;
         isPaused = false;
+        if (diagnosticRunnable != null) {
+            handler.removeCallbacks(diagnosticRunnable);
+        }
         try {
             if (currentController != null) {
                 Class<?> controllerClass = Class.forName("gama.core.kernel.experiment.DefaultExperimentController");
@@ -456,31 +461,269 @@ public class ExperimentActivity extends Activity {
 
         new Thread(() -> {
             try {
+                log("[1] Setting up GUI handlers...");
                 Class<?> guiHandlerClass = Class.forName("com.gama.nativeapp.gui.AndroidGuiHandler");
                 Object guiHandler = guiHandlerClass.getMethod("getInstance").invoke(null);
 
                 Class<?> gamaClass = Class.forName("gama.core.runtime.GAMA");
                 gamaClass.getMethod("setHeadlessGui", Class.forName("gama.core.common.interfaces.IGui")).invoke(null, guiHandler);
                 gamaClass.getMethod("setRegularGui", Class.forName("gama.core.common.interfaces.IGui")).invoke(null, guiHandler);
+                log("[1] GUI handlers set");
 
+                log("[2] Opening experiment plan...");
                 Class<?> expClass = Class.forName("gama.core.kernel.experiment.IExperimentPlan");
                 expClass.getMethod("setHeadless", boolean.class).invoke(expPlan, false);
                 expClass.getMethod("open").invoke(expPlan);
+                log("[2] Experiment plan opened");
 
+                // Deep introspection of experiment state
+                try {
+                    Object agent = expClass.getMethod("getAgent").invoke(expPlan);
+                    log("[2b] Experiment agent: " + (agent != null ? agent.getClass().getName() : "NULL"));
+
+                    if (agent != null) {
+                        log("[2b]   Agent dead=" + agent.getClass().getMethod("dead").invoke(agent));
+                        log("[2b]   Agent scope=" + agent.getClass().getMethod("getScope").invoke(agent));
+
+                        // Check SimulationPopulation
+                        try {
+                            java.lang.reflect.Method getSimPop = agent.getClass().getMethod("getSimulationPopulation");
+                            Object simPop = getSimPop.invoke(agent);
+                            log("[2b]   SimulationPopulation=" + (simPop != null ? simPop.getClass().getName() : "NULL"));
+                            if (simPop != null) {
+                                log("[2b]   SimPop size=" + simPop.getClass().getMethod("size").invoke(simPop));
+
+                                // Get the current simulation from SimPop
+                                java.lang.reflect.Method getCurrentSim = simPop.getClass().getMethod("getCurrentSimulation");
+                                Object curSim = getCurrentSim.invoke(simPop);
+                                log("[2b]   Current sim=" + (curSim != null ? curSim.getClass().getName() : "NULL"));
+                                if (curSim != null) {
+                                    log("[2b]   Sim dead=" + curSim.getClass().getMethod("dead").invoke(curSim));
+                                    Object simScope = curSim.getClass().getMethod("getScope").invoke(curSim);
+                                    log("[2b]   Sim scope=" + simScope);
+
+                                    // Check sub-populations on the SimulationAgent's species
+                                    Object simSpecies = curSim.getClass().getMethod("getSpecies").invoke(curSim);
+                                    log("[2b]   Sim species=" + simSpecies.getClass().getMethod("getName").invoke(simSpecies));
+
+                                    java.lang.reflect.Method getSubPops = simSpecies.getClass().getMethod("getSubPopulations");
+                                    Object subPops = getSubPops.invoke(simSpecies);
+                                    log("[2b]   Sim species subPops=" + subPops);
+                                    if (subPops != null) {
+                                        for (Object subPop : (Iterable<?>) subPops) {
+                                            java.lang.reflect.Method getName = subPop.getClass().getMethod("getName");
+                                            java.lang.reflect.Method getSize = subPop.getClass().getMethod("size");
+                                            java.lang.reflect.Method getSpecies2 = subPop.getClass().getMethod("getSpecies");
+                                            Object speciesName = getSpecies2.invoke(subPop);
+                                            java.lang.reflect.Method getSName = speciesName.getClass().getMethod("getName");
+                                            log("[2b]     SubPop: " + getName.invoke(subPop) + " species=" + getSName.invoke(speciesName) + " size=" + getSize.invoke(subPop));
+                                        }
+                                    }
+
+                                    // Check the SimulationAgent's own population for agents
+                                    java.lang.reflect.Method getSimAgentPop = curSim.getClass().getMethod("getPopulation");
+                                    Object simAgentPop = getSimAgentPop.invoke(curSim);
+                                    if (simAgentPop != null) {
+                                        log("[2b]   SimAgent pop size=" + simAgentPop.getClass().getMethod("size").invoke(simAgentPop));
+                                    }
+                                }
+                            }
+                        } catch (Exception simPopEx) {
+                            log("[2b]   Error: " + simPopEx.getClass().getSimpleName() + ": " + simPopEx.getMessage());
+                            simPopEx.printStackTrace(System.err);
+                        }
+                    }
+                } catch (Exception inspectEx) {
+                    log("[2b]   Introspection error: " + inspectEx.getClass().getSimpleName() + ": " + inspectEx.getMessage());
+                    inspectEx.printStackTrace(System.err);
+                }
+
+                // [2c] Try to manually re-trigger model init on the SimulationAgent
+                try {
+                    Object agent2c = expClass.getMethod("getAgent").invoke(expPlan);
+                    if (agent2c != null) {
+                        Object simPop2c = agent2c.getClass().getMethod("getSimulationPopulation").invoke(agent2c);
+                        if (simPop2c != null) {
+                            Object curSim2c = simPop2c.getClass().getMethod("getCurrentSimulation").invoke(simPop2c);
+                            if (curSim2c != null) {
+                                // Check scope.interrupted()
+                                Object simScope = curSim2c.getClass().getMethod("getScope").invoke(curSim2c);
+                                if (simScope != null) {
+                                    java.lang.reflect.Method isInterrupted = simScope.getClass().getMethod("interrupted");
+                                    boolean interrupted = (boolean) isInterrupted.invoke(simScope);
+                                    log("[2c] simScope.interrupted()=" + interrupted);
+
+                                    // Check scope agent
+                                    try {
+                                        java.lang.reflect.Method getAgentMethod = simScope.getClass().getMethod("getAgent");
+                                        Object scopeAgent = getAgentMethod.invoke(simScope);
+                                        log("[2c] scope.getAgent()=" + (scopeAgent != null ? scopeAgent.getClass().getSimpleName() + " dead=" + scopeAgent.getClass().getMethod("dead").invoke(scopeAgent) : "NULL"));
+                                    } catch (Exception e) { log("[2c] scope.getAgent err: " + e.getMessage()); }
+
+                                    // Check isInitOverriden on population
+                                    Object pop2c = curSim2c.getClass().getMethod("getPopulation").invoke(curSim2c);
+                                    if (pop2c != null) {
+                                        boolean initOverridden = (boolean) pop2c.getClass().getMethod("isInitOverriden").invoke(pop2c);
+                                        log("[2c] isInitOverriden=" + initOverridden);
+                                    }
+
+                                    // Get architecture and check _inits field
+                                    Object species2c = curSim2c.getClass().getMethod("getSpecies").invoke(curSim2c);
+                                    if (species2c != null) {
+                                        Object arch = species2c.getClass().getMethod("getArchitecture").invoke(species2c);
+                                        log("[2c] architecture=" + (arch != null ? arch.getClass().getName() : "NULL"));
+                                        if (arch != null) {
+                                            // Check _inits field
+                                            try {
+                                                java.lang.reflect.Field initsField = arch.getClass().getDeclaredField("_inits");
+                                                initsField.setAccessible(true);
+                                                Object inits = initsField.get(arch);
+                                                log("[2c] _inits=" + (inits != null ? "size=" + ((java.util.List) inits).size() : "NULL"));
+                                                if (inits != null) {
+                                                    for (Object stmt : (java.util.List<?>) inits) {
+                                                        log("[2c]   init stmt: " + stmt.getClass().getName());
+                                                    }
+                                                }
+                                            } catch (Exception e) { log("[2c] _inits field err: " + e.getMessage()); }
+
+                                            // Now try to manually call the create statement on test_agent
+                                            // First, get the GamlAgent helper to get population for test_agent
+                                            try {
+                                                java.lang.reflect.Method getModel = simScope.getClass().getMethod("getModel");
+                                                Object model = getModel.invoke(simScope);
+                                                if (model != null) {
+                                                    // Evaluate nb_agents in the scope
+                                                    try {
+                                                        java.lang.reflect.Method getVar = simScope.getClass().getMethod("getVar", String.class);
+                                                        Object nbAgentsVal = getVar.invoke(simScope, "nb_agents");
+                                                        log("[2c] nb_agents in scope=" + nbAgentsVal);
+                                                    } catch (Exception e) {
+                                                        log("[2c] getVar nb_agents err: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+                                                    }
+
+                                                    java.lang.reflect.Method getSpeciesByName = model.getClass().getMethod("getSpecies", String.class);
+                                                    Object testAgentSpecies = getSpeciesByName.invoke(model, "test_agent");
+                                                    log("[2c] test_agent species=" + (testAgentSpecies != null ? testAgentSpecies.getClass().getName() : "NULL"));
+                                                    if (testAgentSpecies != null) {
+                                                        // Get population for test_agent from the sim agent
+                                                        java.lang.reflect.Method getPopFor = curSim2c.getClass().getMethod("getPopulationFor", Class.forName("gama.core.metamodel.ISpecies"));
+                                                        Object testAgentPop = getPopFor.invoke(curSim2c, testAgentSpecies);
+                                                        log("[2c] test_agent pop=" + (testAgentPop != null ? testAgentPop.getClass().getName() : "NULL"));
+                                                        if (testAgentPop != null) {
+                                                            log("[2c] test_agent pop.size=" + testAgentPop.getClass().getMethod("size").invoke(testAgentPop));
+                                                        }
+                                                    }
+                                                }
+                                            } catch (Exception e) {
+                                                log("[2c] test_agent pop check err: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+                                                if (e.getCause() != null) log("[2c]   cause: " + e.getCause().getMessage());
+                                            }
+
+                                            // Try calling arch.init(scope) again with scope's agent set to sim
+                                            log("[2c] Calling architecture.init(scope) with sim as agent...");
+                                            try {
+                                                // Push sim agent onto scope first
+                                                java.lang.reflect.Method pushMethod = simScope.getClass().getMethod("push", Class.forName("gama.core.metamodel.agent.IAgent"));
+                                                pushMethod.invoke(simScope, curSim2c);
+                                                log("[2c] Pushed sim agent onto scope");
+
+                                                java.lang.reflect.Method archInit = arch.getClass().getMethod("init", Class.forName("gama.core.runtime.IScope"));
+                                                Object result = archInit.invoke(arch, simScope);
+                                                log("[2c] architecture.init() returned: " + result);
+
+                                                // Check test_agent pop again
+                                                try {
+                                                    java.lang.reflect.Method getModel2 = simScope.getClass().getMethod("getModel");
+                                                    Object model2 = getModel2.invoke(simScope);
+                                                    java.lang.reflect.Method getSp2 = model2.getClass().getMethod("getSpecies", String.class);
+                                                    Object sp2 = getSp2.invoke(model2, "test_agent");
+                                                    java.lang.reflect.Method getPopFor2 = curSim2c.getClass().getMethod("getPopulationFor", Class.forName("gama.core.metamodel.ISpecies"));
+                                                    Object pop2 = getPopFor2.invoke(curSim2c, sp2);
+                                                    if (pop2 != null) {
+                                                        log("[2c] test_agent pop.size AFTER init=" + pop2.getClass().getMethod("size").invoke(pop2));
+                                                    }
+                                                } catch (Exception e) { log("[2c] post-init check err: " + e.getMessage()); }
+                                            } catch (Exception archEx) {
+                                                log("[2c] architecture.init() EXCEPTION: " + archEx.getClass().getSimpleName() + ": " + archEx.getMessage());
+                                                if (archEx.getCause() != null) {
+                                                    log("[2c]   CAUSE: " + archEx.getCause().getClass().getSimpleName() + ": " + archEx.getCause().getMessage());
+                                                    if (archEx.getCause().getCause() != null) {
+                                                        log("[2c]   CAUSE2: " + archEx.getCause().getCause().getClass().getSimpleName() + ": " + archEx.getCause().getCause().getMessage());
+                                                    }
+                                                }
+                                                Log.w(TAG, "arch.init failed", archEx);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (Exception ex2c) {
+                    log("[2c] Error: " + ex2c.getClass().getSimpleName() + ": " + ex2c.getMessage());
+                    Log.w(TAG, "[2c] introspection failed", ex2c);
+                }
+
+                log("[3] Getting controller...");
                 Object controller = expClass.getMethod("getController").invoke(expPlan);
                 currentController = controller;
+
+                java.lang.reflect.Field controllersField = gamaClass.getDeclaredField("controllers");
+                controllersField.setAccessible(true);
+                java.util.List controllers = (java.util.List) controllersField.get(null);
+                controllers.add(controller);
+                log("[3] Controller registered (size=" + controllers.size() + ")");
+
+                log("[4] Starting experiment controller...");
                 Class<?> controllerClass = Class.forName("gama.core.kernel.experiment.DefaultExperimentController");
                 controllerClass.getMethod("processStart", boolean.class).invoke(controller, false);
+                log("[4] processStart returned");
 
-                log("Experiment started successfully");
+                // Check state after processStart
+                try {
+                    Thread.sleep(3000);
+                    Class<?> expPlanClass2 = Class.forName("gama.core.kernel.experiment.ExperimentPlan");
+                    java.lang.reflect.Method getCurrentSim2 = expPlanClass2.getMethod("getCurrentSimulation");
+                    Object curSim2 = getCurrentSim2.invoke(expPlan);
+                    log("[4b] getCurrentSimulation() after start=" + (curSim2 != null ? curSim2.getClass().getName() + " dead=" + curSim2.getClass().getMethod("dead").invoke(curSim2) : "NULL"));
+
+                    if (curSim2 != null) {
+                        java.lang.reflect.Method simPopMethod = curSim2.getClass().getMethod("getPopulation");
+                        Object simPop = simPopMethod.invoke(curSim2);
+                        log("[4b]   Sim population=" + (simPop != null ? simPop.getClass().getName() : "NULL"));
+                        if (simPop != null) {
+                            java.lang.reflect.Method sizeMethod = simPop.getClass().getMethod("size");
+                            log("[4b]   Sim pop size=" + sizeMethod.invoke(simPop));
+                        }
+                    }
+
+                    // Also check ExperimentAgent.getSimulationPopulation()
+                    Object agent2 = expClass.getMethod("getAgent").invoke(expPlan);
+                    if (agent2 != null) {
+                        java.lang.reflect.Method getSimPop2 = agent2.getClass().getMethod("getSimulationPopulation");
+                        Object simPop2 = getSimPop2.invoke(agent2);
+                        log("[4b] getSimulationPopulation() after start=" + (simPop2 != null ? simPop2.getClass().getName() : "NULL"));
+                        if (simPop2 != null) {
+                            java.lang.reflect.Method sizeMethod2 = simPop2.getClass().getMethod("size");
+                            log("[4b]   SimulationPopulation size=" + sizeMethod2.invoke(simPop2));
+                        }
+                    }
+                } catch (Exception postEx) {
+                    log("[4b] Post-start check error: " + postEx.getClass().getSimpleName() + ": " + postEx.getMessage());
+                    postEx.printStackTrace(System.err);
+                }
+
+                log("Experiment started. Starting diagnostics...");
                 handler.post(() -> statusText.setText("Running"));
+
+                startDiagnostics(controller);
 
             } catch (Exception e) {
                 Log.e(TAG, "Experiment run error", e);
-                log("ERROR running experiment: " + e.getMessage());
+                log("ERROR: " + e.getClass().getSimpleName() + ": " + e.getMessage());
                 Throwable cause = e.getCause();
                 while (cause != null) {
-                    log("  CAUSE: " + cause.getMessage());
+                    log("  CAUSE: " + cause.getClass().getSimpleName() + ": " + cause.getMessage());
                     cause = cause.getCause();
                 }
                 handler.post(() -> {
@@ -489,6 +732,136 @@ public class ExperimentActivity extends Activity {
                 });
             }
         }).start();
+    }
+
+    private void startDiagnostics(Object controller) {
+        final Class<?> controllerClass;
+        try {
+            controllerClass = Class.forName("gama.core.kernel.experiment.DefaultExperimentController");
+        } catch (ClassNotFoundException e) {
+            log("DIAG: Cannot find controller class");
+            return;
+        }
+
+        final int[] pollCount = {0};
+        diagnosticRunnable = () -> {
+            if (!isRunning) return;
+            pollCount[0]++;
+            StringBuilder sb = new StringBuilder();
+            sb.append("[DIAG #").append(pollCount[0]).append("] ");
+
+            try {
+                // Check execution thread
+                java.lang.reflect.Field execThreadField = controllerClass.getDeclaredField("executionThread");
+                execThreadField.setAccessible(true);
+                Thread execThread = (Thread) execThreadField.get(controller);
+                sb.append("execThread=").append(execThread.getState().name());
+                if (!execThread.isAlive()) {
+                    sb.append(" DEAD!");
+                }
+                sb.append(" ");
+
+                // Check command thread
+                java.lang.reflect.Field cmdThreadField = controllerClass.getSuperclass().getDeclaredField("commandThread");
+                cmdThreadField.setAccessible(true);
+                Thread cmdThread = (Thread) cmdThreadField.get(controller);
+                sb.append("cmdThread=").append(cmdThread.getState().name());
+                if (!cmdThread.isAlive()) {
+                    sb.append(" DEAD!");
+                }
+                sb.append(" ");
+
+                // Check paused state
+                java.lang.reflect.Field pausedField = controllerClass.getSuperclass().getDeclaredField("paused");
+                pausedField.setAccessible(true);
+                boolean paused = pausedField.getBoolean(controller);
+                sb.append("paused=").append(paused);
+                sb.append(" ");
+
+                // Check experiment alive
+                java.lang.reflect.Field aliveField = controllerClass.getSuperclass().getDeclaredField("experimentAlive");
+                aliveField.setAccessible(true);
+                boolean alive = aliveField.getBoolean(controller);
+                sb.append("alive=").append(alive);
+                sb.append(" ");
+
+                // Check agent state
+                java.lang.reflect.Field agentField = controllerClass.getDeclaredField("agent");
+                agentField.setAccessible(true);
+                Object agent = agentField.get(controller);
+                if (agent == null) {
+                    sb.append("agent=NULL!");
+                } else {
+                    sb.append("agent=");
+                    try {
+                        boolean dead = (boolean) agent.getClass().getMethod("dead").invoke(agent);
+                        sb.append(dead ? "DEAD" : "alive");
+                    } catch (Exception e) {
+                        sb.append("?");
+                    }
+                }
+                sb.append(" ");
+
+                // Check scope state
+                java.lang.reflect.Field scopeField = controllerClass.getSuperclass().getDeclaredField("scope");
+                scopeField.setAccessible(true);
+                Object scope = scopeField.get(controller);
+                if (scope == null) {
+                    sb.append("scope=NULL!");
+                } else {
+                    sb.append("scopeOK");
+                }
+
+            } catch (Exception e) {
+                sb.append("reflect_err=").append(e.getMessage());
+            }
+
+            Log.i("GAMA-DIAG", sb.toString());
+            log(sb.toString());
+
+            // After 3 polls (6s), try a manual synchronous step if experiment seems stuck
+            if (pollCount[0] == 3) {
+                log("[DIAG] Attempting manual synchronous step...");
+                try {
+                    // First try to set paused=false and release lock
+                    java.lang.reflect.Field pausedField = controllerClass.getSuperclass().getDeclaredField("paused");
+                    pausedField.setAccessible(true);
+                    boolean currentPaused = pausedField.getBoolean(controller);
+                    log("[DIAG] Current paused=" + currentPaused);
+
+                    if (currentPaused) {
+                        // Try synchronousStart first
+                        java.lang.reflect.Method syncStart = controllerClass.getSuperclass().getDeclaredMethod("synchronousStart");
+                        syncStart.setAccessible(true);
+                        Object startResult = syncStart.invoke(controller);
+                        log("[DIAG] synchronousStart result: " + startResult);
+                    }
+
+                    // Then try synchronousStep
+                    java.lang.reflect.Method syncStep = controllerClass.getSuperclass().getDeclaredMethod("synchronousStep");
+                    syncStep.setAccessible(true);
+                    Object stepResult = syncStep.invoke(controller);
+                    log("[DIAG] synchronousStep result: " + stepResult);
+
+                    // Check paused state again
+                    boolean afterPaused = pausedField.getBoolean(controller);
+                    log("[DIAG] After step: paused=" + afterPaused);
+
+                } catch (Exception e) {
+                    log("[DIAG] Manual step error: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+                    if (e.getCause() != null) {
+                        log("[DIAG] Cause: " + e.getCause().getClass().getSimpleName() + ": " + e.getCause().getMessage());
+                    }
+                    Log.w(TAG, "Manual step failed", e);
+                }
+            }
+
+            // Keep polling
+            if (isRunning && pollCount[0] < 20) {
+                handler.postDelayed(diagnosticRunnable, 2000);
+            }
+        };
+        handler.postDelayed(diagnosticRunnable, 2000);
     }
 
     private static void setGuiActivity(Activity activity) {
@@ -501,6 +874,7 @@ public class ExperimentActivity extends Activity {
     }
 
     private void log(String message) {
+        Log.i(TAG, message);
         handler.post(() -> logView.append(message + "\n"));
     }
 
@@ -527,7 +901,11 @@ public class ExperimentActivity extends Activity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        isRunning = false;
+        if (diagnosticRunnable != null) {
+            handler.removeCallbacks(diagnosticRunnable);
+        }
         setGuiActivity(null);
-        if (isRunning) stopSimulation();
+        if (currentController != null) stopSimulation();
     }
 }
