@@ -24,6 +24,8 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 
 public class ExperimentActivity extends Activity {
 
@@ -68,8 +70,15 @@ public class ExperimentActivity extends Activity {
         setContentView(root);
 
         String assetPath = getIntent().getStringExtra("asset_path");
+        String jarPath = getIntent().getStringExtra("jar_path");
+        boolean fromLibrary = getIntent().getBooleanExtra("from_library", false);
+
         if (assetPath != null) {
-            compileModel(assetPath);
+            compileModelFromAsset(assetPath);
+        } else if (fromLibrary && jarPath != null) {
+            compileModelFromLibrary(jarPath);
+        } else if (jarPath != null) {
+            compileModelFromLibrary(jarPath);
         }
     }
 
@@ -328,12 +337,13 @@ public class ExperimentActivity extends Activity {
         }
     }
 
-    private void compileModel(String assetPath) {
+    private void compileModelFromAsset(String assetPath) {
         log("Compiling model: " + assetPath);
         new Thread(() -> {
             try {
                 File cacheDir = getCacheDir();
-                File modelFile = new File(cacheDir, "model.gaml");
+                String safeName = assetPath.replaceAll("[^a-zA-Z0-9]", "_");
+                File modelFile = new File(cacheDir, safeName + ".gaml");
 
                 try (InputStream is = getAssets().open(assetPath);
                      FileOutputStream fos = new FileOutputStream(modelFile)) {
@@ -389,6 +399,97 @@ public class ExperimentActivity extends Activity {
 
             } catch (Exception e) {
                 Log.e(TAG, "Compilation error", e);
+                log("ERROR: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+                Throwable cause = e.getCause();
+                while (cause != null) {
+                    log("  CAUSE: " + cause.getMessage());
+                    cause = cause.getCause();
+                }
+            }
+        }).start();
+    }
+
+    private void compileModelFromLibrary(String jarEntryPath) {
+        log("Compiling model from library: " + jarEntryPath);
+        new Thread(() -> {
+            try {
+                File cacheDir = getCacheDir();
+
+                java.io.File cacheJar = new java.io.File(cacheDir, "gama.library.jar");
+                if (!cacheJar.exists()) {
+                    try (InputStream is = getAssets().open("gama.library.jar");
+                         FileOutputStream fos = new FileOutputStream(cacheJar)) {
+                        byte[] buf = new byte[8192];
+                        int n;
+                        while ((n = is.read(buf)) > 0) fos.write(buf, 0, n);
+                    }
+                }
+
+                java.util.jar.JarFile jarFile = new java.util.jar.JarFile(cacheJar);
+                JarEntry entry = jarFile.getJarEntry(jarEntryPath);
+                if (entry == null) {
+                    log("ERROR: Entry not found in JAR: " + jarEntryPath);
+                    jarFile.close();
+                    return;
+                }
+
+                String safeName = jarEntryPath.replaceAll("[^a-zA-Z0-9]", "_");
+                File modelFile = new File(cacheDir, safeName + ".gaml");
+                try (InputStream is = jarFile.getInputStream(entry);
+                     FileOutputStream fos = new FileOutputStream(modelFile)) {
+                    byte[] buf = new byte[4096];
+                    int n;
+                    while ((n = is.read(buf)) > 0) fos.write(buf, 0, n);
+                }
+                jarFile.close();
+                log("Model extracted to: " + modelFile.getAbsolutePath());
+
+                Class<?> builderClass = Class.forName("gaml.compiler.gaml.validation.GamlModelBuilder");
+                Object builder = builderClass.getMethod("getDefaultInstance").invoke(null);
+
+                Class<?> uriClass = Class.forName("org.eclipse.emf.common.util.URI");
+                Object uri = uriClass.getMethod("createFileURI", String.class)
+                        .invoke(null, modelFile.getAbsolutePath());
+
+                List<Object> errors = new ArrayList<>();
+                Class<?> errorClass = Class.forName("gama.gaml.compilation.GamlCompilationError");
+                @SuppressWarnings("unchecked")
+                List<Object> errorList = (List<Object>) errors;
+
+                Class<?> modelClass = Class.forName("gama.core.kernel.model.IModel");
+                Object model = builderClass.getMethod("compile", uriClass, List.class)
+                        .invoke(builder, uri, errorList);
+
+                if (model == null) {
+                    log("Compilation failed with " + errorList.size() + " errors");
+                    for (Object err : errorList) {
+                        log("  ERROR: " + err);
+                    }
+                    return;
+                }
+
+                compiledModel = model;
+                String name = (String) modelClass.getMethod("getName").invoke(model);
+                log("Model compiled: " + name);
+
+                java.lang.reflect.Method getExps = modelClass.getMethod("getExperiments");
+                Iterable<?> experiments = (Iterable<?>) getExps.invoke(model);
+
+                List<Object> expList = new ArrayList<>();
+                for (Object exp : experiments) {
+                    expList.add(exp);
+                }
+
+                log("Found " + expList.size() + " experiment(s)");
+                for (Object exp : expList) {
+                    String expName = (String) exp.getClass().getMethod("getName").invoke(exp);
+                    log("  - " + expName);
+                }
+
+                handler.post(() -> showExperiments(expList));
+
+            } catch (Exception e) {
+                Log.e(TAG, "Library compilation error", e);
                 log("ERROR: " + e.getClass().getSimpleName() + ": " + e.getMessage());
                 Throwable cause = e.getCause();
                 while (cause != null) {
