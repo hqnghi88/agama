@@ -67,6 +67,26 @@ tasks.register('patchGamaJars') {
                 "${wrapperOutDir.absolutePath}/gama/core/runtime/concurrent/AndroidTaskWrapper.class"
         }
         logger.lifecycle("ParallelRunnerPatcher completed")
+
+        // Compile Display3DPatcher.java
+        def display3dPatcherOutDir = file("$buildDir/tmp/display3d_patcher")
+        display3dPatcherOutDir.mkdirs()
+        exec {
+            commandLine 'javac',
+                '-cp', "${asmJar.absolutePath}:${asmTreeJar.absolutePath}",
+                '-d', display3dPatcherOutDir.absolutePath,
+                "${projectDir}/../tools/Display3DPatcher.java"
+        }
+        logger.lifecycle("Compiled Display3DPatcher.java")
+
+        // Run Display3DPatcher to remove3D early-return in LayeredDisplayOutput.createSurface()
+        exec {
+            commandLine 'java', '-cp',
+                "${display3dPatcherOutDir.absolutePath}:${asmJar.absolutePath}:${asmTreeJar.absolutePath}",
+                'Display3DPatcher',
+                "${libsDir}/gama.core_0.0.0.202605140230.jar"
+        }
+        logger.lifecycle("Display3DPatcher completed")
     }
 }
 

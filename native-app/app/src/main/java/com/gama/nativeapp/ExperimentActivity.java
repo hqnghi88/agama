@@ -70,9 +70,12 @@ public class ExperimentActivity extends Activity {
 
         String assetPath = getIntent().getStringExtra("asset_path");
         String jarPath = getIntent().getStringExtra("jar_path");
+        String filePath = getIntent().getStringExtra("file_path");
         boolean fromLibrary = getIntent().getBooleanExtra("from_library", false);
 
-        if (assetPath != null) {
+        if (filePath != null) {
+            compileModelFromFilePath(filePath);
+        } else if (assetPath != null) {
             compileModelFromAsset(assetPath);
         } else if (fromLibrary && jarPath != null) {
             compileModelFromLibrary(jarPath);
@@ -419,6 +422,71 @@ public class ExperimentActivity extends Activity {
 
             } catch (Exception e) {
                 Log.e(TAG, "Compilation error", e);
+                log("ERROR: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+                Throwable cause = e.getCause();
+                while (cause != null) {
+                    log("  CAUSE: " + cause.getMessage());
+                    cause = cause.getCause();
+                }
+            }
+        }).start();
+    }
+
+    private void compileModelFromFilePath(String filePath) {
+        log("Compiling model from file: " + filePath);
+        new Thread(() -> {
+            try {
+                File modelFile = new File(filePath);
+                if (!modelFile.exists()) {
+                    log("ERROR: File not found: " + filePath);
+                    return;
+                }
+
+                Class<?> builderClass = Class.forName("gaml.compiler.gaml.validation.GamlModelBuilder");
+                Object builder = builderClass.getMethod("getDefaultInstance").invoke(null);
+
+                Class<?> uriClass = Class.forName("org.eclipse.emf.common.util.URI");
+                Object uri = uriClass.getMethod("createFileURI", String.class)
+                        .invoke(null, modelFile.getAbsolutePath());
+
+                List<Object> errors = new ArrayList<>();
+                @SuppressWarnings("unchecked")
+                List<Object> errorList = (List<Object>) errors;
+
+                Class<?> modelClass = Class.forName("gama.core.kernel.model.IModel");
+                Object model = builderClass.getMethod("compile", uriClass, List.class)
+                        .invoke(builder, uri, errorList);
+
+                if (model == null) {
+                    log("Compilation failed with " + errorList.size() + " errors");
+                    for (Object err : errorList) {
+                        log("  ERROR: " + err);
+                    }
+                    return;
+                }
+
+                compiledModel = model;
+                String name = (String) modelClass.getMethod("getName").invoke(model);
+                log("Model compiled: " + name);
+
+                java.lang.reflect.Method getExps = modelClass.getMethod("getExperiments");
+                Iterable<?> experiments = (Iterable<?>) getExps.invoke(model);
+
+                List<Object> expList = new ArrayList<>();
+                for (Object exp : experiments) {
+                    expList.add(exp);
+                }
+
+                log("Found " + expList.size() + " experiment(s)");
+                for (Object exp : expList) {
+                    String expName = (String) exp.getClass().getMethod("getName").invoke(exp);
+                    log("  - " + expName);
+                }
+
+                handler.post(() -> showExperiments(expList));
+
+            } catch (Exception e) {
+                Log.e(TAG, "File compilation error", e);
                 log("ERROR: " + e.getClass().getSimpleName() + ": " + e.getMessage());
                 Throwable cause = e.getCause();
                 while (cause != null) {
