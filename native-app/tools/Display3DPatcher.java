@@ -7,11 +7,13 @@ import java.util.zip.*;
 /**
  * Patches LayeredDisplayOutput.createSurface() to remove the3D early-return.
  *
- * Source:
- *   else if (getData().is3D()) return;
- *
- * We NOP out the is3D check + RETURN so that createDisplaySurfaceFor() is always called,
- * even for 3D displays. On Android we render everything through the 2D Canvas surface.
+ * Replaces:
+ *   INVOKEVIRTUAL DisplayData.is3D ()Z
+ *   IFEQ <skip>
+ *   RETURN
+ * With:
+ *   POP (consume DisplayData from stack)
+ *   GOTO <skip> (always jump past the RETURN)
  */
 public class Display3DPatcher {
 
@@ -43,42 +45,25 @@ public class Display3DPatcher {
                 for (MethodNode mn : cn.methods) {
                     if (!mn.name.equals("createSurface") || !mn.desc.equals("(Lgama/core/runtime/IScope;)V")) continue;
 
-                    System.out.println("Found createSurface(IScope) in LayeredDisplayOutput");
+                    System.out.println("Found createSurface(IScope)");
 
-                    // Pattern to find:
-                    //   INVOKEVIRTUAL DisplayData.is3D ()Z
-                    //   IFEQ <skip>       -- branch if false (skip the return)
-                    //   RETURN            -- early return if is3D() == true
-                    //
-                    // We NOP out both IFEQ and RETURN so execution always falls through
-                    // to createDisplaySurfaceFor(this).
+                    List<AbstractInsnNode> insns = new ArrayList<>();
+                    for (AbstractInsnNode n : mn.instructions) insns.add(n);
 
-                    for (int i = 0; i < mn.instructions.size(); i++) {
-                        AbstractInsnNode insn = mn.instructions.get(i);
+                    // Phase 1: Find all targets BEFORE any modification
+                    int is3dIdx = -1, ifeqIdx = -1, skipLabelIdx = -1;
+                    for (int i = 0; i < insns.size(); i++) {
+                        AbstractInsnNode insn = insns.get(i);
                         if (insn instanceof MethodInsnNode mni
                                 && mni.name.equals("is3D")
                                 && mni.desc.equals("()Z")) {
-                            System.out.println("Found is3D() call at instruction " + i);
-
-                            // Scan forward for IFEQ + RETURN
-                            for (int j = i + 1; j < Math.min(mn.instructions.size(), i + 6); j++) {
-                                AbstractInsnNode next = mn.instructions.get(j);
-                                if (next instanceof JumpInsnNode jni && jni.getOpcode() == Opcodes.IFEQ) {
-                                    System.out.println("Found IFEQ at instruction " + j);
-                                    // NOP the IFEQ
-                                    mn.instructions.set(jni, new InsnNode(Opcodes.NOP));
-
-                                    // Find and NOP the RETURN that follows
-                                    for (int k = j + 1; k < Math.min(mn.instructions.size(), j + 4); k++) {
-                                        AbstractInsnNode ret = mn.instructions.get(k);
-                                        if (ret.getOpcode() == Opcodes.RETURN) {
-                                            System.out.println("Found RETURN at instruction " + k + " — NOP'ing");
-                                            mn.instructions.set(ret, new InsnNode(Opcodes.NOP));
-                                            patched = true;
-                                            break;
-                                        }
-                                        if (ret.getOpcode() == Opcodes.GOTO) break;
-                                    }
+                            is3dIdx = i;
+                            // Find IFEQ after is3D
+                            for (int j = i + 1; j < Math.min(insns.size(), i + 4); j++) {
+                                if (insns.get(j) instanceof JumpInsnNode jni && jni.getOpcode() == Opcodes.IFEQ) {
+                                    ifeqIdx = j;
+                                    // The label target of IFEQ is where execution continues if is3D() is false
+                                    skipLabelIdx = insns.indexOf(jni.label);
                                     break;
                                 }
                             }
@@ -86,15 +71,34 @@ public class Display3DPatcher {
                         }
                     }
 
-                    if (patched) {
-                        // Recompute frames/maxs
-                        ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS);
-                        cn.accept(cw);
-                        data = cw.toByteArray();
-                        System.out.println("Patched createSurface: is3D() early-return removed");
-                    } else {
-                        System.out.println("WARNING: is3D() pattern not found in createSurface");
+                    if (is3dIdx < 0 || ifeqIdx < 0 || skipLabelIdx < 0) {
+                        System.out.println("WARNING: Pattern not found (is3D@" + is3dIdx + " IFEQ@" + ifeqIdx + ")");
+                        continue;
                     }
+
+                    System.out.println("Found: is3D=@" + is3dIdx + " IFEQ=@" + ifeqIdx + " skip=@" + skipLabelIdx);
+
+                    // Phase 2: Replace is3D() with POP, and IFEQ with GOTO <skip>
+                    AbstractInsnNode is3dInsn = insns.get(is3dIdx);
+                    AbstractInsnNode ifeqInsn = insns.get(ifeqIdx);
+                    LabelNode skipLabel = ((JumpInsnNode) ifeqInsn).label;
+
+                    // Replace is3D() with POP (consumes DisplayData from stack)
+                    mn.instructions.set(is3dInsn, new InsnNode(Opcodes.POP));
+                    System.out.println("Replaced is3D() with POP");
+
+                    // Replace IFEQ with GOTO <skip> (always jump to where execution continues)
+                    mn.instructions.set(ifeqInsn, new JumpInsnNode(Opcodes.GOTO, skipLabel));
+                    System.out.println("Replaced IFEQ with GOTO <skip>");
+
+                    patched = true;
+                }
+
+                if (patched) {
+                    ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+                    cn.accept(cw);
+                    data = cw.toByteArray();
+                    System.out.println("Patched: is3D() early-return removed");
                 }
             }
 
