@@ -6,14 +6,6 @@ plugins {
 tasks.register('patchGamaJars') {
     doLast {
         def libsDir = file("$buildDir/../../app/libs")
-        def coreJar = new File(libsDir, "gama.core_0.0.0.202605140230.jar")
-        def originalJar = new File(libsDir, "gama.core_0.0.0.202605140230.original.jar")
-
-        // Restore original JAR before re-patching (patchers modify in place)
-        if (originalJar.exists()) {
-            java.nio.file.Files.copy(originalJar.toPath(), coreJar.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
-            logger.lifecycle("Restored original JAR from .original.jar backup")
-        }
         def patchedClasses = ['gama/gaml/descriptions/SkillDescription.class']
 
         fileTree(libsDir).matching { include '*.jar' }.each { jarFile ->
@@ -43,6 +35,7 @@ tasks.register('patchGamaJars') {
         wrapperOutDir.mkdirs()
         exec {
             commandLine 'javac',
+                '--release', '21',
                 '-cp', "${libsDir}/gama.core_0.0.0.202605140230.jar",
                 '-d', wrapperOutDir.absolutePath,
                 "${projectDir}/../tools/AndroidTaskWrapper.java"
@@ -60,6 +53,7 @@ tasks.register('patchGamaJars') {
         patcherOutDir.mkdirs()
         exec {
             commandLine 'javac',
+                '--release', '21',
                 '-cp', "${asmJar.absolutePath}:${asmTreeJar.absolutePath}",
                 '-d', patcherOutDir.absolutePath,
                 "${projectDir}/../tools/ParallelRunnerPatcher.java"
@@ -81,6 +75,7 @@ tasks.register('patchGamaJars') {
         display3dPatcherOutDir.mkdirs()
         exec {
             commandLine 'javac',
+                '--release', '21',
                 '-cp', "${asmJar.absolutePath}:${asmTreeJar.absolutePath}",
                 '-d', display3dPatcherOutDir.absolutePath,
                 "${projectDir}/../tools/Display3DPatcher.java"
@@ -100,6 +95,9 @@ tasks.register('patchGamaJars') {
 
 tasks.configureEach { task ->
     if (task.name.startsWith('merge') && task.name.endsWith('JniLibFolders')) {
+        task.dependsOn 'patchGamaJars'
+    }
+    if (task.name == 'compileDebugJavaWithJavac') {
         task.dependsOn 'patchGamaJars'
     }
 }
