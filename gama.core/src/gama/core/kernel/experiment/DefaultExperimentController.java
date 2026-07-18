@@ -77,11 +77,12 @@ public class DefaultExperimentController extends AbstractExperimentController {
 					notifyExceptionAndCloseExperiment(e);
 					return false;
 				}
-			case _START:
-				try {
-					paused = false;
-					lock.release();
-					return true;
+		case _START:
+			try {
+				paused = false;
+				lock.release();
+				System.out.println("[GAMA-CTRL] _START processed: paused=false, lock released");
+				return true;
 				} catch (final GamaRuntimeException e) {
 					notifyExceptionAndCloseExperiment(e);
 					return false;
@@ -201,19 +202,25 @@ public class DefaultExperimentController extends AbstractExperimentController {
 	/**
 	 * Step.
 	 */
+	private static int stepCount = 0;
 	protected void step() {
 		if (paused) {
 			lock.acquire();
-			// experimentAlive = false;
 		}
 		try {
-			if (scope == null) return;
+			if (scope == null) { System.out.println("[GAMA-CTRL] step(): scope is null"); return; }
 			IScope savedScope = scope;
+			stepCount++;
+			if (stepCount <= 3 || stepCount % 100 == 0) {
+				System.out.println("[GAMA-CTRL] step() #" + stepCount + " agent=" + (agent == null ? "null" : agent.getClass().getSimpleName()));
+			}
 			if (!savedScope.step(agent).passed()) {
+				System.out.println("[GAMA-CTRL] step() #" + stepCount + " FAILED — setting paused=true");
 				savedScope.setDisposeStatus();
 				paused = true;
 			}
 		} catch (RuntimeException e) {
+			System.out.println("[GAMA-CTRL] step() #" + stepCount + " EXCEPTION: " + e);
 			e.printStackTrace();
 		} finally {
 			previouslock.release();

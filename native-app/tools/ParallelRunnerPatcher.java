@@ -193,7 +193,13 @@ public class ParallelRunnerPatcher {
                     }
                 }
 
-                ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+                ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES) {
+                    @Override
+                    protected String getCommonSuperClass(String type1, String type2) {
+                        try { return super.getCommonSuperClass(type1, type2); }
+                        catch (Exception e) { return "java/lang/Object"; }
+                    }
+                };
                 cn.accept(cw);
                 data = cw.toByteArray();
             }
@@ -304,7 +310,13 @@ public class ParallelRunnerPatcher {
                     }
                 }
 
-                ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+                ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES) {
+                    @Override
+                    protected String getCommonSuperClass(String type1, String type2) {
+                        try { return super.getCommonSuperClass(type1, type2); }
+                        catch (Exception e) { return "java/lang/Object"; }
+                    }
+                };
                 cn.accept(cw);
                 data = cw.toByteArray();
             }

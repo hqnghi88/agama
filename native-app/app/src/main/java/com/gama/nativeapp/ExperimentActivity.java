@@ -91,11 +91,21 @@ public class ExperimentActivity extends Activity {
         topBar.setBackgroundColor(0xFF2D2D2D);
         topBar.setGravity(Gravity.CENTER_VERTICAL);
 
+        Button backBtn = new Button(this);
+        backBtn.setText("\u25C0");
+        backBtn.setTextColor(Color.WHITE);
+        backBtn.setTextSize(14);
+        backBtn.setBackgroundColor(0xFF444444);
+        backBtn.setPadding(dp(12), dp(2), dp(12), dp(2));
+        backBtn.setOnClickListener(v -> finish());
+        topBar.addView(backBtn);
+
         TextView title = new TextView(this);
         title.setText(modelName != null ? modelName : "GAMA");
         title.setTextColor(0xFFCCCCCC);
         title.setTextSize(14);
         title.setTypeface(Typeface.DEFAULT_BOLD);
+        title.setPadding(dp(8), 0, 0, 0);
         title.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         topBar.addView(title);
 
@@ -694,6 +704,87 @@ public class ExperimentActivity extends Activity {
 
                 log("Experiment started successfully");
                 handler.post(() -> statusText.setText("Running"));
+
+                // Diagnostic: check display container state after a delay
+                handler.postDelayed(() -> {
+                    try {
+                        int childCount = displayContainer.getChildCount();
+                        log("[DIAG] displayContainer childCount=" + childCount);
+
+                        // Check GAMA GUI references
+                        Class<?> gamaClassDiag = Class.forName("gama.core.runtime.GAMA");
+                        Object regularGui = gamaClassDiag.getMethod("getRegularGui").invoke(null);
+                        Object headlessGui = gamaClassDiag.getMethod("getHeadlessGui").invoke(null);
+                        Object staticGui = gamaClassDiag.getMethod("getGui").invoke(null);
+                        log("[DIAG] regularGui=" + (regularGui == null ? "null" : regularGui.getClass().getSimpleName()));
+                        log("[DIAG] headlessGui=" + (headlessGui == null ? "null" : headlessGui.getClass().getSimpleName()));
+                        log("[DIAG] getGui()=" + (staticGui == null ? "null" : staticGui.getClass().getSimpleName()));
+
+                        // Check isInHeadlessMode
+                        java.lang.reflect.Field headlessModeField = gamaClassDiag.getDeclaredField("isInHeadlessMode");
+                        headlessModeField.setAccessible(true);
+                        boolean inHeadless = headlessModeField.getBoolean(null);
+                        log("[DIAG] isInHeadlessMode=" + inHeadless);
+
+                        // Check experiment headless state
+                        java.lang.reflect.Method isHeadlessMethod = expPlan.getClass().getMethod("isHeadless");
+                        boolean expHeadless = (boolean) isHeadlessMethod.invoke(expPlan);
+                        log("[DIAG] expPlan.isHeadless()=" + expHeadless);
+
+                        // Try to find simulation agent and its outputs
+                        java.lang.reflect.Method getAgentMethod = expPlan.getClass().getMethod("getAgent");
+                        Object expAgent = getAgentMethod.invoke(expPlan);
+                        if (expAgent != null) {
+                            log("[DIAG] expAgent=" + expAgent.getClass().getSimpleName());
+                            java.lang.reflect.Method getOutputMgr = expAgent.getClass().getMethod("getOutputManager");
+                            Object outMgr = getOutputMgr.invoke(expAgent);
+                            log("[DIAG] expOutputManager=" + (outMgr == null ? "null" : outMgr.getClass().getSimpleName()));
+
+                            // Check if there are simulations
+                            try {
+                                java.lang.reflect.Method getPopMethod = expAgent.getClass().getMethod("getPopulation", int.class);
+                                Object pop = getPopMethod.invoke(expAgent, 0);
+                                if (pop != null) {
+                                    java.lang.reflect.Method getAgentCount = pop.getClass().getMethod("getAgentCount");
+                                    int agentCount = (int) getAgentCount.invoke(pop);
+                                    log("[DIAG] simulationPopulation agentCount=" + agentCount);
+
+                                    if (agentCount > 0) {
+                                        java.lang.reflect.Method getAgentAt = pop.getClass().getMethod("getAgent", int.class);
+                                        Object simAgent = getAgentAt.invoke(pop, 0);
+                                        if (simAgent != null) {
+                                            log("[DIAG] simAgent=" + simAgent.getClass().getSimpleName());
+                                            java.lang.reflect.Method simOutMgr = simAgent.getClass().getMethod("getOutputManager");
+                                            Object simOutputMgr = simOutMgr.invoke(simAgent);
+                                            log("[DIAG] simOutputManager=" + (simOutputMgr == null ? "null" : simOutputMgr.getClass().getSimpleName()));
+
+                                            // Try to get outputs from the simulation output manager
+                                            if (simOutputMgr != null) {
+                                                try {
+                                                    java.lang.reflect.Field outputsField = simOutputMgr.getClass().getSuperclass().getDeclaredField("outputs");
+                                                    outputsField.setAccessible(true);
+                                                    java.util.List outputs = (java.util.List) outputsField.get(simOutputMgr);
+                                                    log("[DIAG] simOutputs list size=" + (outputs == null ? "null" : outputs.size()));
+                                                    if (outputs != null) {
+                                                        for (Object out : outputs) {
+                                                            log("[DIAG]   output: " + out.getClass().getSimpleName() + " name=" + out.getClass().getMethod("getName").invoke(out));
+                                                        }
+                                                    }
+                                                } catch (Exception oe) {
+                                                    log("[DIAG] simOutputs error: " + oe.getMessage());
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (Exception pe) {
+                                log("[DIAG] popError: " + pe.getMessage());
+                            }
+                        }
+                    } catch (Exception diagE) {
+                        log("[DIAG] error: " + diagE.getMessage());
+                    }
+                }, 5000);
 
                 startStatePolling(controller);
 

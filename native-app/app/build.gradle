@@ -90,6 +90,32 @@ tasks.register('patchGamaJars') {
                 "${libsDir}/gama.core_0.0.0.202605140230.jar"
         }
         logger.lifecycle("Display3DPatcher completed")
+
+        // Compile TypeSwitchPatcher.java
+        def typeSwitchPatcherOutDir = file("$buildDir/tmp/typeswitch_patcher")
+        typeSwitchPatcherOutDir.mkdirs()
+        exec {
+            commandLine 'javac',
+                '--release', '21',
+                '-cp', "${asmJar.absolutePath}:${asmTreeJar.absolutePath}",
+                '-d', typeSwitchPatcherOutDir.absolutePath,
+                "${projectDir}/../tools/TypeSwitchPatcher.java"
+        }
+        logger.lifecycle("Compiled TypeSwitchPatcher.java")
+
+        // Run TypeSwitchPatcher on all gama JARs that have typeSwitch invokedynamic
+        exec {
+            commandLine 'java', '-cp',
+                "${typeSwitchPatcherOutDir.absolutePath}:${asmJar.absolutePath}:${asmTreeJar.absolutePath}",
+                'TypeSwitchPatcher',
+                "${libsDir}/gama.core_0.0.0.202605140230.jar",
+                "${libsDir}/gama.extension.image_0.0.0.202605140230.jar",
+                "${libsDir}/gama.extension.network_0.0.0.202605140230.jar",
+                "${libsDir}/gama.ui.experiment_0.0.0.202605140230.jar",
+                "${libsDir}/gama.ui.shared_0.0.0.202605140230.jar",
+                "${libsDir}/gama.ui.viewers_0.0.0.202605140230.jar"
+        }
+        logger.lifecycle("TypeSwitchPatcher completed")
     }
 }
 

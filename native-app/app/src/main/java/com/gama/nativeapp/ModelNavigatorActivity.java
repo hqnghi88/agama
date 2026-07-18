@@ -63,6 +63,14 @@ public class ModelNavigatorActivity extends AppCompatActivity {
         statusBar.setGravity(Gravity.CENTER_VERTICAL);
         statusBar.setBackgroundColor(0xFF1976D2);
 
+        TextView navBackBtn = new TextView(this);
+        navBackBtn.setText("\u25C0");
+        navBackBtn.setTextSize(16);
+        navBackBtn.setTextColor(Color.WHITE);
+        navBackBtn.setPadding(dp(4), dp(4), dp(12), dp(4));
+        navBackBtn.setOnClickListener(v -> finish());
+        statusBar.addView(navBackBtn);
+
         statusText = new TextView(this);
         statusText.setText("Initializing GAMA engine...");
         statusText.setTextSize(15);

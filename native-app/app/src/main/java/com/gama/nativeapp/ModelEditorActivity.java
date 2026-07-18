@@ -392,20 +392,23 @@ public class ModelEditorActivity extends AppCompatActivity {
     }
 
     private void runModel() {
-        if (isModified) {
-            saveFile();
-        }
+        // Save synchronously before launching ExperimentActivity
+        try {
+            File modelsDir = new File(getFilesDir(), "models");
+            modelsDir.mkdirs();
+            File file = new File(modelsDir, modelName + ".gaml");
+            FileOutputStream fos = new FileOutputStream(file);
+            fos.write(codeEditor.getText().toString().getBytes("UTF-8"));
+            fos.close();
+            isModified = false;
 
-        File internalFile = new File(getFilesDir(), "models/" + modelName + ".gaml");
-        Intent intent = new Intent(this, ExperimentActivity.class);
-        intent.putExtra("model_name", modelName);
-        if (internalFile.exists()) {
-            intent.putExtra("file_path", internalFile.getAbsolutePath());
-        } else if (jarPath != null) {
-            intent.putExtra("jar_path", jarPath);
-            intent.putExtra("from_library", fromLibrary);
+            Intent intent = new Intent(this, ExperimentActivity.class);
+            intent.putExtra("model_name", modelName);
+            intent.putExtra("file_path", file.getAbsolutePath());
+            startActivity(intent);
+        } catch (Exception e) {
+            Toast.makeText(this, "Save failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
-        startActivity(intent);
     }
 
     private void highlightSyntax(Editable text) {
