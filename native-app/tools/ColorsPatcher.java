@@ -1,59 +1,142 @@
 import org.objectweb.asm.*;
 import org.objectweb.asm.tree.*;
 import java.io.*;
-import java.nio.file.*;
+import java.util.*;
+import java.util.zip.*;
 
 /**
- * Simple patch: replace ColorBrewer.instance() call in Colors.<clinit> with ACONST_NULL
- * to avoid circular class initialization issue with Android's XML parser.
+ * Patches Colors.<clinit> to wrap BREWER = ColorBrewer.instance() in try-catch
+ * so that if the XML-based ColorBrewer initialization fails on Android,
+ * the class still loads (BREWER will be null, brewer_colors won't work but
+ * basic colors will).
+ *
+ * Original bytecode in <clinit>:
+ *   invokestatic ColorBrewer.instance()ColorBrewer
+ *   putstatic Colors.BREWER : ColorBrewer
+ *   ... rest of <clinit> ...
+ *
+ * Patched bytecode:
+ *   tryStart:
+ *     invokestatic ColorBrewer.instance()ColorBrewer
+ *     putstatic Colors.BREWER : ColorBrewer
+ *   tryEnd:
+ *     goto afterCatch
+ *   catchHandler:
+ *     pop  // discard exception
+ *   afterCatch:
+ *     ... rest of <clinit> ...
  */
 public class ColorsPatcher {
+
     public static void main(String[] args) throws Exception {
-        if (args.length < 1) { System.err.println("Usage: ColorsPatcher <jar>"); System.exit(1); }
-        java.nio.file.Path jarFile = java.nio.file.Paths.get(args[0]);
-        java.nio.file.Path backup = java.nio.file.Paths.get(args[0] + ".bak4");
-        if (!java.nio.file.Files.exists(backup)) { java.nio.file.Files.copy(jarFile, backup); System.out.println("Backup: " + backup); }
-        File tmpDir = java.nio.file.Files.createTempDirectory("colors_patch").toFile();
-        try {
-            new ProcessBuilder(new String[]{"jar", "xf", jarFile.toAbsolutePath().toString()}).directory(tmpDir).start().waitFor();
-            File f = new File(tmpDir, "gama/gaml/operators/Colors.class");
-            if (!f.exists()) { System.err.println("Colors.class not found!"); System.exit(1); }
-            byte[] patched = patchColors(java.nio.file.Files.readAllBytes(f.toPath()));
-            java.nio.file.Files.write(f.toPath(), patched);
-            System.out.println("Colors.class patched");
-            new ProcessBuilder(new String[]{"jar", "cf", jarFile.toAbsolutePath().toString(), "-C", tmpDir.getAbsolutePath(), "."}).start().waitFor();
-            System.out.println("JAR updated: " + args[0]);
-        } finally { deleteDir(tmpDir); }
-    }
-    static void deleteDir(File d) { File[] f = d.listFiles(); if (f != null) for (File c : f) { if (c.isDirectory()) deleteDir(c); c.delete(); } d.delete(); }
+        if (args.length < 1) {
+            System.err.println("Usage: ColorsPatcher <gama.core.jar>");
+            System.exit(1);
+        }
+        File jarFile = new File(args[0]);
+        if (!jarFile.exists()) { System.err.println("JAR not found"); System.exit(1); }
 
-    static byte[] patchColors(byte[] classBytes) {
-        ClassReader cr = new ClassReader(classBytes);
-        ClassNode cn = new ClassNode(Opcodes.ASM9);
-        cr.accept(cn, 0);
+        String targetClass = "gama/gaml/operators/Colors.class";
+        ZipFile zipIn = new ZipFile(jarFile);
+        File tmpJar = new File(jarFile.getAbsolutePath() + ".tmp");
+        ZipOutputStream zipOut = new ZipOutputStream(new FileOutputStream(tmpJar));
+        boolean patched = false;
 
-        for (MethodNode mn : cn.methods) {
-            if ("<clinit>".equals(mn.name)) {
-                // Find INVOKESTATIC ColorBrewer.instance() and replace with ACONST_NULL
-                int count = 0;
-                for (AbstractInsnNode insn = mn.instructions.getFirst(); insn != null; insn = insn.getNext()) {
-                    if (insn instanceof MethodInsnNode min) {
-                        if (min.getOpcode() == Opcodes.INVOKESTATIC
-                            && "org/geotools/brewer/color/ColorBrewer".equals(min.owner)
-                            && "instance".equals(min.name)) {
-                            mn.instructions.set(insn, new InsnNode(Opcodes.ACONST_NULL));
-                            count++;
-                            System.out.println("Replaced ColorBrewer.instance() with null");
+        Enumeration<? extends ZipEntry> entries = zipIn.entries();
+        while (entries.hasMoreElements()) {
+            ZipEntry entry = entries.nextElement();
+            byte[] data;
+            try (InputStream is = zipIn.getInputStream(entry)) { data = is.readAllBytes(); }
+
+            if (entry.getName().equals(targetClass)) {
+                ClassNode cn = new ClassNode();
+                new ClassReader(data).accept(cn, 0);
+
+                for (MethodNode mn : cn.methods) {
+                    if (!mn.name.equals("<clinit>")) continue;
+
+                    System.out.println("Found <clinit> in Colors");
+
+                    // Find the invokestatic ColorBrewer.instance() call
+                    AbstractInsnNode brewerInit = null;
+                    for (AbstractInsnNode insn = mn.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+                        if (insn instanceof MethodInsnNode min && min.getOpcode() == Opcodes.INVOKESTATIC) {
+                            if (min.owner.contains("ColorBrewer") && min.name.equals("instance")) {
+                                brewerInit = insn;
+                                break;
+                            }
                         }
                     }
+
+                    if (brewerInit == null) {
+                        System.out.println("WARNING: Could not find ColorBrewer.instance() call in <clinit>");
+                        break;
+                    }
+
+                    System.out.println("Found ColorBrewer.instance() call, wrapping in try-catch");
+
+                    // Find the putstatic after invokestatic (should be the next instruction)
+                    AbstractInsnNode putStatic = brewerInit.getNext();
+                    if (putStatic == null || putStatic.getOpcode() != Opcodes.PUTSTATIC) {
+                        System.out.println("WARNING: Expected putstatic after ColorBrewer.instance()");
+                        break;
+                    }
+
+                    // Build labels
+                    LabelNode tryStart = new LabelNode();
+                    LabelNode tryEnd = new LabelNode();
+                    LabelNode catchHandler = new LabelNode();
+                    LabelNode afterCatch = new LabelNode();
+
+                    // Insert: tryStart before invokestatic
+                    mn.instructions.insertBefore(brewerInit, tryStart);
+
+                    // Insert after putstatic: tryEnd, goto afterCatch, catchHandler, pop, afterCatch
+                    mn.instructions.insert(putStatic, tryEnd);
+
+                    InsnList handler = new InsnList();
+                    handler.add(new JumpInsnNode(Opcodes.GOTO, afterCatch));
+                    handler.add(catchHandler);
+                    handler.add(new InsnNode(Opcodes.POP));   // discard exception
+                    handler.add(afterCatch);
+                    mn.instructions.insert(tryEnd, handler);
+
+                    // Add try-catch block
+                    if (mn.tryCatchBlocks == null) mn.tryCatchBlocks = new ArrayList<>();
+                    mn.tryCatchBlocks.add(0, new TryCatchBlockNode(tryStart, tryEnd, catchHandler, "java/lang/Exception"));
+
+                    patched = true;
+                    System.out.println("Patched Colors.<clinit>: wrapped BREWER init in try-catch(Exception)");
                 }
-                if (count == 0) System.out.println("WARNING: No ColorBrewer.instance() call found!");
-                break;
+
+                if (patched) {
+                    ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES) {
+                        @Override
+                        protected String getCommonSuperClass(String type1, String type2) {
+                            try { return super.getCommonSuperClass(type1, type2); }
+                            catch (Exception e) { return "java/lang/Object"; }
+                        }
+                    };
+                    cn.accept(cw);
+                    data = cw.toByteArray();
+                }
             }
+
+            zipOut.putNextEntry(new ZipEntry(entry.getName()));
+            zipOut.write(data);
+            zipOut.closeEntry();
         }
 
-        ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
-        cn.accept(cw);
-        return cw.toByteArray();
+        zipIn.close();
+        zipOut.close();
+
+        if (patched) {
+            jarFile.delete();
+            tmpJar.renameTo(jarFile);
+            System.out.println("JAR updated: " + jarFile.getName());
+        } else {
+            tmpJar.delete();
+            System.out.println("No targets found");
+        }
     }
 }

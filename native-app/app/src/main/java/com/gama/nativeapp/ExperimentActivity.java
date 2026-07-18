@@ -909,6 +909,58 @@ public class ExperimentActivity extends Activity {
                         "Simulation 0: " + cycleStr + " cycles [" +
                         String.format("%02d:%02d:%02d", 0, min, sec) + "]" +
                         (paused ? " [PAUSED]" : ""));
+
+                    // Step and update the display output with the simulation scope
+                    if (displayContainer.getChildCount() > 0) {
+                        try {
+                            Class<?> guiHandlerClass = Class.forName("com.gama.nativeapp.gui.AndroidGuiHandler");
+                            java.lang.reflect.Field ldoField = guiHandlerClass.getDeclaredField("cachedDisplayOutput");
+                            ldoField.setAccessible(true);
+                            Object ldoObj = ldoField.get(null);
+                            if (ldoObj != null) {
+                                Class<?> iscopeClass = Class.forName("gama.core.runtime.IScope");
+                                Class<?> gamaClass = Class.forName("gama.core.runtime.GAMA");
+                                java.lang.reflect.Field controllersField = gamaClass.getDeclaredField("controllers");
+                                controllersField.setAccessible(true);
+                                java.util.List controllers = (java.util.List) controllersField.get(null);
+                                if (controllers != null && !controllers.isEmpty()) {
+                                    Object ctrl = controllers.get(controllers.size() - 1);
+                                    java.lang.reflect.Field scopeField = ctrl.getClass().getSuperclass().getDeclaredField("scope");
+                                    scopeField.setAccessible(true);
+                                    Object ctrlScope = scopeField.get(ctrl);
+                                    if (ctrlScope != null) {
+                                        java.lang.reflect.Method copyForGraphics = ctrlScope.getClass().getMethod("copyForGraphics", String.class);
+                                        Object gfxScope = copyForGraphics.invoke(ctrlScope, "display map");
+
+                                        java.lang.reflect.Method setScope = ldoObj.getClass().getMethod("setScope", iscopeClass);
+                                        setScope.invoke(ldoObj, gfxScope);
+
+                                        java.lang.reflect.Method step = ldoObj.getClass().getMethod("step", iscopeClass);
+                                        step.invoke(ldoObj, gfxScope);
+
+                                        java.lang.reflect.Method update = ldoObj.getClass().getMethod("update");
+                                        update.invoke(ldoObj);
+
+                                        // Also get the surface and invalidate it directly
+                                        java.lang.reflect.Method getSurface = ldoObj.getClass().getMethod("getSurface");
+                                        Object surfObj = getSurface.invoke(ldoObj);
+                                        if (surfObj != null) {
+                                            android.view.View surfView = (android.view.View) surfObj;
+                                            surfView.post(() -> {
+                                                surfView.invalidate();
+                                            });
+                                        }
+
+                                        if (pollCount[0] <= 5 || pollCount[0] % 50 == 0) {
+                                            Log.i(TAG, "[DISPLAY] stepped LDO, cycle=" + cycleCount[0] + " surface=" + (surfObj == null ? "null" : "ok"));
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (Exception e) {
+                            if (pollCount[0] <= 3) Log.e(TAG, "[DISPLAY] step error: " + e.getMessage());
+                        }
+                    }
                 });
 
             } catch (Exception e) {

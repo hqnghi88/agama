@@ -116,6 +116,48 @@ tasks.register('patchGamaJars') {
                 "${libsDir}/gama.ui.viewers_0.0.0.202605140230.jar"
         }
         logger.lifecycle("TypeSwitchPatcher completed")
+
+        // Compile CrsPatcher.java
+        def crsPatcherOutDir = file("$buildDir/tmp/crs_patcher")
+        crsPatcherOutDir.mkdirs()
+        exec {
+            commandLine 'javac',
+                '--release', '21',
+                '-cp', "${asmJar.absolutePath}:${asmTreeJar.absolutePath}",
+                '-d', crsPatcherOutDir.absolutePath,
+                "${projectDir}/../tools/CrsPatcher.java"
+        }
+        logger.lifecycle("Compiled CrsPatcher.java")
+
+        // Run CrsPatcher to widen CRS.decode catch in ProjectionFactory
+        exec {
+            commandLine 'java', '-cp',
+                "${crsPatcherOutDir.absolutePath}:${asmJar.absolutePath}:${asmTreeJar.absolutePath}",
+                'CrsPatcher',
+                "${libsDir}/gama.core_0.0.0.202605140230.jar"
+        }
+        logger.lifecycle("CrsPatcher completed")
+
+        // Compile ColorsPatcher.java
+        def colorsPatcherOutDir = file("$buildDir/tmp/colors_patcher")
+        colorsPatcherOutDir.mkdirs()
+        exec {
+            commandLine 'javac',
+                '--release', '21',
+                '-cp', "${asmJar.absolutePath}:${asmTreeJar.absolutePath}",
+                '-d', colorsPatcherOutDir.absolutePath,
+                "${projectDir}/../tools/ColorsPatcher.java"
+        }
+        logger.lifecycle("Compiled ColorsPatcher.java")
+
+        // Run ColorsPatcher to wrap BREWER init in try-catch
+        exec {
+            commandLine 'java', '-cp',
+                "${colorsPatcherOutDir.absolutePath}:${asmJar.absolutePath}:${asmTreeJar.absolutePath}",
+                'ColorsPatcher',
+                "${libsDir}/gama.core_0.0.0.202605140230.jar"
+        }
+        logger.lifecycle("ColorsPatcher completed")
     }
 }
 

@@ -7,4 +7,5 @@ public class GraphicsEnvironment {
     public GraphicsDevice[] getScreenDevices() { return new GraphicsDevice[0]; }
     public GraphicsDevice getDefaultScreenDevice() { return new GraphicsDevice(); }
     public Graphics2D createGraphics(BufferedImage image) { return new Graphics2D(); }
+    public static boolean isHeadless() { return true; }
 }

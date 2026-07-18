@@ -44,6 +44,8 @@ public class AndroidGuiHandler implements IGui {
     private static AndroidGuiHandler instance;
     private ConsoleListener consoleListener;
     private static AndroidDisplaySurface pendingSurface;
+    private static IExperimentPlan cachedExperimentPlan;
+    public static LayeredDisplayOutput cachedDisplayOutput;
 
     public static void setActivity(Activity activity) {
         currentActivity = activity;
@@ -199,13 +201,144 @@ public class AndroidGuiHandler implements IGui {
             Boolean keepTabs, Boolean keepToolbars, Boolean showConsoles,
             Boolean showParameters, Boolean showNavigator, Boolean showControls,
             Boolean keepTray, Supplier<GamaColor> color, boolean showEditors) {
-        Log.i(TAG, "Arranging experiment views for: " + (experimentPlan != null ? experimentPlan.getName() : "null"));
+        Log.i(TAG, "[ARRANGE] called, scope=" + (myScope == null ? "null" : myScope.getClass().getSimpleName()));
         Activity activity = currentActivity;
+        cachedExperimentPlan = experimentPlan;
+
+        // Find the LayeredDisplayOutput definition and init it with the scope to create its surface
+        try {
+            java.lang.reflect.Method getSimOutputs = experimentPlan.getClass().getMethod("getOriginalSimulationOutputs");
+            Object simOutputMgr = getSimOutputs.invoke(experimentPlan);
+            if (simOutputMgr != null) {
+                java.lang.reflect.Field outputsField = simOutputMgr.getClass().getSuperclass().getDeclaredField("outputs");
+                outputsField.setAccessible(true);
+                Object outputsMap = outputsField.get(simOutputMgr);
+                if (outputsMap instanceof java.util.Map) {
+                    java.util.Map map = (java.util.Map) outputsMap;
+                    Log.i(TAG, "[ARRANGE] Found " + map.size() + " output(s)");
+                    for (Object val : map.values()) {
+                        if (val instanceof LayeredDisplayOutput) {
+                            LayeredDisplayOutput ldo = (LayeredDisplayOutput) val;
+                            cachedDisplayOutput = ldo;
+                            if (ldo.getSurface() != null) {
+                                Log.i(TAG, "[ARRANGE] Surface already exists for: " + ldo.getName());
+                            } else if (myScope != null) {
+                                boolean ok = ldo.init(myScope);
+                                Log.i(TAG, "[ARRANGE] init(" + ldo.getName() + ")=" + ok);
+                                IDisplaySurface surf = ldo.getSurface();
+                                Log.i(TAG, "[ARRANGE] Surface: " + (surf == null ? "NULL" : surf.getClass().getSimpleName()));
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "[ARRANGE] error: " + e.getMessage(), e);
+        }
+
         if (activity instanceof ExperimentActivity) {
             ExperimentActivity expActivity = (ExperimentActivity) activity;
             expActivity.runOnUiThread(() -> {
                 expActivity.updateCycleInfo(0, 0);
             });
+        }
+    }
+
+    public static void probeAndCreateSurface() {
+        // First try the experiment plan's output definitions — call init() to create surface
+        if (cachedExperimentPlan != null) {
+            try {
+                java.lang.reflect.Method getSimOutputs = cachedExperimentPlan.getClass().getMethod("getOriginalSimulationOutputs");
+                Object simOutputMgr = getSimOutputs.invoke(cachedExperimentPlan);
+                if (simOutputMgr != null) {
+                    java.lang.reflect.Field outputsField = simOutputMgr.getClass().getSuperclass().getDeclaredField("outputs");
+                    outputsField.setAccessible(true);
+                    Object outputsMap = outputsField.get(simOutputMgr);
+                    if (outputsMap instanceof java.util.Map) {
+                        java.util.Map map = (java.util.Map) outputsMap;
+                        for (Object val : map.values()) {
+                            if (val instanceof LayeredDisplayOutput) {
+                                LayeredDisplayOutput ldo = (LayeredDisplayOutput) val;
+                                if (ldo.getSurface() != null) continue;
+                                // Get controller scope to init
+                                Class<?> gamaClass = Class.forName("gama.core.runtime.GAMA");
+                                java.lang.reflect.Field controllersField = gamaClass.getDeclaredField("controllers");
+                                controllersField.setAccessible(true);
+                                java.util.List controllers = (java.util.List) controllersField.get(null);
+                                if (controllers != null && !controllers.isEmpty()) {
+                                    Object controller = controllers.get(controllers.size() - 1);
+                                    java.lang.reflect.Field scopeField = controller.getClass().getSuperclass().getDeclaredField("scope");
+                                    scopeField.setAccessible(true);
+                                    IScope ctrlScope = (IScope) scopeField.get(controller);
+                                    if (ctrlScope != null) {
+                                        Log.i(TAG, "[PROBE-FALLBACK] init output: " + ldo.getName());
+                                        boolean ok = ldo.init(ctrlScope);
+                                        Log.i(TAG, "[PROBE-FALLBACK] init()=" + ok + " surface=" + (ldo.getSurface() == null ? "NULL" : "OK"));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                return;
+            } catch (Exception e) {
+                Log.e(TAG, "[PROBE-FALLBACK] error: " + e.getMessage());
+            }
+        }
+
+        // Original probe path
+        try {
+            Class<?> gamaClass = Class.forName("gama.core.runtime.GAMA");
+            java.lang.reflect.Field controllersField = gamaClass.getDeclaredField("controllers");
+            controllersField.setAccessible(true);
+            java.util.List controllers = (java.util.List) controllersField.get(null);
+            if (controllers == null || controllers.isEmpty()) return;
+            Object controller = controllers.get(controllers.size() - 1);
+
+            java.lang.reflect.Field scopeField = controller.getClass().getSuperclass().getDeclaredField("scope");
+            scopeField.setAccessible(true);
+            IScope ctrlScope = (IScope) scopeField.get(controller);
+            if (ctrlScope == null) return;
+
+            Object rootAgent = ctrlScope.getRoot();
+            if (rootAgent == null) return;
+
+            Object simAgent = rootAgent.getClass().getMethod("getSimulation").invoke(rootAgent);
+            if (simAgent == null) {
+                Log.i(TAG, "[PROBE] no simulation yet");
+                return;
+            }
+
+            Object simOutMgr = simAgent.getClass().getMethod("getOutputManager").invoke(simAgent);
+            if (simOutMgr == null) {
+                Log.i(TAG, "[PROBE] no sim output manager");
+                return;
+            }
+
+            java.lang.reflect.Field simOutputsField = simOutMgr.getClass().getSuperclass().getDeclaredField("outputs");
+            simOutputsField.setAccessible(true);
+            Object simOutputsMap = simOutputsField.get(simOutMgr);
+            if (!(simOutputsMap instanceof java.util.Map)) {
+                Log.i(TAG, "[PROBE] sim outputs not a map");
+                return;
+            }
+
+            java.util.Map map = (java.util.Map) simOutputsMap;
+            Log.i(TAG, "[PROBE] Sim output manager has " + map.size() + " output(s)");
+            for (Object key : map.keySet()) {
+                Object val = map.get(key);
+                if (val instanceof LayeredDisplayOutput) {
+                    LayeredDisplayOutput ldo = (LayeredDisplayOutput) val;
+                    IDisplaySurface surf = ldo.getSurface();
+                    Log.i(TAG, "[PROBE]   " + key + " surface=" + (surf == null ? "NULL" : "OK"));
+                    if (surf == null) {
+                        IDisplaySurface newSurf = getInstance().createDisplaySurfaceFor(ldo);
+                        Log.i(TAG, "[PROBE]   created: " + (newSurf == null ? "NULL" : "OK"));
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "[PROBE] error: " + e.getMessage());
         }
     }
 

@@ -200,7 +200,34 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
             java.util.List<String> speciesNames = new java.util.ArrayList<>();
             speciesNames.add("test_agent");
             for (String speciesName : speciesNames) {
-                gama.core.metamodel.population.IPopulation pop = sim.getMicroPopulation(speciesName);
+                gama.core.metamodel.population.IPopulation pop = null;
+
+                // First try simulation directly
+                pop = sim.getMicroPopulation(speciesName);
+
+                // If null, search experiment root agent hierarchy
+                if (pop == null) {
+                    gama.core.kernel.experiment.ITopLevelAgent rootTLA = drawScope.getRoot();
+                    if (rootTLA != null && rootTLA instanceof gama.core.metamodel.agent.IMacroAgent) {
+                        gama.core.metamodel.population.IPopulation<?>[] rootPops = ((gama.core.metamodel.agent.IMacroAgent) rootTLA).getMicroPopulations();
+                        if (rootPops != null) {
+                            for (gama.core.metamodel.population.IPopulation<?> mp : rootPops) {
+                                // Each rootPop is a population of macro agents. Try each agent.
+                                for (Object agentObj : mp.toArray()) {
+                                    if (agentObj instanceof gama.core.metamodel.agent.IMacroAgent macroAgent) {
+                                        if (frames < 5) android.util.Log.i("AndroidDisplaySurface", "  checking macroAgent: " + macroAgent.getName() + " class=" + macroAgent.getClass().getSimpleName());
+                                        try {
+                                            gama.core.metamodel.population.IPopulation<?> nested = macroAgent.getMicroPopulation(speciesName);
+                                            if (nested != null) { pop = nested; if (frames < 5) android.util.Log.i("AndroidDisplaySurface", "  FOUND in " + macroAgent.getName()); break; }
+                                            if (frames < 5) android.util.Log.i("AndroidDisplaySurface", "  not found in " + macroAgent.getName());
+                                        } catch (Exception e) { if (frames < 5) android.util.Log.w("AndroidDisplaySurface", "  search error: " + e.getMessage()); }
+                                    }
+                                }
+                                if (pop != null) break;
+                            }
+                        }
+                    }
+                }
                 if (pop == null) {
                     if (frames < 5 || frames % 100 == 0) android.util.Log.w("AndroidDisplaySurface", "Manual draw: pop is null for " + speciesName + " frame=" + frames);
                     continue;
