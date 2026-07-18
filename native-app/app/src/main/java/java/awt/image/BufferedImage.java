@@ -37,7 +37,7 @@ public class BufferedImage extends Image implements Transparency {
         this.type = imageType;
         this.data = new int[width * height];
         this.colorModel = new DirectColorModel(24, 0xFF0000, 0xFF00, 0xFF);
-        this.raster = null;
+        this.raster = new WritableRaster(new DataBufferInt(width * height));
     }
 
     public BufferedImage(int width, int height, int imageType, IndexColorModel cm) {

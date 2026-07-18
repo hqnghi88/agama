@@ -66,6 +66,12 @@ public class AndroidGuiHandler implements IGui {
             return null;
         }
 
+        // Force display type to 2d on Android — no OpenGL available
+        if (output.getData().is3D()) {
+            Log.i(TAG, "Overriding 3D display type to 2d for: " + output.getName());
+            output.getData().setDisplayType("2d");
+        }
+
         final AndroidDisplaySurface[] surfaceHolder = new AndroidDisplaySurface[1];
         try {
             java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);

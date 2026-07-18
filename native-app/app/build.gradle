@@ -158,6 +158,50 @@ tasks.register('patchGamaJars') {
                 "${libsDir}/gama.core_0.0.0.202605140230.jar"
         }
         logger.lifecycle("ColorsPatcher completed")
+
+        // Compile PrecisePredicatePatcher.java
+        def containersPatcherOutDir = file("$buildDir/tmp/containers_patcher")
+        containersPatcherOutDir.mkdirs()
+        exec {
+            commandLine 'javac',
+                '--release', '21',
+                '-cp', "${asmJar.absolutePath}:${asmTreeJar.absolutePath}",
+                '-d', containersPatcherOutDir.absolutePath,
+                "${projectDir}/../tools/PrecisePredicatePatcher.java"
+        }
+        logger.lifecycle("Compiled PrecisePredicatePatcher.java")
+
+        // Run PrecisePredicatePatcher to fix Predicate type mismatch
+        def predicateArgs = fileTree(libsDir).matching { include 'gama.*.jar' }.files
+            .findAll { !it.name.contains('.original.') }
+            .collect { it.absolutePath }
+        exec {
+            commandLine(['java', '-cp',
+                "${containersPatcherOutDir.absolutePath}:${asmJar.absolutePath}:${asmTreeJar.absolutePath}",
+                'PrecisePredicatePatcher'] + predicateArgs)
+        }
+        logger.lifecycle("PrecisePredicatePatcher completed")
+
+        // Compile SimulationRunnerPatcher.java
+        def simRunnerPatcherOutDir = file("$buildDir/tmp/simrunner_patcher")
+        simRunnerPatcherOutDir.mkdirs()
+        exec {
+            commandLine 'javac',
+                '--release', '21',
+                '-cp', "${asmJar.absolutePath}:${asmTreeJar.absolutePath}",
+                '-d', simRunnerPatcherOutDir.absolutePath,
+                "${projectDir}/../tools/SimulationRunnerPatcher.java"
+        }
+        logger.lifecycle("Compiled SimulationRunnerPatcher.java")
+
+        // Run SimulationRunnerPatcher to fix SimulationPopulation.stepAgents() deadlock
+        exec {
+            commandLine 'java', '-cp',
+                "${simRunnerPatcherOutDir.absolutePath}:${asmJar.absolutePath}:${asmTreeJar.absolutePath}",
+                'SimulationRunnerPatcher',
+                "${libsDir}/gama.core_0.0.0.202605140230.jar"
+        }
+        logger.lifecycle("SimulationRunnerPatcher completed")
     }
 }
 

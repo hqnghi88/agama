@@ -17,5 +17,7 @@ public class Raster {
     public SampleModel getSampleModel() { return null; }
     public java.awt.image.ColorModel getColorModel() { return null; }
     public Object getDataElements(int x, int y, Object obj) { return obj; }
+    public DataBuffer getDataBuffer() { return null; }
     public static WritableRaster createWritableRaster(int bands, int w, int h) { return new WritableRaster(); }
+    public static DataBuffer getDataBufferStatic(Raster raster) { return raster != null ? raster.getDataBuffer() : null; }
 }

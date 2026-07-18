@@ -1,7 +1,14 @@
 package java.awt.image;
 
 public class WritableRaster extends Raster {
+    private DataBuffer dataBuffer;
+
     public WritableRaster() {}
+    public WritableRaster(DataBuffer buffer) { this.dataBuffer = buffer; }
+
+    @Override
+    public DataBuffer getDataBuffer() { return dataBuffer; }
+
     public void setPixel(int x, int y, int[] iArray) {}
     public void setPixel(int x, int y, float[] fArray) {}
     public void setPixel(int x, int y, double[] dArray) {}
