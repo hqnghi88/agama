@@ -343,12 +343,9 @@ public class ModelNavigatorActivity extends AppCompatActivity {
     }
 
     private void launchExperiment(String modelName, String jarPath, boolean fromLibrary) {
-        java.io.File savedFile = new java.io.File(getFilesDir(), "models/" + modelName + ".gaml");
         Intent intent = new Intent(this, ExperimentActivity.class);
         intent.putExtra("model_name", modelName);
-        if (savedFile.exists()) {
-            intent.putExtra("file_path", savedFile.getAbsolutePath());
-        } else if (fromLibrary) {
+        if (fromLibrary) {
             intent.putExtra("jar_path", jarPath);
             intent.putExtra("from_library", true);
         } else {

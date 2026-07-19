@@ -98,7 +98,7 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
         setClickable(true);
         setFocusable(true);
         setWillNotDraw(false);
-        setLayerType(LAYER_TYPE_NONE, null);
+        setLayerType(LAYER_TYPE_SOFTWARE, null);
         android.util.Log.i("AndroidDisplaySurface", "Created, bg=" + bgPaint.getColor() + ", envW=" + getEnvWidth() + ", envH=" + getEnvHeight());
     }
 
@@ -121,7 +121,7 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
 
     @Override
     protected void onDraw(Canvas canvas) {
-        if (frames < 5) android.util.Log.i("AndroidDisplaySurface", "onDraw called! frame=" + frames + " canvas=" + canvas.getWidth() + "x" + canvas.getHeight() + " attached=" + isAttachedToWindow());
+        if (frames < 5 || frames % 100 == 0) android.util.Log.i("AndroidDisplaySurface", "onDraw called! frame=" + frames + " canvas=" + canvas.getWidth() + "x" + canvas.getHeight() + " attached=" + isAttachedToWindow() + " bg=" + bgPaint.getColor());
         super.onDraw(canvas);
         if (disposed || output == null) return;
 
@@ -141,7 +141,7 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
             if (drawScope != null && !drawScope.interrupted()) {
                 layerManager.drawLayersOn(androidGraphics);
                 drewShapes = androidGraphics.getDrawnShapesCount() > 0;
-                if (frames < 5) android.util.Log.i("AndroidDisplaySurface", "onDraw: drewShapes=" + drewShapes + " shapesCount=" + androidGraphics.getDrawnShapesCount() + " scope=" + drawScope.getClass().getSimpleName());
+                if (frames < 5 || frames % 100 == 0) android.util.Log.i("AndroidDisplaySurface", "onDraw: drewShapes=" + drewShapes + " shapesCount=" + androidGraphics.getDrawnShapesCount() + " scope=" + drawScope.getClass().getSimpleName());
             } else {
                 if (frames < 5) android.util.Log.w("AndroidDisplaySurface", "onDraw: scope=" + drawScope + " interrupted=" + (drawScope != null && drawScope.interrupted()));
             }
@@ -157,6 +157,13 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
 
         // Always try manual draw for grid species (layer manager may fail to find grid)
         drawAgentsManually(canvas);
+
+        if (frames < 5) {
+            Paint testPaint = new Paint();
+            testPaint.setColor(Color.RED);
+            canvas.drawRect(50, 50, 200, 200, testPaint);
+            android.util.Log.i("AndroidDisplaySurface", "Drew test red rect at 50,50-200,200, canvas=" + canvas.getWidth() + "x" + canvas.getHeight());
+        }
 
         frames++;
         rendered = true;
@@ -391,8 +398,7 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
                 if (frames < 5) android.util.Log.w("AndroidDisplaySurface", "updateDisplay: NOT attached to window");
                 return;
             }
-            if (frames < 5) android.util.Log.i("AndroidDisplaySurface", "updateDisplay: requesting layout+invalidate, attached=" + isAttachedToWindow());
-            requestLayout();
+            if (frames < 5) android.util.Log.i("AndroidDisplaySurface", "updateDisplay: requesting invalidate, attached=" + isAttachedToWindow());
             invalidate();
             if (synchronizer != null) synchronizer.release();
         });

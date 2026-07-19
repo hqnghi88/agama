@@ -541,27 +541,52 @@ public class ExperimentActivity extends Activity {
                     while ((n = is.read(buf)) > 0) fos.write(buf, 0, n);
                 }
 
-                // Also extract sibling 'includes' directory for shapefiles etc.
+                // Also extract 'includes' directories for shapefiles etc.
+                // The model may reference ../includes/ so look in parent dirs too
                 String modelParentPath = jarEntryPath.substring(0, jarEntryPath.lastIndexOf('/') + 1);
-                String includesPrefix = modelParentPath + "includes/";
+                // Also compute grandparent path for models nested in a subdirectory (e.g. models/Toy Models/Traffic/models/)
+                String grandParentPath = modelParentPath.contains("/")
+                    ? modelParentPath.substring(0, modelParentPath.lastIndexOf('/', modelParentPath.length() - 2) + 1)
+                    : "";
                 int extractedIncludes = 0;
                 java.util.Enumeration<? extends JarEntry> entries = jarFile.entries();
+                java.util.Set<String> extractedPaths = new java.util.HashSet<>();
                 while (entries.hasMoreElements()) {
                     JarEntry e = entries.nextElement();
-                    if (e.getName().startsWith(includesPrefix) && !e.isDirectory()) {
-                        File outFile = new File(cacheDir, e.getName());
-                        outFile.getParentFile().mkdirs();
+                    String eName = e.getName();
+                    if (e.isDirectory() || extractedPaths.contains(eName)) continue;
+                    // Check if this file is in an 'includes' directory that is a sibling or parent-sibling of the model
+                    if (eName.endsWith("/")) continue;
+                    int includesIdx = eName.lastIndexOf("/includes/");
+                    if (includesIdx < 0) continue;
+                    String includesDirPrefix = eName.substring(0, includesIdx + "/includes/".length());
+                    // Check if this includes dir is related to our model
+                    if (!includesDirPrefix.startsWith(modelParentPath) && !includesDirPrefix.startsWith(grandParentPath)) continue;
+                    if (!includesDirPrefix.endsWith("includes/")) continue;
+
+                    // Compute output path: place includes relative to the model file
+                    // The model at cacheDir/<jarEntryPath> references ../includes/
+                    // So we need includes at cacheDir/<modelParentPath>/../includes/ = cacheDir/<grandParentPath>/includes/
+                    String relativePath = eName.substring(includesDirPrefix.length());
+                    File outFile = new File(modelFile.getParentFile(), "../includes/" + relativePath);
+                    // Normalize to remove .. 
+                    outFile = outFile.getCanonicalFile();
+                    outFile.getParentFile().mkdirs();
+                    if (!extractedPaths.contains(outFile.getAbsolutePath())) {
                         try (InputStream is = jarFile.getInputStream(e);
                              FileOutputStream fos = new FileOutputStream(outFile)) {
                             byte[] buf = new byte[4096];
                             int n;
                             while ((n = is.read(buf)) > 0) fos.write(buf, 0, n);
                         }
+                        extractedPaths.add(outFile.getAbsolutePath());
                         extractedIncludes++;
                     }
                 }
                 if (extractedIncludes > 0) {
                     log("Extracted " + extractedIncludes + " includes files from JAR");
+                } else {
+                    log("WARNING: No includes files found for model");
                 }
                 jarFile.close();
                 log("Model extracted to: " + modelFile.getAbsolutePath());
