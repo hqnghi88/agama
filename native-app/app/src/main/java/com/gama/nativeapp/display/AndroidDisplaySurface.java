@@ -198,6 +198,7 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
             }
 
             java.util.List<String> speciesNames = new java.util.ArrayList<>();
+            speciesNames.add("life_cell");
             speciesNames.add("test_agent");
             for (String speciesName : speciesNames) {
                 gama.core.metamodel.population.IPopulation pop = null;
@@ -241,7 +242,6 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
                 }
 
                 agentPaint.setStyle(Paint.Style.FILL);
-                agentPaint.setColor(0xFF0000FF);
 
                 double envW = getEnvWidth();
                 double envH = getEnvHeight();
@@ -253,22 +253,60 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
                 double offsetX = (dispW - envW * scale) / 2.0;
                 double offsetY = (dispH - envH * scale) / 2.0;
 
-                for (Object obj : pop.toArray()) {
-                    if (obj instanceof gama.core.metamodel.agent.IAgent agent) {
-                        gama.core.metamodel.shape.IShape shape = agent.getLocation();
-                        if (shape == null) continue;
-                        GamaPoint pt = shape.getLocation();
-                        if (pt == null) continue;
+                // Try to get grid dimensions for bitmap rendering
+                boolean drawnAsGrid = false;
+                if (pop instanceof gama.core.metamodel.topology.grid.GridPopulation) {
+                    try {
+                        int gridW = (int) envW;
+                        int gridH = (int) envH;
+                        if (gridW > 0 && gridH > 0) {
+                            int[] pixels = new int[gridW * gridH];
+                            for (Object obj : pop.toArray()) {
+                                if (obj instanceof gama.core.metamodel.agent.IAgent agent) {
+                                    try {
+                                        int idx = agent.getIndex();
+                                        if (idx >= 0 && idx < pixels.length) {
+                                            Object colorObj = agent.getAttribute("color");
+                                            if (colorObj instanceof gama.core.util.GamaColor gc) {
+                                                pixels[idx] = 0xFF000000 | (gc.getRGB() & 0xFFFFFF);
+                                            }
+                                        }
+                                    } catch (Exception ignored) {}
+                                }
+                            }
+                            Bitmap gridBitmap = Bitmap.createBitmap(gridW, gridH, Bitmap.Config.ARGB_8888);
+                            gridBitmap.setPixels(pixels, 0, gridW, 0, 0, gridW, gridH);
+                            float left = (float) (offsetX - viewPort.left);
+                            float top = (float) (offsetY - viewPort.top);
+                            float right = (float) (envW * scale + offsetX - viewPort.left);
+                            float bottom = (float) (envH * scale + offsetY - viewPort.top);
+                            canvas.drawBitmap(gridBitmap, null, new RectF(left, top, right, bottom), null);
+                            gridBitmap.recycle();
+                            drawnAsGrid = true;
+                        }
+                    } catch (Throwable t) {
+                        if (frames < 5) android.util.Log.w("AndroidDisplaySurface", "Grid bitmap render failed: " + t.getMessage());
+                    }
+                }
 
-                        float sx = (float) (pt.getX() * scale + offsetX - viewPort.left);
-                        float sy = (float) ((envH - pt.getY()) * scale + offsetY - viewPort.top);
-                        float radius = (float) Math.max(3, 3.0 * scale);
+                if (!drawnAsGrid) {
+                    for (Object obj : pop.toArray()) {
+                        if (obj instanceof gama.core.metamodel.agent.IAgent agent) {
+                            gama.core.metamodel.shape.IShape shape = agent.getLocation();
+                            if (shape == null) continue;
+                            GamaPoint pt = shape.getLocation();
+                            if (pt == null) continue;
 
-                        canvas.drawCircle(sx, sy, radius, agentPaint);
+                            float sx = (float) (pt.getX() * scale + offsetX - viewPort.left);
+                            float sy = (float) ((envH - pt.getY()) * scale + offsetY - viewPort.top);
+                            float radius = (float) Math.max(3, 3.0 * scale);
+
+                            canvas.drawCircle(sx, sy, radius, agentPaint);
+                        }
                     }
                 }
                 if (frames < 5 || frames % 100 == 0) {
-                    android.util.Log.d("AndroidDisplaySurface", "Manual draw: " + pop.size() + " agents at scale=" + scale + " frame=" + frames);
+                    android.util.Log.d("AndroidDisplaySurface", "Manual draw: " + pop.size() + " agents at scale=" + scale + " frame=" + frames + " grid=" + drawnAsGrid);
                 }
             }
         } catch (Throwable t) {

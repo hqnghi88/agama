@@ -37,7 +37,7 @@ public class BufferedImage extends Image implements Transparency {
         this.type = imageType;
         this.data = new int[width * height];
         this.colorModel = new DirectColorModel(24, 0xFF0000, 0xFF00, 0xFF);
-        this.raster = new WritableRaster(new DataBufferInt(width * height));
+        this.raster = new WritableRaster(new DataBufferInt(this.data, width * height));
     }
 
     public BufferedImage(int width, int height, int imageType, IndexColorModel cm) {
@@ -48,9 +48,9 @@ public class BufferedImage extends Image implements Transparency {
         this.width = raster.getWidth();
         this.height = raster.getHeight();
         this.type = TYPE_INT_ARGB;
-        this.data = new int[width * height];
-        this.colorModel = cm;
         this.raster = raster;
+        this.data = ((DataBufferInt) raster.getDataBuffer()).getData();
+        this.colorModel = cm;
     }
 
     @Override public int getWidth(ImageObserver observer) { return width; }

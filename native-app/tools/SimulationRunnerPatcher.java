@@ -5,14 +5,16 @@ import java.util.*;
 import java.util.zip.*;
 
 /**
- * Patches SimulationPopulation.stepAgents() to skip SimulationRunner.step() semaphore coordination.
+ * Patches SimulationPopulation.stepAgents() to use the parent's stepping mechanism
+ * instead of SimulationRunner.step() semaphore coordination.
  * 
  * Problem: SimulationPopulation.stepAgents() calls runner.step() which does:
  *   simulationsSemaphore.release(nb); experimentSemaphore.acquire(nb);
  * This deadlocks on Android because the experiment controller calls step() synchronously
- * on the same thread, so experimentSemaphore is never released.
+ * on the same thread, so experimentSemaphore is never released by the simulation threads.
  * 
- * Fix: Replace the runner.step() call with just `return true`.
+ * Fix: Replace runner.step() with super.stepAgents(scope) which uses
+ * GamaExecutorService.step() — the normal agent stepping path.
  */
 public class SimulationRunnerPatcher {
 
@@ -25,6 +27,7 @@ public class SimulationRunnerPatcher {
         if (!jarFile.exists()) { System.err.println("JAR not found"); System.exit(1); }
 
         String targetClass = "gama/core/kernel/simulation/SimulationPopulation.class";
+        String parentClass = "gama/core/metamodel/population/GamaPopulation";
 
         ZipFile zipIn = new ZipFile(jarFile);
         File tmpJar = new File(jarFile.getAbsolutePath() + ".tmp");
@@ -43,19 +46,28 @@ public class SimulationRunnerPatcher {
 
                 for (MethodNode mn : cn.methods) {
                     if (mn.name.equals("stepAgents") && mn.desc.equals("(Lgama/core/runtime/IScope;)Z")) {
-                        // Replace the entire method body with: return true;
+                        // Replace body with: return super.stepAgents(scope);
                         mn.instructions.clear();
                         mn.tryCatchBlocks.clear();
                         mn.localVariables.clear();
 
                         InsnList insns = new InsnList();
-                        insns.add(new InsnNode(Opcodes.ICONST_1));
+                        // ALOAD 0 (this)
+                        insns.add(new VarInsnNode(Opcodes.ALOAD, 0));
+                        // ALOAD 1 (scope)
+                        insns.add(new VarInsnNode(Opcodes.ALOAD, 1));
+                        // INVOKESPECIAL GamaPopulation.stepAgents(IScope)Z
+                        insns.add(new MethodInsnNode(Opcodes.INVOKESPECIAL,
+                                parentClass, "stepAgents",
+                                "(Lgama/core/runtime/IScope;)Z", false));
+                        // IRETURN
                         insns.add(new InsnNode(Opcodes.IRETURN));
+
                         mn.instructions.insert(insns);
-                        mn.maxStack = 1;
-                        mn.maxLocals = 2; // keep original local count for safety
+                        mn.maxStack = 2;
+                        mn.maxLocals = 2;
                         patched = true;
-                        System.out.println("Patched: " + targetClass + " -> stepAgents() returns true (skips semaphore)");
+                        System.out.println("Patched: " + targetClass + " -> stepAgents() calls super.stepAgents(scope)");
                     }
                 }
 

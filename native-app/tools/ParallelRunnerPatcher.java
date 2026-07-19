@@ -274,7 +274,25 @@ public class ParallelRunnerPatcher {
                         }
                     }
 
-                    // 3. Patch executeThreaded() — use ANDROID_PARALLEL_EXECUTOR
+                    // 3. Patch getParallelism() — always return 0 (sequential stepping)
+                    //    This prevents ParallelAgentRunner.compute() from recursively submitting
+                    //    tasks to ANDROID_PARALLEL_EXECUTOR which causes thread explosion on Android
+                    if (mn.name.equals("getParallelism") && mn.desc.contains("Caller")) {
+                        mn.instructions.clear();
+                        mn.tryCatchBlocks.clear();
+                        mn.localVariables.clear();
+
+                        InsnList insns = new InsnList();
+                        insns.add(new InsnNode(Opcodes.ICONST_0));
+                        insns.add(new InsnNode(Opcodes.IRETURN));
+                        mn.instructions.insert(insns);
+                        mn.maxStack = 1;
+                        mn.maxLocals = 4;
+                        patchedExecutor = true;
+                        System.out.println("Patched: " + executorClass + " -> getParallelism() returns 0 (sequential stepping)");
+                    }
+
+                    // 4. Patch executeThreaded() — use ANDROID_PARALLEL_EXECUTOR
                     if (mn.name.equals("executeThreaded") && mn.desc.equals("(Ljava/lang/Runnable;)V")) {
                         mn.instructions.clear();
                         mn.tryCatchBlocks.clear();
