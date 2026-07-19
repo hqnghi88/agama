@@ -194,7 +194,6 @@ public class AndroidDisplayGraphics extends AbstractDisplayGraphics {
     @Override
     public Rectangle2D drawImage(BufferedImage img, DrawingAttributes attributes) {
         if (img == null || canvas == null) return null;
-        drawnShapesCount++;
 
         float curX, curY;
         if (attributes.getLocation() == null) {
@@ -321,7 +320,6 @@ public class AndroidDisplayGraphics extends AbstractDisplayGraphics {
 
     @Override
     public Rectangle2D drawField(IField fieldValues, MeshDrawingAttributes attributes) {
-        drawnShapesCount++;
         List<?> textures = attributes.getTextures();
         if (textures != null) {
             Object image = textures.get(0);

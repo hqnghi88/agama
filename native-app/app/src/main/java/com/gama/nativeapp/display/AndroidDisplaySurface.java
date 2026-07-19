@@ -151,11 +151,12 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
 
         if (!drewShapes) {
             framesSinceLastDraw++;
-            if (frames < 5) android.util.Log.i("AndroidDisplaySurface", "onDraw: no shapes drawn, trying manual draw. frame=" + frames);
-            drawAgentsManually(canvas);
         } else {
             framesSinceLastDraw = 0;
         }
+
+        // Always try manual draw for grid species (layer manager may fail to find grid)
+        drawAgentsManually(canvas);
 
         frames++;
         rendered = true;
@@ -255,25 +256,31 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
 
                 // Try to get grid dimensions for bitmap rendering
                 boolean drawnAsGrid = false;
-                if (pop instanceof gama.core.metamodel.topology.grid.GridPopulation) {
+                if (pop instanceof gama.core.metamodel.topology.grid.GridPopulation gridPop) {
                     try {
-                        int gridW = (int) envW;
-                        int gridH = (int) envH;
+                        int gridW = gridPop.getNbCols();
+                        int gridH = gridPop.getNbRows();
                         if (gridW > 0 && gridH > 0) {
+                            if (frames < 5) android.util.Log.i("AndroidDisplaySurface", "Grid render: gridW=" + gridW + " gridH=" + gridH + " popSize=" + pop.size());
                             int[] pixels = new int[gridW * gridH];
+                            int colorCount = 0;
                             for (Object obj : pop.toArray()) {
-                                if (obj instanceof gama.core.metamodel.agent.IAgent agent) {
+                                if (obj instanceof gama.core.metamodel.topology.grid.IGridAgent ga) {
                                     try {
-                                        int idx = agent.getIndex();
+                                        int idx = ga.getIndex();
                                         if (idx >= 0 && idx < pixels.length) {
-                                            Object colorObj = agent.getAttribute("color");
-                                            if (colorObj instanceof gama.core.util.GamaColor gc) {
+                                            gama.core.util.GamaColor gc = ga.getColor();
+                                            if (gc != null) {
                                                 pixels[idx] = 0xFF000000 | (gc.getRGB() & 0xFFFFFF);
+                                                colorCount++;
                                             }
                                         }
-                                    } catch (Exception ignored) {}
+                                    } catch (Exception e) {
+                                        if (frames < 3) android.util.Log.w("AndroidDisplaySurface", "Cell color error at idx=" + ga.getIndex() + ": " + e.getClass().getSimpleName() + ": " + e.getMessage());
+                                    }
                                 }
                             }
+                            if (frames < 5) android.util.Log.i("AndroidDisplaySurface", "Grid render: colored=" + colorCount + " of " + pixels.length);
                             Bitmap gridBitmap = Bitmap.createBitmap(gridW, gridH, Bitmap.Config.ARGB_8888);
                             gridBitmap.setPixels(pixels, 0, gridW, 0, 0, gridW, gridH);
                             float left = (float) (offsetX - viewPort.left);
@@ -285,7 +292,7 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
                             drawnAsGrid = true;
                         }
                     } catch (Throwable t) {
-                        if (frames < 5) android.util.Log.w("AndroidDisplaySurface", "Grid bitmap render failed: " + t.getMessage());
+                        if (frames < 5) android.util.Log.w("AndroidDisplaySurface", "Grid bitmap render failed: " + t.getMessage(), t);
                     }
                 }
 
