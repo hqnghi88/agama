@@ -15,8 +15,7 @@ import static gama.core.common.geometry.GeometryUtils.GEOMETRY_FACTORY;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.time.Duration;
-import java.time.temporal.ChronoUnit;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ExecutionException;
 
 import org.geotools.data.simple.SimpleFeatureCollection;
@@ -78,7 +77,7 @@ public abstract class GamaGisFile extends GamaGeometryFile {
 
 	/** The CRS cache. */
 	static Cache<String, CoordinateReferenceSystem> CRSCache = CacheBuilder.newBuilder().concurrencyLevel(10)
-			.expireAfterAccess(Duration.of(5, ChronoUnit.MINUTES)).build();
+			.expireAfterAccess(5, TimeUnit.MINUTES).build();
 
 	/**
 	 * Returns the CRS defined with this file (in a ".prj" file or passed by the user)

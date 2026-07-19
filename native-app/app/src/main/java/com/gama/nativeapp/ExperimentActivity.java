@@ -531,13 +531,37 @@ public class ExperimentActivity extends Activity {
                     return;
                 }
 
-                String safeName = jarEntryPath.replaceAll("[^a-zA-Z0-9]", "_");
-                File modelFile = new File(cacheDir, safeName + ".gaml");
+                // Extract model with directory structure so relative paths (e.g. ../includes/) work
+                File modelFile = new File(cacheDir, jarEntryPath);
+                modelFile.getParentFile().mkdirs();
                 try (InputStream is = jarFile.getInputStream(entry);
                      FileOutputStream fos = new FileOutputStream(modelFile)) {
                     byte[] buf = new byte[4096];
                     int n;
                     while ((n = is.read(buf)) > 0) fos.write(buf, 0, n);
+                }
+
+                // Also extract sibling 'includes' directory for shapefiles etc.
+                String modelParentPath = jarEntryPath.substring(0, jarEntryPath.lastIndexOf('/') + 1);
+                String includesPrefix = modelParentPath + "includes/";
+                int extractedIncludes = 0;
+                java.util.Enumeration<? extends JarEntry> entries = jarFile.entries();
+                while (entries.hasMoreElements()) {
+                    JarEntry e = entries.nextElement();
+                    if (e.getName().startsWith(includesPrefix) && !e.isDirectory()) {
+                        File outFile = new File(cacheDir, e.getName());
+                        outFile.getParentFile().mkdirs();
+                        try (InputStream is = jarFile.getInputStream(e);
+                             FileOutputStream fos = new FileOutputStream(outFile)) {
+                            byte[] buf = new byte[4096];
+                            int n;
+                            while ((n = is.read(buf)) > 0) fos.write(buf, 0, n);
+                        }
+                        extractedIncludes++;
+                    }
+                }
+                if (extractedIncludes > 0) {
+                    log("Extracted " + extractedIncludes + " includes files from JAR");
                 }
                 jarFile.close();
                 log("Model extracted to: " + modelFile.getAbsolutePath());
@@ -687,10 +711,10 @@ public class ExperimentActivity extends Activity {
 
                 log("[4] Starting experiment controller via processStart...");
                 Class<?> ctrlInterface = Class.forName("gama.core.kernel.experiment.IExperimentController");
-                ctrlInterface.getMethod("processStart", boolean.class).invoke(controller, false);
-                log("[4] processStart queued _START command");
+                ctrlInterface.getMethod("processStart", boolean.class).invoke(controller, true);
+                log("[4] processStart(true) completed");
 
-                log("[5] Also manually unpausing execution thread...");
+                // Manually unpause the execution thread since acceptingCommands starts false
                 Class<?> absControllerClass = Class.forName("gama.core.kernel.experiment.DefaultExperimentController").getSuperclass();
                 java.lang.reflect.Field pausedField = absControllerClass.getDeclaredField("paused");
                 pausedField.setAccessible(true);
@@ -700,7 +724,7 @@ public class ExperimentActivity extends Activity {
                 lockField.setAccessible(true);
                 Object lock = lockField.get(controller);
                 lock.getClass().getMethod("release").invoke(lock);
-                log("[5] paused=false, lock released");
+                log("[4] paused=false, lock released - execution thread running");
 
                 log("Experiment started successfully");
                 handler.post(() -> statusText.setText("Running"));

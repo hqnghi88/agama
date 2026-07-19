@@ -5,9 +5,9 @@ public class Font {
     public static final int BOLD = 1;
     public static final int ITALIC = 2;
 
-    private String name;
-    private int style;
-    private int size;
+    public String name;
+    public int style;
+    public int size;
 
     public Font(String name, int style, int size) {
         this.name = name;

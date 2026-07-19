@@ -202,6 +202,70 @@ tasks.register('patchGamaJars') {
                 "${libsDir}/gama.core_0.0.0.202605140230.jar"
         }
         logger.lifecycle("SimulationRunnerPatcher completed")
+
+        // Compile MeshLayerPatcher.java
+        def meshLayerPatcherOutDir = file("$buildDir/tmp/meshlayer_patcher")
+        meshLayerPatcherOutDir.mkdirs()
+        exec {
+            commandLine 'javac',
+                '--release', '21',
+                '-cp', "${asmJar.absolutePath}:${asmTreeJar.absolutePath}",
+                '-d', meshLayerPatcherOutDir.absolutePath,
+                "${projectDir}/../tools/MeshLayerPatcher.java"
+        }
+        logger.lifecycle("Compiled MeshLayerPatcher.java")
+
+        // Run MeshLayerPatcher to add null check in MeshLayerData.buildValues()
+        exec {
+            commandLine 'java', '-cp',
+                "${meshLayerPatcherOutDir.absolutePath}:${asmJar.absolutePath}:${asmTreeJar.absolutePath}",
+                'MeshLayerPatcher',
+                "${libsDir}/gama.core_0.0.0.202605140230.jar"
+        }
+        logger.lifecycle("MeshLayerPatcher completed")
+
+        // Compile CacheBuilderPatcher.java
+        def cacheBuilderPatcherOutDir = file("$buildDir/tmp/cb_patcher")
+        cacheBuilderPatcherOutDir.mkdirs()
+        exec {
+            commandLine 'javac',
+                '--release', '21',
+                '-cp', "${asmJar.absolutePath}:${asmTreeJar.absolutePath}",
+                '-d', cacheBuilderPatcherOutDir.absolutePath,
+                "${projectDir}/../tools/CacheBuilderPatcher.java"
+        }
+        logger.lifecycle("Compiled CacheBuilderPatcher.java")
+
+        // Run CacheBuilderPatcher to fix GamaGisFile expireAfterAccess(Duration)
+        exec {
+            commandLine 'java', '-cp',
+                "${cacheBuilderPatcherOutDir.absolutePath}:${asmJar.absolutePath}:${asmTreeJar.absolutePath}",
+                'CacheBuilderPatcher',
+                "${libsDir}/gama.core_0.0.0.202605140230.jar"
+        }
+        logger.lifecycle("CacheBuilderPatcher completed")
+
+        // Compile EclipseCorePatcher.java
+        def eclipsePatcherOutDir = file("$buildDir/tmp/eclipse_patcher")
+        eclipsePatcherOutDir.mkdirs()
+        exec {
+            commandLine 'javac',
+                '--release', '21',
+                '-cp', "${asmJar.absolutePath}:${asmTreeJar.absolutePath}",
+                '-d', eclipsePatcherOutDir.absolutePath,
+                "${projectDir}/../tools/EclipseCorePatcher.java"
+        }
+        logger.lifecycle("Compiled EclipseCorePatcher.java")
+
+        // Run EclipseCorePatcher to add IWorkspace.getRoot() and IWorkspaceRoot
+        exec {
+            commandLine 'java', '-cp',
+                "${eclipsePatcherOutDir.absolutePath}:${asmJar.absolutePath}:${asmTreeJar.absolutePath}",
+                'EclipseCorePatcher',
+                "${libsDir}/eclipse-core-stubs.jar",
+                "${libsDir}/gama.core_0.0.0.202605140230.jar"
+        }
+        logger.lifecycle("EclipseCorePatcher completed")
     }
 }
 

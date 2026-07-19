@@ -1,12 +1,14 @@
 package org.eclipse.core.runtime;
 
+import java.net.URI;
+
 public interface IPath {
     IPath append(String child);
     IPath removeLastSegments(int count);
     IPath makeRelative();
     IPath makeAbsolute();
     IPath removeFileExtension();
-    IPath getFileExtension();
+    String getFileExtension();
     IPath removeTrailingSeparator();
     IPath addTrailingSeparator();
     IPath segment(int index);
@@ -26,4 +28,7 @@ public interface IPath {
     boolean isPrefixOf(String another);
     IPath setDevice(String device);
     IPath addFileExtension(String extension);
+    java.io.File toFile();
+    IPath append(IPath child);
+    URI toURI();
 }
