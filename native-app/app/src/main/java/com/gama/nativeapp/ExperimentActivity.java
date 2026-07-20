@@ -95,14 +95,16 @@ public class ExperimentActivity extends Activity {
             String filePath = getIntent().getStringExtra("file_path");
             boolean fromLibrary = getIntent().getBooleanExtra("from_library", false);
 
+            String effectivePath = jarPath != null ? jarPath : modelName;
+
             if (filePath != null) {
                 compileModelFromFilePath(filePath);
             } else if (assetPath != null) {
                 compileModelFromAsset(assetPath);
-            } else if (fromLibrary && jarPath != null) {
-                compileModelFromLibrary(jarPath);
-            } else if (jarPath != null) {
-                compileModelFromLibrary(jarPath);
+            } else if (fromLibrary && effectivePath != null) {
+                compileModelFromLibrary(effectivePath);
+            } else if (effectivePath != null) {
+                compileModelFromLibrary(effectivePath);
             }
         });
     }
@@ -817,87 +819,6 @@ public class ExperimentActivity extends Activity {
                 log("Experiment started successfully");
                 handler.post(() -> statusText.setText("Running"));
 
-                // Diagnostic: check display container state after a delay
-                handler.postDelayed(() -> {
-                    try {
-                        int childCount = displayContainer.getChildCount();
-                        log("[DIAG] displayContainer childCount=" + childCount);
-
-                        // Check GAMA GUI references
-                        Class<?> gamaClassDiag = Class.forName("gama.core.runtime.GAMA");
-                        Object regularGui = gamaClassDiag.getMethod("getRegularGui").invoke(null);
-                        Object headlessGui = gamaClassDiag.getMethod("getHeadlessGui").invoke(null);
-                        Object staticGui = gamaClassDiag.getMethod("getGui").invoke(null);
-                        log("[DIAG] regularGui=" + (regularGui == null ? "null" : regularGui.getClass().getSimpleName()));
-                        log("[DIAG] headlessGui=" + (headlessGui == null ? "null" : headlessGui.getClass().getSimpleName()));
-                        log("[DIAG] getGui()=" + (staticGui == null ? "null" : staticGui.getClass().getSimpleName()));
-
-                        // Check isInHeadlessMode
-                        java.lang.reflect.Field headlessModeField = gamaClassDiag.getDeclaredField("isInHeadlessMode");
-                        headlessModeField.setAccessible(true);
-                        boolean inHeadless = headlessModeField.getBoolean(null);
-                        log("[DIAG] isInHeadlessMode=" + inHeadless);
-
-                        // Check experiment headless state
-                        java.lang.reflect.Method isHeadlessMethod = expPlan.getClass().getMethod("isHeadless");
-                        boolean expHeadless = (boolean) isHeadlessMethod.invoke(expPlan);
-                        log("[DIAG] expPlan.isHeadless()=" + expHeadless);
-
-                        // Try to find simulation agent and its outputs
-                        java.lang.reflect.Method getAgentMethod = expPlan.getClass().getMethod("getAgent");
-                        Object expAgent = getAgentMethod.invoke(expPlan);
-                        if (expAgent != null) {
-                            log("[DIAG] expAgent=" + expAgent.getClass().getSimpleName());
-                            java.lang.reflect.Method getOutputMgr = expAgent.getClass().getMethod("getOutputManager");
-                            Object outMgr = getOutputMgr.invoke(expAgent);
-                            log("[DIAG] expOutputManager=" + (outMgr == null ? "null" : outMgr.getClass().getSimpleName()));
-
-                            // Check if there are simulations
-                            try {
-                                java.lang.reflect.Method getPopMethod = expAgent.getClass().getMethod("getPopulation", int.class);
-                                Object pop = getPopMethod.invoke(expAgent, 0);
-                                if (pop != null) {
-                                    java.lang.reflect.Method getAgentCount = pop.getClass().getMethod("getAgentCount");
-                                    int agentCount = (int) getAgentCount.invoke(pop);
-                                    log("[DIAG] simulationPopulation agentCount=" + agentCount);
-
-                                    if (agentCount > 0) {
-                                        java.lang.reflect.Method getAgentAt = pop.getClass().getMethod("getAgent", int.class);
-                                        Object simAgent = getAgentAt.invoke(pop, 0);
-                                        if (simAgent != null) {
-                                            log("[DIAG] simAgent=" + simAgent.getClass().getSimpleName());
-                                            java.lang.reflect.Method simOutMgr = simAgent.getClass().getMethod("getOutputManager");
-                                            Object simOutputMgr = simOutMgr.invoke(simAgent);
-                                            log("[DIAG] simOutputManager=" + (simOutputMgr == null ? "null" : simOutputMgr.getClass().getSimpleName()));
-
-                                            // Try to get outputs from the simulation output manager
-                                            if (simOutputMgr != null) {
-                                                try {
-                                                    java.lang.reflect.Field outputsField = simOutputMgr.getClass().getSuperclass().getDeclaredField("outputs");
-                                                    outputsField.setAccessible(true);
-                                                    java.util.List outputs = (java.util.List) outputsField.get(simOutputMgr);
-                                                    log("[DIAG] simOutputs list size=" + (outputs == null ? "null" : outputs.size()));
-                                                    if (outputs != null) {
-                                                        for (Object out : outputs) {
-                                                            log("[DIAG]   output: " + out.getClass().getSimpleName() + " name=" + out.getClass().getMethod("getName").invoke(out));
-                                                        }
-                                                    }
-                                                } catch (Exception oe) {
-                                                    log("[DIAG] simOutputs error: " + oe.getMessage());
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            } catch (Exception pe) {
-                                log("[DIAG] popError: " + pe.getMessage());
-                            }
-                        }
-                    } catch (Exception diagE) {
-                        log("[DIAG] error: " + diagE.getMessage());
-                    }
-                }, 5000);
-
                 startStatePolling(controller);
 
             } catch (Exception e) {
@@ -932,7 +853,7 @@ public class ExperimentActivity extends Activity {
         final int[] unpauseCount = {0};
         final int[] lastCycle = {-1};
 
-        // Redirect System.err/System.out to logcat so we can see GAMA-CTRL debug prints
+        // Redirect System.err/System.out to logcat
         if (pollCount[0] == 0) {
             try {
                 final PrintStream origErr = System.err;
@@ -955,7 +876,6 @@ public class ExperimentActivity extends Activity {
                 }, true);
                 System.setErr(teeErr);
                 System.setOut(teeOut);
-                Log.i(TAG, "[REDIRECT] System.out/err -> logcat active");
             } catch (Exception e) {
                 Log.w(TAG, "Could not redirect streams", e);
             }
@@ -1035,41 +955,8 @@ public class ExperimentActivity extends Activity {
                 }
 
                 Log.i(TAG, sb.toString());
-                if (pollCount[0] <= 10 || pollCount[0] % 10 == 0) {
+                if (pollCount[0] % 30 == 0) {
                     log(sb.toString());
-                }
-
-                if (pollCount[0] <= 5 || pollCount[0] == 10 || pollCount[0] == 50) {
-                    StackTraceElement[] stack = execThread.getStackTrace();
-                    StringBuilder stackStr = new StringBuilder();
-                    stackStr.append("EXEC THREAD STACK (").append(execState).append("):\n");
-                    for (StackTraceElement frame : stack) {
-                        stackStr.append("  at ").append(frame).append("\n");
-                    }
-                    Log.w(TAG, stackStr.toString());
-                    if (pollCount[0] <= 5) log(stackStr.toString());
-
-                    ThreadGroup tg = execThread.getThreadGroup();
-                    if (tg != null) {
-                        Thread[] threads = new Thread[tg.activeCount() + 10];
-                        int count = tg.enumerate(threads, true);
-                        for (int i = 0; i < count; i++) {
-                            Thread t = threads[i];
-                            if (t != execThread && t != Thread.currentThread() && t.isAlive()) {
-                                String name = t.getName();
-                                if (name.contains("Simulation") || name.contains("Front end") || name.contains("ForkJoin")) {
-                                    StackTraceElement[] tstack = t.getStackTrace();
-                                    StringBuilder tsb = new StringBuilder();
-                                    tsb.append("THREAD '").append(name).append("' (").append(t.getState()).append("):\n");
-                                    for (StackTraceElement frame : tstack) {
-                                        tsb.append("  at ").append(frame).append("\n");
-                                    }
-                                    Log.w(TAG, tsb.toString());
-                                    if (pollCount[0] <= 5) log(tsb.toString());
-                                }
-                            }
-                        }
-                    }
                 }
 
                 handler.post(() -> {
@@ -1120,14 +1007,14 @@ public class ExperimentActivity extends Activity {
                                             });
                                         }
 
-                                        if (pollCount[0] <= 5 || pollCount[0] % 50 == 0) {
-                                            Log.i(TAG, "[DISPLAY] stepped LDO, cycle=" + cycleCount[0] + " surface=" + (surfObj == null ? "null" : "ok"));
+                                        if (pollCount[0] % 30 == 0) {
+                                            Log.i(TAG, "[DISPLAY] stepped LDO, cycle=" + cycleCount[0]);
                                         }
                                     }
                                 }
                             }
                         } catch (Exception e) {
-                            if (pollCount[0] <= 5) Log.e(TAG, "[DISPLAY] step error: " + e.getMessage());
+                            if (pollCount[0] % 60 == 0) Log.w(TAG, "[DISPLAY] step error: " + e.getMessage());
                         }
                     }
                 });
