@@ -55,7 +55,7 @@ public class AndroidDisplayGraphics extends AbstractDisplayGraphics {
     private int drawnShapesCount = 0;
 
     public int getDrawnShapesCount() { return drawnShapesCount; }
-    public void resetDrawnShapesCount() { drawnShapesCount = 0; shapeDrawCount = 0; layerCount = 0; }
+    public void resetDrawnShapesCount() { drawnShapesCount = 0; layerCount = 0; }
 
     public AndroidDisplayGraphics() {
         fillPaint.setStyle(Paint.Style.FILL);
@@ -95,26 +95,6 @@ public class AndroidDisplayGraphics extends AbstractDisplayGraphics {
     public Rectangle2D drawShape(Geometry gg, DrawingAttributes attributes) {
         if (gg == null || canvas == null) return null;
         drawnShapesCount++;
-        shapeDrawCount++;
-
-        if (shapeDrawCount <= 5 || shapeDrawCount % 500 == 0) {
-            GamaColor fillColor = attributes.getColor();
-            GamaColor borderColor = attributes.getBorder();
-            org.locationtech.jts.geom.Envelope env = gg.getEnvelopeInternal();
-            float pLeft = toPixelX(env.getMinX());
-            float pTop = toPixelY(env.getMaxY());
-            float pRight = toPixelX(env.getMaxX());
-            float pBottom = toPixelY(env.getMinY());
-            android.util.Log.d("AndroidDisplayGraphics",
-                "drawShape#" + shapeDrawCount + " type=" + gg.getGeometryType()
-                + " modelEnv=[" + env.getMinX() + "," + env.getMaxX() + "]x[" + env.getMinY() + "," + env.getMaxY() + "]"
-                + " pixRect=[" + pLeft + "," + pTop + "," + pRight + "," + pBottom + "]"
-                + " fill=" + (fillColor != null ? "0x" + Integer.toHexString(fillColor.getRGB()) : "null")
-                + " border=" + (borderColor != null ? "0x" + Integer.toHexString(borderColor.getRGB()) : "null")
-                + " alpha=" + currentAlpha
-                + " empty=" + attributes.isEmpty()
-                + " layer=" + (currentLayer != null ? currentLayer.getClass().getSimpleName() : "null"));
-        }
 
         Geometry geometry = gg;
 
@@ -206,10 +186,7 @@ public class AndroidDisplayGraphics extends AbstractDisplayGraphics {
 
     @Override
     public Rectangle2D drawImage(BufferedImage img, DrawingAttributes attributes) {
-        if (img == null || canvas == null) {
-            if (canvas != null) android.util.Log.d("AndroidDisplayGraphics", "drawImage: img=" + (img == null ? "NULL" : img.getWidth() + "x" + img.getHeight()) + " canvas=" + canvas.getWidth() + "x" + canvas.getHeight());
-            return null;
-        }
+        if (img == null || canvas == null) return null;
 
         float curX, curY;
         if (attributes.getLocation() == null) {
@@ -232,8 +209,6 @@ public class AndroidDisplayGraphics extends AbstractDisplayGraphics {
         Bitmap bitmap = bufferedImageToBitmap(img);
         if (bitmap == null) return null;
 
-        android.util.Log.d("AndroidDisplayGraphics", "drawImage: bitmap=" + bitmap.getWidth() + "x" + bitmap.getHeight()
-            + " dest=(" + curX + "," + curY + "," + (curX+curWidth) + "," + (curY+curHeight) + ") angle=" + attributes.getAngle());
         canvas.save();
         if (attributes.getAngle() != null) {
             canvas.rotate((float) (Maths.toRad * attributes.getAngle()),
@@ -359,7 +334,6 @@ public class AndroidDisplayGraphics extends AbstractDisplayGraphics {
     @Override
     public void fillBackground(java.awt.Color bgColor) {
         if (canvas == null) return;
-        android.util.Log.d("AndroidDisplayGraphics", "fillBackground called! color=" + bgColor + " canvas=" + canvas.getWidth() + "x" + canvas.getHeight());
         setAlpha(1);
         bgPaint.setColor(awtColorToArgb(bgColor));
         bgPaint.setStyle(Paint.Style.FILL);
@@ -387,20 +361,6 @@ public class AndroidDisplayGraphics extends AbstractDisplayGraphics {
     public void beginDrawingLayer(final ILayer layer) {
         currentLayer = layer;
         layerCount++;
-        try {
-            java.awt.Point sz = layer.getData().getSizeInPixels();
-            java.awt.Point pos = layer.getData().getPositionInPixels();
-            android.util.Log.d("AndroidDisplayGraphics", "beginDrawingLayer#" + layerCount + ": class=" + layer.getClass().getSimpleName()
-                + " name=" + layer.getClass().getSimpleName()
-                + " sizeInPixels=" + (sz != null ? sz.x + "x" + sz.y : "null")
-                + " posInPixels=" + (pos != null ? pos.x + "," + pos.y : "null")
-                + " layerW=" + getLayerWidth() + " layerH=" + getLayerHeight()
-                + " xRatio=" + getxRatioBetweenPixelsAndModelUnits()
-                + " yRatio=" + getyRatioBetweenPixelsAndModelUnits()
-                + " xOff=" + getXOffsetInPixels() + " yOff=" + getYOffsetInPixels());
-        } catch (Exception e) {
-            android.util.Log.e("AndroidDisplayGraphics", "beginDrawingLayer error: " + e.getMessage(), e);
-        }
     }
 
     public void manuallyDrawAgents(IAgent[] agents) {

@@ -99,7 +99,6 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
         setFocusable(true);
         setWillNotDraw(false);
         setLayerType(LAYER_TYPE_SOFTWARE, null);
-        android.util.Log.i("AndroidDisplaySurface", "Created, bg=" + bgPaint.getColor() + ", envW=" + getEnvWidth() + ", envH=" + getEnvHeight());
     }
 
     public AndroidDisplaySurface(Context context, AttributeSet attrs) {
@@ -111,7 +110,6 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
-        android.util.Log.i("AndroidDisplaySurface", "onSizeChanged: " + w + "x" + h);
         if (w > 0 && h > 0) {
             if (zoomFit) {
                 zoomFit();
@@ -121,7 +119,6 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
 
     @Override
     protected void onDraw(Canvas canvas) {
-        if (frames < 5 || frames % 100 == 0) android.util.Log.i("AndroidDisplaySurface", "onDraw called! frame=" + frames + " canvas=" + canvas.getWidth() + "x" + canvas.getHeight() + " attached=" + isAttachedToWindow() + " bg=" + bgPaint.getColor());
         super.onDraw(canvas);
         if (disposed || output == null) return;
 
@@ -141,12 +138,9 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
             if (drawScope != null && !drawScope.interrupted()) {
                 layerManager.drawLayersOn(androidGraphics);
                 drewShapes = androidGraphics.getDrawnShapesCount() > 0;
-                if (frames < 5 || frames % 100 == 0) android.util.Log.i("AndroidDisplaySurface", "onDraw: drewShapes=" + drewShapes + " shapesCount=" + androidGraphics.getDrawnShapesCount() + " scope=" + drawScope.getClass().getSimpleName());
-            } else {
-                if (frames < 5) android.util.Log.w("AndroidDisplaySurface", "onDraw: scope=" + drawScope + " interrupted=" + (drawScope != null && drawScope.interrupted()));
             }
         } catch (Throwable t) {
-            android.util.Log.e("AndroidDisplaySurface", "Error drawing layers", t);
+            // error drawing layers
         }
 
         if (!drewShapes) {
@@ -158,13 +152,6 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
         // Always try manual draw for grid species (layer manager may fail to find grid)
         drawAgentsManually(canvas);
 
-        if (frames < 5) {
-            Paint testPaint = new Paint();
-            testPaint.setColor(Color.RED);
-            canvas.drawRect(50, 50, 200, 200, testPaint);
-            android.util.Log.i("AndroidDisplaySurface", "Drew test red rect at 50,50-200,200, canvas=" + canvas.getWidth() + "x" + canvas.getHeight());
-        }
-
         frames++;
         rendered = true;
     }
@@ -174,15 +161,8 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
             IGraphicsScope drawScope = scope;
             if (drawScope == null || drawScope.interrupted()) return;
 
-            // Matches SpeciesLayer.privateDraw: scope.getSimulation() returns IMacroAgent "world"
             gama.core.metamodel.agent.IMacroAgent sim = drawScope.getSimulation();
-            if (sim == null) {
-                if (frames < 5 || frames % 100 == 0) android.util.Log.w("AndroidDisplaySurface", "Manual draw: no simulation. frame=" + frames);
-                return;
-            }
-
-            // REMOVED: sim.getMicroPopulations() diagnostic - it caches empty result before simulation init,
-            // causing stepSubPopulations() to skip all species (root cause of agents not moving)
+            if (sim == null) return;
 
             java.util.List<String> speciesNames = new java.util.ArrayList<>();
             speciesNames.add("life_cell");
@@ -191,39 +171,15 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
             for (String speciesName : speciesNames) {
                 gama.core.metamodel.population.IPopulation pop = null;
 
-                // First try simulation directly (use getAttribute, NOT getMicroPopulations which caches)
                 Object attr = null;
                 try { attr = sim.getAttribute(speciesName); } catch (Exception e) {}
                 if (attr instanceof gama.core.metamodel.population.IPopulation) {
                     pop = (gama.core.metamodel.population.IPopulation) attr;
                 }
-                if (pop == null) {
-                    if (frames < 5 || frames % 100 == 0) android.util.Log.w("AndroidDisplaySurface", "Manual draw: pop is null for " + speciesName + " frame=" + frames);
-                    continue;
-                }
-                if (frames % 500 == 0) {
-                    int simHash = System.identityHashCode(sim);
-                    int popHash = System.identityHashCode(pop);
-                    android.util.Log.d("AndroidDisplaySurface", "DIAG pop#" + popHash + " popClass=" + pop.getClass().getSimpleName() + " popSize=" + pop.size() + " frame=" + frames);
-                    // Also try getting location via IShape directly and check for any movement across 5 agents
-                    int idx2 = 0;
-                    for (Object obj2 : pop.toArray()) {
-                        if (obj2 instanceof gama.core.metamodel.agent.IAgent ag2) {
-                            gama.core.metamodel.shape.IShape loc2 = ag2.getLocation();
-                            GamaPoint pt2 = loc2 != null ? loc2.getLocation() : null;
-                            android.util.Log.d("AndroidDisplaySurface", "  agent#" + idx2 + " loc=" + (pt2 != null ? "(" + pt2.getX() + "," + pt2.getY() + ")" : "null"));
-                            idx2++;
-                            if (idx2 >= 5) break;
-                        }
-                    }
-                }
+                if (pop == null) continue;
+
                 int popSize = pop.size();
-                if (popSize == 0) {
-                    if (frames < 5 || frames % 100 == 0) {
-                        android.util.Log.w("AndroidDisplaySurface", "Manual draw: pop size=0 for " + speciesName + " frame=" + frames + " host=" + pop.getHost());
-                    }
-                    continue;
-                }
+                if (popSize == 0) continue;
 
                 agentPaint.setStyle(Paint.Style.FILL);
 
@@ -237,16 +193,13 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
                 double offsetX = (dispW - envW * scale) / 2.0;
                 double offsetY = (dispH - envH * scale) / 2.0;
 
-                // Try to get grid dimensions for bitmap rendering
                 boolean drawnAsGrid = false;
                 if (pop instanceof gama.core.metamodel.topology.grid.GridPopulation gridPop) {
                     try {
                         int gridW = gridPop.getNbCols();
                         int gridH = gridPop.getNbRows();
                         if (gridW > 0 && gridH > 0) {
-                            if (frames < 5) android.util.Log.i("AndroidDisplaySurface", "Grid render: gridW=" + gridW + " gridH=" + gridH + " popSize=" + pop.size());
                             int[] pixels = new int[gridW * gridH];
-                            int colorCount = 0;
                             for (Object obj : pop.toArray()) {
                                 if (obj instanceof gama.core.metamodel.topology.grid.IGridAgent ga) {
                                     try {
@@ -255,15 +208,11 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
                                             gama.core.util.GamaColor gc = ga.getColor();
                                             if (gc != null) {
                                                 pixels[idx] = 0xFF000000 | (gc.getRGB() & 0xFFFFFF);
-                                                colorCount++;
                                             }
                                         }
-                                    } catch (Exception e) {
-                                        if (frames < 3) android.util.Log.w("AndroidDisplaySurface", "Cell color error at idx=" + ga.getIndex() + ": " + e.getClass().getSimpleName() + ": " + e.getMessage());
-                                    }
+                                    } catch (Exception e) { /* skip */ }
                                 }
                             }
-                            if (frames < 5) android.util.Log.i("AndroidDisplaySurface", "Grid render: colored=" + colorCount + " of " + pixels.length);
                             Bitmap gridBitmap = Bitmap.createBitmap(gridW, gridH, Bitmap.Config.ARGB_8888);
                             gridBitmap.setPixels(pixels, 0, gridW, 0, 0, gridW, gridH);
                             float left = (float) (offsetX - viewPort.left);
@@ -274,13 +223,10 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
                             gridBitmap.recycle();
                             drawnAsGrid = true;
                         }
-                    } catch (Throwable t) {
-                        if (frames < 5) android.util.Log.w("AndroidDisplaySurface", "Grid bitmap render failed: " + t.getMessage(), t);
-                    }
+                    } catch (Throwable t) { /* skip */ }
                 }
 
                 if (!drawnAsGrid) {
-                    int agentIdx = 0;
                     for (Object obj : pop.toArray()) {
                         if (obj instanceof gama.core.metamodel.agent.IAgent agent) {
                             gama.core.metamodel.shape.IShape shape = agent.getLocation();
@@ -293,22 +239,11 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
                             float radius = (float) Math.max(3, 3.0 * scale);
 
                             canvas.drawCircle(sx, sy, radius, agentPaint);
-                            if (agentIdx < 3 && (frames < 5 || frames % 500 == 0)) {
-                                android.util.Log.d("AndroidDisplaySurface", "Agent#" + agentIdx + " pos: (" + pt.getX() + ", " + pt.getY() + ") frame=" + frames);
-                            }
-                            agentIdx++;
                         }
                     }
                 }
-                if (frames < 5 || frames % 100 == 0) {
-                    android.util.Log.d("AndroidDisplaySurface", "Manual draw: " + pop.size() + " agents at scale=" + scale + " frame=" + frames + " grid=" + drawnAsGrid);
-                }
             }
-        } catch (Throwable t) {
-            if (frames < 5 || frames % 100 == 0) {
-                android.util.Log.e("AndroidDisplaySurface", "Manual draw error", t);
-            }
-        }
+        } catch (Throwable t) { /* skip */ }
     }
 
     @Override
@@ -375,11 +310,7 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
     public void updateDisplay(boolean force, GeneralSynchronizer synchronizer) {
         if (disposed) return;
         post(() -> {
-            if (!isAttachedToWindow()) {
-                if (frames < 5) android.util.Log.w("AndroidDisplaySurface", "updateDisplay: NOT attached to window");
-                return;
-            }
-            if (frames < 5) android.util.Log.i("AndroidDisplaySurface", "updateDisplay: requesting invalidate, attached=" + isAttachedToWindow());
+            if (!isAttachedToWindow()) return;
             invalidate();
             if (synchronizer != null) synchronizer.release();
         });
@@ -418,7 +349,6 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
     public void zoomFit() {
         int w = getWidth();
         int h = getHeight();
-        android.util.Log.i("AndroidDisplaySurface", "zoomFit: view=" + w + "x" + h + ", envW=" + getEnvWidth() + ", envH=" + getEnvHeight());
         if (w <= 0 || h <= 0) return;
         mousePosition.set(w / 2f, h / 2f);
         if (resizeImage(w, h, false)) {

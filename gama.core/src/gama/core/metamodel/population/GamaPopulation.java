@@ -905,14 +905,16 @@ public class GamaPopulation<T extends IAgent> extends GamaList<T> implements IPo
 	public void filter(final IScope scope, final IShape source, final Collection<? extends IShape> results) {
 		final IAgent sourceAgent = source == null ? null : source.getAgent();
 		results.remove(sourceAgent);
-		final Predicate<IShape> toRemove = each -> {
-			final IAgent a = each.getAgent();
-			return a == null || a.dead()
-					|| a.getPopulation() != this
-							&& (a.getPopulation().getGamlType().getContentType() != this.getGamlType().getContentType()
-									|| !this.contains(a));
-		};
-		results.removeIf(toRemove);
+		results.removeIf(new java.util.function.Predicate<IShape>() {
+			@Override
+			public boolean test(final IShape each) {
+				final IAgent a = each.getAgent();
+				return a == null || a.dead()
+						|| a.getPopulation() != GamaPopulation.this
+								&& (a.getPopulation().getGamlType().getContentType() != GamaPopulation.this.getGamlType().getContentType()
+										|| !GamaPopulation.this.contains(a));
+			}
+		});
 	}
 
 	/**
