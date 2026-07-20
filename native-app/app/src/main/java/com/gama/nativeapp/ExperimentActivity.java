@@ -616,64 +616,42 @@ public class ExperimentActivity extends Activity {
                     return;
                 }
 
-                // Extract model with directory structure so relative paths (e.g. ../includes/) work
-                File modelFile = new File(cacheDir, jarEntryPath);
-                modelFile.getParentFile().mkdirs();
-                try (InputStream is = jarFile.getInputStream(entry);
-                     FileOutputStream fos = new FileOutputStream(modelFile)) {
-                    byte[] buf = new byte[4096];
-                    int n;
-                    while ((n = is.read(buf)) > 0) fos.write(buf, 0, n);
+                // Find the project root: go up from models/ subfolder to project dir
+                // e.g. "models/Toy Models/Boids/models/Boids With Flocks.gaml"
+                //   -> project root = "models/Toy Models/Boids/"
+                String projectRoot = "";
+                String parentPath = jarEntryPath.substring(0, jarEntryPath.lastIndexOf('/') + 1);
+                if (parentPath.endsWith("models/")) {
+                    projectRoot = parentPath.substring(0, parentPath.length() - "models/".length());
                 }
+                log("Project root: " + projectRoot + " (jarEntryPath: " + jarEntryPath + ")");
 
-                // Also extract 'includes' directories for shapefiles etc.
-                // The model may reference ../includes/ so look in parent dirs too
-                String modelParentPath = jarEntryPath.substring(0, jarEntryPath.lastIndexOf('/') + 1);
-                // Also compute grandparent path for models nested in a subdirectory (e.g. models/Toy Models/Traffic/models/)
-                String grandParentPath = modelParentPath.contains("/")
-                    ? modelParentPath.substring(0, modelParentPath.lastIndexOf('/', modelParentPath.length() - 2) + 1)
-                    : "";
-                int extractedIncludes = 0;
+                // Extract the ENTIRE project directory from the JAR
+                // This gets sibling .gaml files (import statements), images, shapefiles, etc.
+                int extractedCount = 0;
                 java.util.Enumeration<? extends JarEntry> entries = jarFile.entries();
-                java.util.Set<String> extractedPaths = new java.util.HashSet<>();
                 while (entries.hasMoreElements()) {
                     JarEntry e = entries.nextElement();
                     String eName = e.getName();
-                    if (e.isDirectory() || extractedPaths.contains(eName)) continue;
-                    // Check if this file is in an 'includes' directory that is a sibling or parent-sibling of the model
-                    if (eName.endsWith("/")) continue;
-                    int includesIdx = eName.lastIndexOf("/includes/");
-                    if (includesIdx < 0) continue;
-                    String includesDirPrefix = eName.substring(0, includesIdx + "/includes/".length());
-                    // Check if this includes dir is related to our model
-                    if (!includesDirPrefix.startsWith(modelParentPath) && !includesDirPrefix.startsWith(grandParentPath)) continue;
-                    if (!includesDirPrefix.endsWith("includes/")) continue;
-
-                    // Compute output path: place includes relative to the model file
-                    // The model at cacheDir/<jarEntryPath> references ../includes/
-                    // So we need includes at cacheDir/<modelParentPath>/../includes/ = cacheDir/<grandParentPath>/includes/
-                    String relativePath = eName.substring(includesDirPrefix.length());
-                    File outFile = new File(modelFile.getParentFile(), "../includes/" + relativePath);
-                    // Normalize to remove .. 
-                    outFile = outFile.getCanonicalFile();
+                    if (e.isDirectory() || eName.endsWith("/")) continue;
+                    if (!eName.startsWith(projectRoot)) continue;
+                    String relativePath = eName.substring(projectRoot.length());
+                    if (relativePath.isEmpty()) continue;
+                    File outFile = new File(cacheDir, projectRoot + relativePath);
                     outFile.getParentFile().mkdirs();
-                    if (!extractedPaths.contains(outFile.getAbsolutePath())) {
-                        try (InputStream is = jarFile.getInputStream(e);
-                             FileOutputStream fos = new FileOutputStream(outFile)) {
-                            byte[] buf = new byte[4096];
-                            int n;
-                            while ((n = is.read(buf)) > 0) fos.write(buf, 0, n);
-                        }
-                        extractedPaths.add(outFile.getAbsolutePath());
-                        extractedIncludes++;
+                    try (InputStream is = jarFile.getInputStream(e);
+                         FileOutputStream fos = new FileOutputStream(outFile)) {
+                        byte[] buf = new byte[4096];
+                        int n;
+                        while ((n = is.read(buf)) > 0) fos.write(buf, 0, n);
                     }
-                }
-                if (extractedIncludes > 0) {
-                    log("Extracted " + extractedIncludes + " includes files from JAR");
-                } else {
-                    log("WARNING: No includes files found for model");
+                    extractedCount++;
                 }
                 jarFile.close();
+                log("Extracted " + extractedCount + " files from JAR project dir");
+
+                // The model file is now at cacheDir/<jarEntryPath>
+                File modelFile = new File(cacheDir, jarEntryPath);
                 log("Model extracted to: " + modelFile.getAbsolutePath());
 
                 Class<?> builderClass = Class.forName("gaml.compiler.gaml.validation.GamlModelBuilder");

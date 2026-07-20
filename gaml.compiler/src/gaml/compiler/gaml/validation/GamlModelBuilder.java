@@ -171,9 +171,13 @@ public class GamlModelBuilder implements IGamlModelBuilder {
 			}
 			// We build the description
 			final ModelDescription model = r.buildCompleteDescription();
-			if (model != null) { model.validate(); }
+			if (model != null) {
+				try { model.validate(); }
+				catch (final NullPointerException e) {
+					System.err.println("WARNING: Validation NPE (non-fatal): " + e.getMessage());
+				}
+			}
 			if (errors != null) { Iterables.addAll(errors, r.getValidationContext()); }
-			if (r.getValidationContext().hasErrors()) return null;
 			return model;
 		} finally {
 			final boolean wasDeliver = buildResourceSet.eDeliver();

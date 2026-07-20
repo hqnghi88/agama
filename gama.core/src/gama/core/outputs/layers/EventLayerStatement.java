@@ -142,7 +142,7 @@ public class EventLayerStatement extends AbstractLayerStatement {
 		@Override
 		public void validate(final StatementDescription description) {
 			IExpressionDescription nameDesc = description.getFacet(NAME);
-			final String name = nameDesc != null ? nameDesc.getExpression().literalValue() : null;
+			final String name = (nameDesc != null && nameDesc.getExpression() != null) ? nameDesc.getExpression().literalValue() : null;
 			if (name == null) {
 				description.error("Impossible to find this action", IGamlIssue.UNKNOWN_ACTION, ACTION);
 				return;
