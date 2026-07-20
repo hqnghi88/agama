@@ -392,7 +392,6 @@ public class ModelEditorActivity extends AppCompatActivity {
     }
 
     private void runModel() {
-        // Save synchronously before launching ExperimentActivity
         try {
             File modelsDir = new File(getFilesDir(), "models");
             modelsDir.mkdirs();
@@ -404,7 +403,12 @@ public class ModelEditorActivity extends AppCompatActivity {
 
             Intent intent = new Intent(this, ExperimentActivity.class);
             intent.putExtra("model_name", modelName);
-            intent.putExtra("file_path", file.getAbsolutePath());
+            if (fromLibrary && jarPath != null) {
+                intent.putExtra("jar_path", jarPath);
+                intent.putExtra("from_library", true);
+            } else {
+                intent.putExtra("file_path", file.getAbsolutePath());
+            }
             startActivity(intent);
         } catch (Exception e) {
             Toast.makeText(this, "Save failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
