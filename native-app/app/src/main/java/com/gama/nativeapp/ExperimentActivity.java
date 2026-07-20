@@ -16,7 +16,6 @@ import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
-import android.widget.SeekBar;
 import android.widget.TextView;
 
 import java.io.File;
@@ -42,6 +41,9 @@ public class ExperimentActivity extends Activity {
     private LinearLayout displayToolbar;
     private LinearLayout consolePanel;
     private LinearLayout root;
+    private LinearLayout displayWrapper;
+    private LinearLayout.LayoutParams displayWrapperLp;
+    private LinearLayout.LayoutParams consolePanelLp;
     private final Handler handler = new Handler(Looper.getMainLooper());
 
     private Object compiledModel;
@@ -155,38 +157,40 @@ public class ExperimentActivity extends Activity {
     }
 
     private void buildDisplayArea() {
-        LinearLayout displayWrapper = new LinearLayout(this);
+        displayWrapper = new LinearLayout(this);
         displayWrapper.setOrientation(LinearLayout.VERTICAL);
-        displayWrapper.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+        displayWrapperLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 3f);
 
         buildSimControlBar(displayWrapper);
         buildDisplayToolbar(displayWrapper);
 
         displayContainer = new FrameLayout(this);
         displayContainer.setBackgroundColor(0xFF808080);
-        displayContainer.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
         displayWrapper.addView(displayContainer, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
 
-        root.addView(displayWrapper, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+        root.addView(displayWrapper, displayWrapperLp);
+
+        buildDragHandle(root);
+
+        consolePanelLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f);
     }
 
     private void buildSimControlBar(LinearLayout parent) {
         LinearLayout bar = new LinearLayout(this);
         bar.setOrientation(LinearLayout.HORIZONTAL);
-        bar.setPadding(dp(8), dp(4), dp(8), dp(4));
+        bar.setPadding(dp(8), dp(2), dp(8), dp(2));
         bar.setBackgroundColor(0xFF333333);
         bar.setGravity(Gravity.CENTER_VERTICAL);
         bar.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
         cycleText = new TextView(this);
-        cycleText.setText("Simulation 0: 0 cycle [00:00:00]");
+        cycleText.setText("0 cycle");
         cycleText.setTextColor(0xFFCCCCCC);
-        cycleText.setTextSize(10);
+        cycleText.setTextSize(11);
         cycleText.setTypeface(Typeface.MONOSPACE);
         cycleText.setSingleLine(true);
         cycleText.setHorizontallyScrolling(true);
@@ -196,31 +200,58 @@ public class ExperimentActivity extends Activity {
         cycleScroll.addView(cycleText);
         bar.addView(cycleScroll);
 
-        playPauseBtn = makeControlBtn("\u25B6", 0xFF4CAF50);
+        playPauseBtn = makeControlBtn("\u25B6 Play", 0xFF4CAF50);
         playPauseBtn.setOnClickListener(v -> togglePlayPause());
         bar.addView(playPauseBtn);
 
-        stepBtn = makeControlBtn("\u23E9", 0xFF888888);
+        stepBtn = makeControlBtn("\u23E9 Step", 0xFFAAAAAA);
         stepBtn.setOnClickListener(v -> stepSimulation());
         bar.addView(stepBtn);
 
-        stopBtn = makeControlBtn("\u23F9", 0xFF888888);
+        stopBtn = makeControlBtn("\u23F9 Stop", 0xFFAAAAAA);
         stopBtn.setOnClickListener(v -> stopSimulation());
         bar.addView(stopBtn);
 
-        TextView speedLabel = new TextView(this);
-        speedLabel.setText(" Speed ");
-        speedLabel.setTextColor(0xFF888888);
-        speedLabel.setTextSize(9);
-        bar.addView(speedLabel);
-
-        SeekBar speedSlider = new SeekBar(this);
-        speedSlider.setLayoutParams(new LinearLayout.LayoutParams(dp(60), LinearLayout.LayoutParams.WRAP_CONTENT));
-        speedSlider.setMax(100);
-        speedSlider.setProgress(50);
-        bar.addView(speedSlider);
-
         parent.addView(bar, lpFull());
+    }
+
+    private void buildDragHandle(LinearLayout parent) {
+        View handle = new View(this);
+        handle.setBackgroundColor(0xFF444444);
+        LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(6));
+        handle.setLayoutParams(hl);
+
+        final float[] startY = new float[1];
+        final int[] startDisplayWeight = new int[1];
+        final int[] startConsoleWeight = new int[1];
+
+        handle.setOnTouchListener((v, event) -> {
+            switch (event.getAction()) {
+                case android.view.MotionEvent.ACTION_DOWN:
+                    startY[0] = event.getRawY();
+                    startDisplayWeight[0] = (int) displayWrapperLp.weight;
+                    startConsoleWeight[0] = (int) consolePanelLp.weight;
+                    return true;
+                case android.view.MotionEvent.ACTION_MOVE:
+                    float dy = startY[0] - event.getRawY();
+                    float totalHeight = root.getHeight();
+                    if (totalHeight <= 0) return true;
+                    float deltaWeight = (dy / totalHeight) * 4f;
+                    float newDisplay = Math.max(0.5f, startDisplayWeight[0] + deltaWeight);
+                    float newConsole = Math.max(0.5f, startConsoleWeight[0] - deltaWeight);
+                    displayWrapperLp.weight = newDisplay;
+                    consolePanelLp.weight = newConsole;
+                    root.requestLayout();
+                    return true;
+                case android.view.MotionEvent.ACTION_UP:
+                case android.view.MotionEvent.ACTION_CANCEL:
+                    return true;
+            }
+            return false;
+        });
+
+        parent.addView(handle);
     }
 
     private void buildDisplayToolbar(LinearLayout parent) {
@@ -231,15 +262,18 @@ public class ExperimentActivity extends Activity {
         displayToolbar.setGravity(Gravity.CENTER);
         displayToolbar.setVisibility(View.GONE);
 
-        String[] icons = {"\u23F8", "+", "\u2195", "\u2212", "\u2318", "\u25CE", "\u26F6", "\u2637"};
-        for (String icon : icons) {
+        String[][] tools = {
+            {"Zoom+", "+"}, {"Zoom-", "\u2212"}, {"Fit", "\u2195"},
+            {"Lock", "\u2318"}, {"Select", "\u25CE"}
+        };
+        for (String[] tool : tools) {
             TextView btn = new TextView(this);
-            btn.setText(icon);
+            btn.setText(" " + tool[0] + " ");
             btn.setTextColor(0xFFAAAAAA);
-            btn.setTextSize(16);
-            btn.setPadding(dp(12), dp(4), dp(12), dp(4));
+            btn.setTextSize(11);
+            btn.setPadding(dp(6), dp(4), dp(6), dp(4));
             btn.setGravity(Gravity.CENTER);
-            btn.setOnClickListener(v -> handleDisplayAction(icon));
+            btn.setOnClickListener(v -> handleDisplayAction(tool[1]));
             displayToolbar.addView(btn);
         }
 
@@ -275,7 +309,7 @@ public class ExperimentActivity extends Activity {
 
         ScrollView logScroll = new ScrollView(this);
         logScroll.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(120)));
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
 
         logView = new TextView(this);
         logView.setTextSize(10);
@@ -287,9 +321,9 @@ public class ExperimentActivity extends Activity {
         logScroll.addView(logView);
 
         consolePanel.addView(logScroll, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(120)));
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
 
-        root.addView(consolePanel, lpFull());
+        root.addView(consolePanel, consolePanelLp);
     }
 
     private Button makeControlBtn(String text, int color) {
@@ -308,7 +342,7 @@ public class ExperimentActivity extends Activity {
         if (!isRunning || currentController == null) return;
         isPaused = !isPaused;
         handler.post(() -> {
-            playPauseBtn.setText(isPaused ? "\u25B6" : "\u23F8");
+            playPauseBtn.setText(isPaused ? "\u25B6 Play" : "\u23F8 Pause");
             statusText.setText(isPaused ? "Paused" : "Running");
         });
         try {
@@ -850,11 +884,9 @@ public class ExperimentActivity extends Activity {
 
         final long startTime = System.currentTimeMillis();
         final int[] pollCount = {0};
-        final int[] unpauseCount = {0};
         final int[] lastCycle = {-1};
 
-        // Redirect System.err/System.out to logcat
-        if (pollCount[0] == 0) {
+                // Redirect System.err/System.out to logcat
             try {
                 final PrintStream origErr = System.err;
                 final PrintStream origOut = System.out;
@@ -879,7 +911,6 @@ public class ExperimentActivity extends Activity {
             } catch (Exception e) {
                 Log.w(TAG, "Could not redirect streams", e);
             }
-        }
 
         statePollRunnable = () -> {
             if (!isRunning) return;
@@ -921,31 +952,12 @@ public class ExperimentActivity extends Activity {
                     // clock not available yet
                 }
 
-                // AUTO-UNPAUSE: if execution thread is stuck on lock.acquire(), release it
-                if (paused && execState.equals("WAITING") && alive) {
-                    try {
-                        java.lang.reflect.Field lockField = absControllerClass.getDeclaredField("lock");
-                        lockField.setAccessible(true);
-                        Object lock = lockField.get(controller);
-                        pausedField.setBoolean(controller, false);
-                        lock.getClass().getMethod("release").invoke(lock);
-                        unpauseCount[0]++;
-                        Log.w(TAG, "[AUTO-UNPAUSE #" + unpauseCount[0] + "] Released lock, paused=false");
-                        if (unpauseCount[0] <= 10 || unpauseCount[0] % 50 == 0) {
-                            log("[AUTO-UNPAUSE #" + unpauseCount[0] + "] Released lock, cycle=" + cycleCount[0]);
-                        }
-                    } catch (Exception ue) {
-                        Log.e(TAG, "[AUTO-UNPAUSE] error: " + ue.getMessage());
-                    }
-                }
-
                 StringBuilder sb = new StringBuilder();
                 sb.append("[Poll #").append(pollCount[0]).append("] ");
                 sb.append("paused=").append(paused).append(" ");
                 sb.append("alive=").append(alive).append(" ");
                 sb.append("exec=").append(execState);
                 sb.append(" cycle=").append(cycleCount[0]);
-                sb.append(" unpause=").append(unpauseCount[0]);
                 if (!execAlive) sb.append(" DEAD!");
 
                 // Detect cycle changes

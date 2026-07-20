@@ -118,6 +118,32 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
     }
 
     @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        int parentW = MeasureSpec.getSize(widthMeasureSpec);
+        int parentH = MeasureSpec.getSize(heightMeasureSpec);
+        if (parentW <= 0 || parentH <= 0) {
+            super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+            return;
+        }
+        double envW = getEnvWidth();
+        double envH = getEnvHeight();
+        if (envW <= 0 || envH <= 0) {
+            super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+            return;
+        }
+        double envRatio = envW / envH;
+        int measuredW, measuredH;
+        if (envRatio >= (double) parentW / parentH) {
+            measuredW = parentW;
+            measuredH = (int) Math.round(parentW / envRatio);
+        } else {
+            measuredH = parentH;
+            measuredW = (int) Math.round(parentH * envRatio);
+        }
+        setMeasuredDimension(Math.max(1, measuredW), Math.max(1, measuredH));
+    }
+
+    @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         if (disposed || output == null) return;

@@ -85,9 +85,11 @@ public class AndroidGuiHandler implements IGui {
                         android.widget.FrameLayout container = expActivity.getDisplayContainer();
                         if (container != null) {
                             container.removeAllViews();
-                            container.addView(surfaceHolder[0], new android.widget.FrameLayout.LayoutParams(
-                                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
-                                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
+                            android.widget.FrameLayout.LayoutParams flp = new android.widget.FrameLayout.LayoutParams(
+                                    android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+                                    android.widget.FrameLayout.LayoutParams.WRAP_CONTENT);
+                            flp.gravity = android.view.Gravity.CENTER;
+                            container.addView(surfaceHolder[0], flp);
                             Log.i(TAG, "Surface added to container directly");
                         }
                     } else {

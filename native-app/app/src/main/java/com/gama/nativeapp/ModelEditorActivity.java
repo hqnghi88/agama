@@ -209,12 +209,11 @@ public class ModelEditorActivity extends AppCompatActivity {
         codeEditor.setHorizontalScrollBarEnabled(true);
         codeEditor.setRawInputType(0xF001);
         codeEditor.setTextIsSelectable(true);
-        codeEditor.setCustomSelectionActionModeCallback(new android.view.ActionMode.Callback() {
-            @Override public boolean onCreateActionMode(android.view.ActionMode mode, android.view.Menu menu) { return true; }
-            @Override public boolean onPrepareActionMode(android.view.ActionMode mode, android.view.Menu menu) { return false; }
-            @Override public boolean onActionItemClicked(android.view.ActionMode mode, android.view.MenuItem item) { return false; }
-            @Override public void onDestroyActionMode(android.view.ActionMode mode) {}
+
+        codeEditor.getViewTreeObserver().addOnScrollChangedListener(() -> {
+            lineNumbers.scrollTo(0, codeEditor.getScrollY());
         });
+
         editorArea.addView(codeEditor, new LinearLayout.LayoutParams(
             0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
 
