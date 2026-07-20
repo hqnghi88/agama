@@ -55,7 +55,7 @@ public class AndroidDisplayGraphics extends AbstractDisplayGraphics {
     private int drawnShapesCount = 0;
 
     public int getDrawnShapesCount() { return drawnShapesCount; }
-    public void resetDrawnShapesCount() { drawnShapesCount = 0; shapeDrawCount = 0; }
+    public void resetDrawnShapesCount() { drawnShapesCount = 0; shapeDrawCount = 0; layerCount = 0; }
 
     public AndroidDisplayGraphics() {
         fillPaint.setStyle(Paint.Style.FILL);
@@ -259,7 +259,7 @@ public class AndroidDisplayGraphics extends AbstractDisplayGraphics {
             if (a == 0) {
                 pixels[i] = 0;
             } else {
-                pixels[i] = 0xFF000000 | (p & 0x00FFFFFF);
+                pixels[i] = p;
             }
         }
         Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
@@ -381,23 +381,25 @@ public class AndroidDisplayGraphics extends AbstractDisplayGraphics {
         return true;
     }
 
+    private int layerCount = 0;
+
     @Override
     public void beginDrawingLayer(final ILayer layer) {
         currentLayer = layer;
-        if (shapeDrawCount == 0) {
-            try {
-                java.awt.Point sz = layer.getData().getSizeInPixels();
-                java.awt.Point pos = layer.getData().getPositionInPixels();
-                android.util.Log.d("AndroidDisplayGraphics", "beginDrawingLayer: class=" + layer.getClass().getSimpleName()
-                    + " sizeInPixels=" + (sz != null ? sz.x + "x" + sz.y : "null")
-                    + " posInPixels=" + (pos != null ? pos.x + "," + pos.y : "null")
-                    + " layerW=" + getLayerWidth() + " layerH=" + getLayerHeight()
-                    + " xRatio=" + getxRatioBetweenPixelsAndModelUnits()
-                    + " yRatio=" + getyRatioBetweenPixelsAndModelUnits()
-                    + " xOff=" + getXOffsetInPixels() + " yOff=" + getYOffsetInPixels());
-            } catch (Exception e) {
-                android.util.Log.e("AndroidDisplayGraphics", "beginDrawingLayer error: " + e.getMessage(), e);
-            }
+        layerCount++;
+        try {
+            java.awt.Point sz = layer.getData().getSizeInPixels();
+            java.awt.Point pos = layer.getData().getPositionInPixels();
+            android.util.Log.d("AndroidDisplayGraphics", "beginDrawingLayer#" + layerCount + ": class=" + layer.getClass().getSimpleName()
+                + " name=" + layer.getClass().getSimpleName()
+                + " sizeInPixels=" + (sz != null ? sz.x + "x" + sz.y : "null")
+                + " posInPixels=" + (pos != null ? pos.x + "," + pos.y : "null")
+                + " layerW=" + getLayerWidth() + " layerH=" + getLayerHeight()
+                + " xRatio=" + getxRatioBetweenPixelsAndModelUnits()
+                + " yRatio=" + getyRatioBetweenPixelsAndModelUnits()
+                + " xOff=" + getXOffsetInPixels() + " yOff=" + getYOffsetInPixels());
+        } catch (Exception e) {
+            android.util.Log.e("AndroidDisplayGraphics", "beginDrawingLayer error: " + e.getMessage(), e);
         }
     }
 

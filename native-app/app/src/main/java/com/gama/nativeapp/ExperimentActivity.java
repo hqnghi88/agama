@@ -22,6 +22,7 @@ import android.widget.TextView;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.jar.JarEntry;
@@ -68,20 +69,42 @@ public class ExperimentActivity extends Activity {
 
         setContentView(root);
 
-        String assetPath = getIntent().getStringExtra("asset_path");
-        String jarPath = getIntent().getStringExtra("jar_path");
-        String filePath = getIntent().getStringExtra("file_path");
-        boolean fromLibrary = getIntent().getBooleanExtra("from_library", false);
-
-        if (filePath != null) {
-            compileModelFromFilePath(filePath);
-        } else if (assetPath != null) {
-            compileModelFromAsset(assetPath);
-        } else if (fromLibrary && jarPath != null) {
-            compileModelFromLibrary(jarPath);
-        } else if (jarPath != null) {
-            compileModelFromLibrary(jarPath);
+        if (!GamaNativeBootstrap.isInitialized()) {
+            log("Initializing GAMA engine...");
+            new Thread(() -> {
+                try {
+                    GamaNativeBootstrap.initialize(this, new GamaNativeBootstrap.ProgressCallback() {
+                        @Override public void onProgress(String msg) { log("  " + msg); }
+                        @Override public void onSuccess(String msg) { log("  " + msg); startCompilation(); }
+                        @Override public void onFailure(String msg, Throwable t) { log("  FAIL: " + msg); }
+                    });
+                } catch (Exception e) {
+                    Log.e(TAG, "Bootstrap failed", e);
+                    log("Bootstrap error: " + e.getMessage());
+                }
+            }).start();
+        } else {
+            startCompilation();
         }
+    }
+
+    private void startCompilation() {
+        runOnUiThread(() -> {
+            String assetPath = getIntent().getStringExtra("asset_path");
+            String jarPath = getIntent().getStringExtra("jar_path");
+            String filePath = getIntent().getStringExtra("file_path");
+            boolean fromLibrary = getIntent().getBooleanExtra("from_library", false);
+
+            if (filePath != null) {
+                compileModelFromFilePath(filePath);
+            } else if (assetPath != null) {
+                compileModelFromAsset(assetPath);
+            } else if (fromLibrary && jarPath != null) {
+                compileModelFromLibrary(jarPath);
+            } else if (jarPath != null) {
+                compileModelFromLibrary(jarPath);
+            }
+        });
     }
 
     private void buildTopBar() {
@@ -375,8 +398,8 @@ public class ExperimentActivity extends Activity {
         new Thread(() -> {
             try {
                 File cacheDir = getCacheDir();
-                String safeName = assetPath.replaceAll("[^a-zA-Z0-9]", "_");
-                File modelFile = new File(cacheDir, safeName + ".gaml");
+                File modelFile = new File(cacheDir, assetPath);
+                modelFile.getParentFile().mkdirs();
 
                 try (InputStream is = getAssets().open(assetPath);
                      FileOutputStream fos = new FileOutputStream(modelFile)) {
@@ -385,6 +408,8 @@ public class ExperimentActivity extends Activity {
                     while ((n = is.read(buf)) > 0) fos.write(buf, 0, n);
                 }
                 log("Model file copied to: " + modelFile.getAbsolutePath());
+
+                extractIncludesFromJarForAsset(modelFile, assetPath);
 
                 Class<?> builderClass = Class.forName("gaml.compiler.gaml.validation.GamlModelBuilder");
                 Object builder = builderClass.getMethod("getDefaultInstance").invoke(null);
@@ -440,6 +465,66 @@ public class ExperimentActivity extends Activity {
                 }
             }
         }).start();
+    }
+
+    private void extractIncludesFromJarForAsset(File modelFile, String assetPath) {
+        int extractedIncludes = 0;
+        try {
+            File cacheJar = new File(getCacheDir(), "gama.library.jar");
+            if (!cacheJar.exists()) {
+                try (InputStream is = getAssets().open("gama.library.jar");
+                     FileOutputStream fos = new FileOutputStream(cacheJar)) {
+                    byte[] buf = new byte[8192];
+                    int n;
+                    while ((n = is.read(buf)) > 0) fos.write(buf, 0, n);
+                }
+            }
+            java.util.jar.JarFile jarFile = new java.util.jar.JarFile(cacheJar);
+            String modelFileName = assetPath.substring(assetPath.lastIndexOf('/') + 1);
+            java.util.Enumeration<? extends JarEntry> entries = jarFile.entries();
+            java.util.Set<String> extractedPaths = new java.util.HashSet<>();
+            while (entries.hasMoreElements()) {
+                JarEntry e = entries.nextElement();
+                String eName = e.getName();
+                if (e.isDirectory() || extractedPaths.contains(eName)) continue;
+                if (eName.endsWith("/")) continue;
+                int includesIdx = eName.lastIndexOf("/includes/");
+                if (includesIdx < 0) continue;
+                String includesDirPrefix = eName.substring(0, includesIdx + "/includes/".length());
+                if (!includesDirPrefix.endsWith("includes/")) continue;
+                String jarModelsDir = includesDirPrefix.replace("includes/", "models/");
+                boolean found = false;
+                java.util.Enumeration<? extends JarEntry> innerEntries = jarFile.entries();
+                while (innerEntries.hasMoreElements()) {
+                    JarEntry ie = innerEntries.nextElement();
+                    if (!ie.isDirectory() && ie.getName().startsWith(jarModelsDir) && ie.getName().endsWith(modelFileName)) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) continue;
+                String relativePath = eName.substring(includesDirPrefix.length());
+                File outFile = new File(modelFile.getParentFile(), "../includes/" + relativePath);
+                outFile = outFile.getCanonicalFile();
+                outFile.getParentFile().mkdirs();
+                if (!extractedPaths.contains(outFile.getAbsolutePath())) {
+                    try (InputStream is = jarFile.getInputStream(e);
+                         FileOutputStream fos = new FileOutputStream(outFile)) {
+                        byte[] buf = new byte[4096];
+                        int n;
+                        while ((n = is.read(buf)) > 0) fos.write(buf, 0, n);
+                    }
+                    extractedPaths.add(outFile.getAbsolutePath());
+                    extractedIncludes++;
+                }
+            }
+            jarFile.close();
+            if (extractedIncludes > 0) {
+                log("Extracted " + extractedIncludes + " includes files from JAR");
+            }
+        } catch (Exception e) {
+            log("Includes extraction: " + e.getMessage());
+        }
     }
 
     private void compileModelFromFilePath(String filePath) {
@@ -866,6 +951,38 @@ public class ExperimentActivity extends Activity {
 
         final long startTime = System.currentTimeMillis();
         final int[] pollCount = {0};
+        final int[] unpauseCount = {0};
+        final int[] lastCycle = {-1};
+
+        // Redirect System.err/System.out to logcat so we can see GAMA-CTRL debug prints
+        if (pollCount[0] == 0) {
+            try {
+                final PrintStream origErr = System.err;
+                final PrintStream origOut = System.out;
+                PrintStream teeErr = new PrintStream(new java.io.OutputStream() {
+                    @Override public void write(int b) { origErr.write(b); }
+                    @Override public void write(byte[] b, int off, int len) {
+                        origErr.write(b, off, len);
+                        String s = new String(b, off, len).trim();
+                        if (!s.isEmpty()) Log.e(TAG, "[STDERR] " + s);
+                    }
+                }, true);
+                PrintStream teeOut = new PrintStream(new java.io.OutputStream() {
+                    @Override public void write(int b) { origOut.write(b); }
+                    @Override public void write(byte[] b, int off, int len) {
+                        origOut.write(b, off, len);
+                        String s = new String(b, off, len).trim();
+                        if (!s.isEmpty()) Log.i(TAG, "[STDOUT] " + s);
+                    }
+                }, true);
+                System.setErr(teeErr);
+                System.setOut(teeOut);
+                Log.i(TAG, "[REDIRECT] System.out/err -> logcat active");
+            } catch (Exception e) {
+                Log.w(TAG, "Could not redirect streams", e);
+            }
+        }
+
         statePollRunnable = () -> {
             if (!isRunning) return;
             pollCount[0]++;
@@ -906,20 +1023,45 @@ public class ExperimentActivity extends Activity {
                     // clock not available yet
                 }
 
+                // AUTO-UNPAUSE: if execution thread is stuck on lock.acquire(), release it
+                if (paused && execState.equals("WAITING") && alive) {
+                    try {
+                        java.lang.reflect.Field lockField = absControllerClass.getDeclaredField("lock");
+                        lockField.setAccessible(true);
+                        Object lock = lockField.get(controller);
+                        pausedField.setBoolean(controller, false);
+                        lock.getClass().getMethod("release").invoke(lock);
+                        unpauseCount[0]++;
+                        Log.w(TAG, "[AUTO-UNPAUSE #" + unpauseCount[0] + "] Released lock, paused=false");
+                        if (unpauseCount[0] <= 10 || unpauseCount[0] % 50 == 0) {
+                            log("[AUTO-UNPAUSE #" + unpauseCount[0] + "] Released lock, cycle=" + cycleCount[0]);
+                        }
+                    } catch (Exception ue) {
+                        Log.e(TAG, "[AUTO-UNPAUSE] error: " + ue.getMessage());
+                    }
+                }
+
                 StringBuilder sb = new StringBuilder();
                 sb.append("[Poll #").append(pollCount[0]).append("] ");
                 sb.append("paused=").append(paused).append(" ");
                 sb.append("alive=").append(alive).append(" ");
                 sb.append("exec=").append(execState);
                 sb.append(" cycle=").append(cycleCount[0]);
+                sb.append(" unpause=").append(unpauseCount[0]);
                 if (!execAlive) sb.append(" DEAD!");
 
+                // Detect cycle changes
+                if (cycleCount[0] > lastCycle[0] && cycleCount[0] >= 0) {
+                    sb.append(" [CYCLE ADVANCED!]");
+                    lastCycle[0] = cycleCount[0];
+                }
+
                 Log.i(TAG, sb.toString());
-                if (pollCount[0] <= 5 || pollCount[0] % 10 == 0) {
+                if (pollCount[0] <= 10 || pollCount[0] % 10 == 0) {
                     log(sb.toString());
                 }
 
-                if (pollCount[0] <= 3 || pollCount[0] == 10) {
+                if (pollCount[0] <= 5 || pollCount[0] == 10 || pollCount[0] == 50) {
                     StackTraceElement[] stack = execThread.getStackTrace();
                     StringBuilder stackStr = new StringBuilder();
                     stackStr.append("EXEC THREAD STACK (").append(execState).append("):\n");
@@ -927,7 +1069,7 @@ public class ExperimentActivity extends Activity {
                         stackStr.append("  at ").append(frame).append("\n");
                     }
                     Log.w(TAG, stackStr.toString());
-                    if (pollCount[0] <= 3) log(stackStr.toString());
+                    if (pollCount[0] <= 5) log(stackStr.toString());
 
                     ThreadGroup tg = execThread.getThreadGroup();
                     if (tg != null) {
@@ -945,7 +1087,7 @@ public class ExperimentActivity extends Activity {
                                         tsb.append("  at ").append(frame).append("\n");
                                     }
                                     Log.w(TAG, tsb.toString());
-                                    if (pollCount[0] <= 3) log(tsb.toString());
+                                    if (pollCount[0] <= 5) log(tsb.toString());
                                 }
                             }
                         }
@@ -1007,7 +1149,7 @@ public class ExperimentActivity extends Activity {
                                 }
                             }
                         } catch (Exception e) {
-                            if (pollCount[0] <= 3) Log.e(TAG, "[DISPLAY] step error: " + e.getMessage());
+                            if (pollCount[0] <= 5) Log.e(TAG, "[DISPLAY] step error: " + e.getMessage());
                         }
                     }
                 });
@@ -1016,7 +1158,7 @@ public class ExperimentActivity extends Activity {
                 Log.w(TAG, "Poll error", e);
             }
 
-            if (isRunning && pollCount[0] < 300) {
+            if (isRunning && pollCount[0] < 600) {
                 handler.postDelayed(statePollRunnable, 1000);
             }
         };

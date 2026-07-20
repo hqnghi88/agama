@@ -89,10 +89,10 @@ public class GamlAgent extends MinimalAgent implements IMacroAgent {
 				if (isPopulation(s)) { pops.add((IPopulation<?>) o); }
 				return true;
 			});
-			microPopulations = pops.toArray(new IPopulation[pops.size()]);
-			if (microPopulations.length == 0) {
+			if (pops.isEmpty()) {
 				microPopulations = NO_POP;
 			} else {
+				microPopulations = pops.toArray(new IPopulation[pops.size()]);
 				Arrays.sort(microPopulations, (p1, p2) -> p1.isGrid() ? p2.isGrid() ? 0 : 1 : p2.isGrid() ? -1 : 0);
 			}
 		}

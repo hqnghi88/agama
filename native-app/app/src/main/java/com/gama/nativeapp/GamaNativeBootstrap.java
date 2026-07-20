@@ -19,6 +19,9 @@ public class GamaNativeBootstrap {
 
     private static final String TAG = "GamaNativeBootstrap";
     private static final Map<String, Bundle> registeredBundles = new LinkedHashMap<>();
+    private static volatile boolean initialized = false;
+
+    public static boolean isInitialized() { return initialized; }
 
     public interface ProgressCallback {
         void onProgress(String message);
@@ -346,6 +349,7 @@ public class GamaNativeBootstrap {
             callback.onProgress("Constants registration failed: " + e.getMessage());
         }
 
+        initialized = true;
         callback.onSuccess("GAMA engine initialized! " + loaded + " plugins loaded.");
     }
 

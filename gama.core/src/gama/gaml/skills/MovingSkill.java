@@ -651,6 +651,10 @@ public class MovingSkill extends Skill {
 	final GamaPoint source = agent.getLocation().copy(scope);
 	final double maxDist = computeDistance(scope, agent);
 	IShape goal = computeTarget(scope, agent);
+	if (agent.getSpecies() != null && "people".equals(agent.getSpecies().getName())) {
+	    final String speciesName = agent.getSpecies().getName();
+	    System.out.println("[GOTO-DIAG] agent=" + agent.getName() + " species=" + speciesName + " source=" + source + " goal=" + goal + " maxDist=" + maxDist);
+	}
 	final Boolean returnPath = scope.hasArg("return_path") ? (Boolean) scope.getArg("return_path", IType.NONE)
 		: false;
 	IContainer on = null;
@@ -683,6 +687,9 @@ public class MovingSkill extends Skill {
 	final IShape edge = rt instanceof IShape ? (IShape) rt : null;
 	final ITopology topo = rt instanceof ITopology ? (ITopology) rt : scope.getTopology();
 	if (goal == null || topo == null) {
+	    if ("people".equals(agent.getSpecies().getName())) {
+		System.out.println("[GOTO-DIAG] NOT MOVING: goal=" + goal + " topo=" + topo);
+	    }
 	    notMoving(agent);
 	    if (returnPath) {
 		return PathFactory.newInstance(scope, topo, source, source, GamaListFactory.EMPTY_LIST, false);
@@ -736,6 +743,9 @@ public class MovingSkill extends Skill {
 	    path = topo.pathBetween(scope, agent, goal);
 	}
 	if (path == null) {
+	    if ("people".equals(agent.getSpecies().getName())) {
+		System.out.println("[GOTO-DIAG] PATH NULL: topo=" + topo.getClass().getSimpleName() + " source=" + source + " goal=" + goal);
+	    }
 	    notMoving(agent);
 	    if (returnPath) {
 		return PathFactory.newInstance(scope, topo, source, source,

@@ -181,65 +181,41 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
                 return;
             }
 
-            // Log all micro-populations on the simulation agent
-            if (frames < 10) {
-                gama.core.metamodel.population.IPopulation<?>[] microPops = sim.getMicroPopulations();
-                android.util.Log.i("AndroidDisplaySurface", "Manual draw: sim=" + sim.getClass().getSimpleName() +
-                    " simName=" + sim.getName() + " microPopCount=" + (microPops == null ? 0 : microPops.length));
-                if (microPops != null) {
-                    for (gama.core.metamodel.population.IPopulation<?> mp : microPops) {
-                        android.util.Log.i("AndroidDisplaySurface", "  microPop: species=" + mp.getSpecies().getName() + " size=" + mp.size());
-                    }
-                }
-                // Also check root agent (ITopLevelAgent extends IMacroAgent)
-                gama.core.kernel.experiment.ITopLevelAgent rootTLA = drawScope.getRoot();
-                if (rootTLA != null && rootTLA instanceof gama.core.metamodel.agent.IMacroAgent) {
-                    gama.core.metamodel.agent.IMacroAgent macroRoot = (gama.core.metamodel.agent.IMacroAgent) rootTLA;
-                    gama.core.metamodel.population.IPopulation<?>[] rootPops = macroRoot.getMicroPopulations();
-                    android.util.Log.i("AndroidDisplaySurface", "  rootAgent=" + macroRoot.getClass().getSimpleName() + " name=" + macroRoot.getName() + " microPopCount=" + (rootPops == null ? 0 : rootPops.length));
-                    if (rootPops != null) {
-                        for (gama.core.metamodel.population.IPopulation<?> mp : rootPops) {
-                            android.util.Log.i("AndroidDisplaySurface", "  root microPop: species=" + mp.getSpecies().getName() + " size=" + mp.size());
-                        }
-                    }
-                }
-            }
+            // REMOVED: sim.getMicroPopulations() diagnostic - it caches empty result before simulation init,
+            // causing stepSubPopulations() to skip all species (root cause of agents not moving)
 
             java.util.List<String> speciesNames = new java.util.ArrayList<>();
             speciesNames.add("life_cell");
             speciesNames.add("test_agent");
+            speciesNames.add("people");
             for (String speciesName : speciesNames) {
                 gama.core.metamodel.population.IPopulation pop = null;
 
-                // First try simulation directly
-                pop = sim.getMicroPopulation(speciesName);
-
-                // If null, search experiment root agent hierarchy
-                if (pop == null) {
-                    gama.core.kernel.experiment.ITopLevelAgent rootTLA = drawScope.getRoot();
-                    if (rootTLA != null && rootTLA instanceof gama.core.metamodel.agent.IMacroAgent) {
-                        gama.core.metamodel.population.IPopulation<?>[] rootPops = ((gama.core.metamodel.agent.IMacroAgent) rootTLA).getMicroPopulations();
-                        if (rootPops != null) {
-                            for (gama.core.metamodel.population.IPopulation<?> mp : rootPops) {
-                                // Each rootPop is a population of macro agents. Try each agent.
-                                for (Object agentObj : mp.toArray()) {
-                                    if (agentObj instanceof gama.core.metamodel.agent.IMacroAgent macroAgent) {
-                                        if (frames < 5) android.util.Log.i("AndroidDisplaySurface", "  checking macroAgent: " + macroAgent.getName() + " class=" + macroAgent.getClass().getSimpleName());
-                                        try {
-                                            gama.core.metamodel.population.IPopulation<?> nested = macroAgent.getMicroPopulation(speciesName);
-                                            if (nested != null) { pop = nested; if (frames < 5) android.util.Log.i("AndroidDisplaySurface", "  FOUND in " + macroAgent.getName()); break; }
-                                            if (frames < 5) android.util.Log.i("AndroidDisplaySurface", "  not found in " + macroAgent.getName());
-                                        } catch (Exception e) { if (frames < 5) android.util.Log.w("AndroidDisplaySurface", "  search error: " + e.getMessage()); }
-                                    }
-                                }
-                                if (pop != null) break;
-                            }
-                        }
-                    }
+                // First try simulation directly (use getAttribute, NOT getMicroPopulations which caches)
+                Object attr = null;
+                try { attr = sim.getAttribute(speciesName); } catch (Exception e) {}
+                if (attr instanceof gama.core.metamodel.population.IPopulation) {
+                    pop = (gama.core.metamodel.population.IPopulation) attr;
                 }
                 if (pop == null) {
                     if (frames < 5 || frames % 100 == 0) android.util.Log.w("AndroidDisplaySurface", "Manual draw: pop is null for " + speciesName + " frame=" + frames);
                     continue;
+                }
+                if (frames % 500 == 0) {
+                    int simHash = System.identityHashCode(sim);
+                    int popHash = System.identityHashCode(pop);
+                    android.util.Log.d("AndroidDisplaySurface", "DIAG pop#" + popHash + " popClass=" + pop.getClass().getSimpleName() + " popSize=" + pop.size() + " frame=" + frames);
+                    // Also try getting location via IShape directly and check for any movement across 5 agents
+                    int idx2 = 0;
+                    for (Object obj2 : pop.toArray()) {
+                        if (obj2 instanceof gama.core.metamodel.agent.IAgent ag2) {
+                            gama.core.metamodel.shape.IShape loc2 = ag2.getLocation();
+                            GamaPoint pt2 = loc2 != null ? loc2.getLocation() : null;
+                            android.util.Log.d("AndroidDisplaySurface", "  agent#" + idx2 + " loc=" + (pt2 != null ? "(" + pt2.getX() + "," + pt2.getY() + ")" : "null"));
+                            idx2++;
+                            if (idx2 >= 5) break;
+                        }
+                    }
                 }
                 int popSize = pop.size();
                 if (popSize == 0) {
@@ -304,6 +280,7 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
                 }
 
                 if (!drawnAsGrid) {
+                    int agentIdx = 0;
                     for (Object obj : pop.toArray()) {
                         if (obj instanceof gama.core.metamodel.agent.IAgent agent) {
                             gama.core.metamodel.shape.IShape shape = agent.getLocation();
@@ -316,6 +293,10 @@ public class AndroidDisplaySurface extends View implements IDisplaySurface {
                             float radius = (float) Math.max(3, 3.0 * scale);
 
                             canvas.drawCircle(sx, sy, radius, agentPaint);
+                            if (agentIdx < 3 && (frames < 5 || frames % 500 == 0)) {
+                                android.util.Log.d("AndroidDisplaySurface", "Agent#" + agentIdx + " pos: (" + pt.getX() + ", " + pt.getY() + ") frame=" + frames);
+                            }
+                            agentIdx++;
                         }
                     }
                 }

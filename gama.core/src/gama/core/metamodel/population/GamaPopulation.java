@@ -336,6 +336,9 @@ public class GamaPopulation<T extends IAgent> extends GamaList<T> implements IPo
 	 */
 	@Override
 	public boolean step(final IScope scope) throws GamaRuntimeException {
+		if (species != null && "people".equals(species.getName())) {
+			System.out.println("[POP-DIAG] GamaPopulation.step() called for people, size=" + size() + " cycle=" + scope.getClock().getCycle());
+		}
 		final IExpression frequencyExp = species.getFrequency();
 		if (frequencyExp != null) {
 			final int frequency = Cast.asInt(scope, frequencyExp.value(scope));

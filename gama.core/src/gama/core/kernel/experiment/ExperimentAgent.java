@@ -549,6 +549,7 @@ public class ExperimentAgent extends GamlAgent implements IExperimentAgent {
 			pop.initializeFor(ownScope);
 		}
 		microPopulations = new IPopulation[] { pop };
+		System.out.println("[SIMPOP-DIAG] createSimulationPopulation: model=" + model.getName() + ", pop.size=" + pop.size() + ", microPopulations.length=" + microPopulations.length);
 	}
 
 	/**
