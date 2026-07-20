@@ -18,6 +18,8 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
+import com.gama.nativeapp.display.AndroidDisplaySurface;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
@@ -44,6 +46,9 @@ public class ExperimentActivity extends Activity {
     private LinearLayout displayWrapper;
     private LinearLayout.LayoutParams displayWrapperLp;
     private LinearLayout.LayoutParams consolePanelLp;
+    private HorizontalScrollView displayTabScroll;
+    private LinearLayout displayTabBar;
+    private String activeDisplayName;
     private final Handler handler = new Handler(Looper.getMainLooper());
 
     private Object compiledModel;
@@ -164,6 +169,7 @@ public class ExperimentActivity extends Activity {
 
         buildSimControlBar(displayWrapper);
         buildDisplayToolbar(displayWrapper);
+        buildDisplayTabBar(displayWrapper);
 
         displayContainer = new FrameLayout(this);
         displayContainer.setBackgroundColor(0xFF808080);
@@ -278,6 +284,72 @@ public class ExperimentActivity extends Activity {
         }
 
         parent.addView(displayToolbar, lpFull());
+    }
+
+    private void buildDisplayTabBar(LinearLayout parent) {
+        displayTabScroll = new HorizontalScrollView(this);
+        displayTabScroll.setHorizontalScrollBarEnabled(false);
+        displayTabScroll.setBackgroundColor(0xFF252526);
+        displayTabScroll.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        displayTabScroll.setVisibility(View.GONE);
+
+        displayTabBar = new LinearLayout(this);
+        displayTabBar.setOrientation(LinearLayout.HORIZONTAL);
+        displayTabBar.setPadding(dp(4), dp(2), dp(4), dp(2));
+        displayTabScroll.addView(displayTabBar);
+
+        parent.addView(displayTabScroll, lpFull());
+    }
+
+    public void onDisplayRegistered(String displayName, AndroidDisplaySurface surface) {
+        if (activeDisplayName == null) {
+            activeDisplayName = displayName;
+            surface.setVisibility(View.VISIBLE);
+        } else {
+            surface.setVisibility(View.GONE);
+        }
+
+        TextView tab = new TextView(this);
+        tab.setText(" " + displayName + " ");
+        tab.setTextColor(activeDisplayName.equals(displayName) ? 0xFF4CAF50 : 0xFFAAAAAA);
+        tab.setTextSize(11);
+        tab.setPadding(dp(8), dp(4), dp(8), dp(4));
+        tab.setBackgroundColor(activeDisplayName.equals(displayName) ? 0xFF333333 : 0xFF2D2D2D);
+        tab.setOnClickListener(v -> selectDisplay(displayName));
+        displayTabBar.addView(tab);
+
+        if (displayTabBar.getChildCount() > 1) {
+            displayTabScroll.setVisibility(View.VISIBLE);
+        }
+
+        displayToolbar.setVisibility(View.VISIBLE);
+    }
+
+    private void selectDisplay(String displayName) {
+        if (displayName.equals(activeDisplayName)) return;
+        activeDisplayName = displayName;
+
+        for (int i = 0; i < displayContainer.getChildCount(); i++) {
+            displayContainer.getChildAt(i).setVisibility(View.GONE);
+        }
+        for (int i = 0; i < displayTabBar.getChildCount(); i++) {
+            View tabView = displayTabBar.getChildAt(i);
+            if (tabView instanceof TextView) {
+                TextView tab = (TextView) tabView;
+                boolean isActive = tab.getText().toString().trim().equals(displayName);
+                tab.setTextColor(isActive ? 0xFF4CAF50 : 0xFFAAAAAA);
+                tab.setBackgroundColor(isActive ? 0xFF333333 : 0xFF2D2D2D);
+            }
+        }
+
+        java.util.Map<String, AndroidDisplaySurface> surfaces =
+                com.gama.nativeapp.gui.AndroidGuiHandler.getInstance().getDisplaySurfaces();
+        AndroidDisplaySurface activeSurface = surfaces.get(displayName);
+        if (activeSurface != null) {
+            activeSurface.setVisibility(View.VISIBLE);
+            activeSurface.invalidate();
+        }
     }
 
     private void buildConsolePanel() {
@@ -802,8 +874,7 @@ public class ExperimentActivity extends Activity {
         handler.post(() -> {
             statusText.setText("Running");
             playPauseBtn.setText("\u23F8");
-            displayToolbar.setVisibility(View.VISIBLE);
-            cycleText.setText("Simulation 0: 0 cycle elapsed [00:00:00]");
+            cycleText.setText("Simulation 0: 0 cycle");
         });
 
         new Thread(() -> {
@@ -978,56 +1049,59 @@ public class ExperimentActivity extends Activity {
                         String.format("%02d:%02d:%02d", 0, min, sec) + "]" +
                         (paused ? " [PAUSED]" : ""));
 
-                    // Step and update the display output with the simulation scope
-                    if (displayContainer.getChildCount() > 0) {
-                        try {
-                            Class<?> guiHandlerClass = Class.forName("com.gama.nativeapp.gui.AndroidGuiHandler");
-                            java.lang.reflect.Field ldoField = guiHandlerClass.getDeclaredField("cachedDisplayOutput");
-                            ldoField.setAccessible(true);
-                            Object ldoObj = ldoField.get(null);
-                            if (ldoObj != null) {
-                                Class<?> iscopeClass = Class.forName("gama.core.runtime.IScope");
-                                Class<?> gamaClass = Class.forName("gama.core.runtime.GAMA");
-                                java.lang.reflect.Field controllersField = gamaClass.getDeclaredField("controllers");
-                                controllersField.setAccessible(true);
-                                java.util.List controllers = (java.util.List) controllersField.get(null);
-                                if (controllers != null && !controllers.isEmpty()) {
-                                    Object ctrl = controllers.get(controllers.size() - 1);
-                                    java.lang.reflect.Field scopeField = ctrl.getClass().getSuperclass().getDeclaredField("scope");
-                                    scopeField.setAccessible(true);
-                                    Object ctrlScope = scopeField.get(ctrl);
-                                    if (ctrlScope != null) {
-                                        java.lang.reflect.Method copyForGraphics = ctrlScope.getClass().getMethod("copyForGraphics", String.class);
-                                        Object gfxScope = copyForGraphics.invoke(ctrlScope, "display map");
+                    try {
+                        Class<?> guiHandlerClass = Class.forName("com.gama.nativeapp.gui.AndroidGuiHandler");
+                        java.lang.reflect.Method getInstanceMethod = guiHandlerClass.getMethod("getInstance");
+                        Object guiHandler = getInstanceMethod.invoke(null);
+                        java.lang.reflect.Method getOutputsMethod = guiHandlerClass.getMethod("getDisplayOutputs");
+                        @SuppressWarnings("unchecked")
+                        java.util.Map<String, Object> outputsMap = (java.util.Map<String, Object>) getOutputsMethod.invoke(guiHandler);
+                        if (outputsMap == null || outputsMap.isEmpty()) return;
 
-                                        java.lang.reflect.Method setScope = ldoObj.getClass().getMethod("setScope", iscopeClass);
-                                        setScope.invoke(ldoObj, gfxScope);
+                        Class<?> iscopeClass = Class.forName("gama.core.runtime.IScope");
+                        Class<?> gamaClass = Class.forName("gama.core.runtime.GAMA");
+                        java.lang.reflect.Field controllersField = gamaClass.getDeclaredField("controllers");
+                        controllersField.setAccessible(true);
+                        java.util.List controllers = (java.util.List) controllersField.get(null);
+                        if (controllers == null || controllers.isEmpty()) return;
 
-                                        java.lang.reflect.Method step = ldoObj.getClass().getMethod("step", iscopeClass);
-                                        step.invoke(ldoObj, gfxScope);
+                        Object ctrl = controllers.get(controllers.size() - 1);
+                        java.lang.reflect.Field scopeField = ctrl.getClass().getSuperclass().getDeclaredField("scope");
+                        scopeField.setAccessible(true);
+                        Object ctrlScope = scopeField.get(ctrl);
+                        if (ctrlScope == null) return;
 
-                                        java.lang.reflect.Method update = ldoObj.getClass().getMethod("update");
-                                        update.invoke(ldoObj);
+                        java.lang.reflect.Method copyForGraphics = ctrlScope.getClass().getMethod("copyForGraphics", String.class);
 
-                                        // Also get the surface and invalidate it directly
-                                        java.lang.reflect.Method getSurface = ldoObj.getClass().getMethod("getSurface");
-                                        Object surfObj = getSurface.invoke(ldoObj);
-                                        if (surfObj != null) {
-                                            android.view.View surfView = (android.view.View) surfObj;
-                                            surfView.post(() -> {
-                                                surfView.invalidate();
-                                            });
-                                        }
+                        for (Object ldoObj : outputsMap.values()) {
+                            try {
+                                Object gfxScope = copyForGraphics.invoke(ctrlScope, "display map");
 
-                                        if (pollCount[0] % 30 == 0) {
-                                            Log.i(TAG, "[DISPLAY] stepped LDO, cycle=" + cycleCount[0]);
-                                        }
-                                    }
+                                java.lang.reflect.Method setScope = ldoObj.getClass().getMethod("setScope", iscopeClass);
+                                setScope.invoke(ldoObj, gfxScope);
+
+                                java.lang.reflect.Method step = ldoObj.getClass().getMethod("step", iscopeClass);
+                                step.invoke(ldoObj, gfxScope);
+
+                                java.lang.reflect.Method update = ldoObj.getClass().getMethod("update");
+                                update.invoke(ldoObj);
+
+                                java.lang.reflect.Method getSurface = ldoObj.getClass().getMethod("getSurface");
+                                Object surfObj = getSurface.invoke(ldoObj);
+                                if (surfObj != null) {
+                                    android.view.View surfView = (android.view.View) surfObj;
+                                    surfView.post(() -> surfView.invalidate());
                                 }
+                            } catch (Exception de) {
+                                if (pollCount[0] % 60 == 0) Log.w(TAG, "[DISPLAY] step error for " + ldoObj + ": " + de.getMessage());
                             }
-                        } catch (Exception e) {
-                            if (pollCount[0] % 60 == 0) Log.w(TAG, "[DISPLAY] step error: " + e.getMessage());
                         }
+
+                        if (pollCount[0] % 30 == 0) {
+                            Log.i(TAG, "[DISPLAY] stepped " + outputsMap.size() + " display(s), cycle=" + cycleCount[0]);
+                        }
+                    } catch (Exception e) {
+                        if (pollCount[0] % 60 == 0) Log.w(TAG, "[DISPLAY] error: " + e.getMessage());
                     }
                 });
 
