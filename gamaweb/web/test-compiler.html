@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html><head><title>Compiler Test</title></head>
+<body>
+<pre id="output"></pre>
+<script src="js/gama-runtime.js"></script>
+<script src="js/gama-compiler.js"></script>
+<script>
+var out = document.getElementById('output');
+function log(s) { out.textContent += s + '\n'; }
+
+// Fetch the SIR_ABM model
+fetch('library/models/Toy Models/Comodels/SIR Switch/Legacy_models/SIR_ABM.gaml')
+  .then(function(r) { return r.text(); })
+  .then(function(src) {
+    log('=== SOURCE ===');
+    log(src);
+    log('\n=== COMPILING ===');
+    try {
+      var result = compileGaml(src);
+      log('\n=== AST (first 3000 chars) ===');
+      log(JSON.stringify(result.ast, null, 2).substring(0, 3000));
+      log('\n=== GENERATED JS ===');
+      log(result.jsCode);
+      log('\n=== PARSING SUCCESS ===');
+    } catch(e) {
+      log('\n=== ERROR ===');
+      log(e.message);
+      log(e.stack);
+    }
+  })
+  .catch(function(e) { log('Fetch error: ' + e.message); });
+</script>
+</body></html>

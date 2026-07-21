@@ -1,0 +1,24 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 2
+Bundle-Name: GAMA Web (Browser-based WebGL renderer)
+Bundle-SymbolicName: gama.web;singleton:=true
+Bundle-Version: 0.0.0.qualifier
+Require-Bundle: gama.core,
+ gaml.compiler,
+ gama.headless,
+ gama.dependencies,
+ gama.extension.image,
+ gama.extension.maths,
+ gama.extension.database,
+ gama.extension.network,
+ gama.extension.traffic
+Bundle-ActivationPolicy: lazy
+Export-Package: 
+ gama.web.display,
+ gama.web.graphics,
+ gama.web.runtime
+Import-Package: com.google.inject,
+ gama.workspace
+Bundle-ClassPath: .
+Bundle-RequiredExecutionEnvironment: JavaSE-25
+Automatic-Module-Name: gama.web

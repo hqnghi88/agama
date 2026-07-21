@@ -1,0 +1,2426 @@
+[
+  {
+    "path": "models/Data/Data Exportation/models/Save Graphs.gaml",
+    "name": "Savetoshapefile",
+    "category": "models/Data/Data Exportation",
+    "experiments": "main",
+    "size": 1598,
+    "lines": 50
+  },
+  {
+    "path": "models/Data/Data Exportation/models/Save to ASC.gaml",
+    "name": "SavetoAsc",
+    "category": "models/Data/Data Exportation",
+    "experiments": "main",
+    "size": 1103,
+    "lines": 33
+  },
+  {
+    "path": "models/Data/Data Exportation/models/Save to CSV.gaml",
+    "name": "SavetoCSV",
+    "category": "models/Data/Data Exportation",
+    "experiments": "main",
+    "size": 1747,
+    "lines": 59
+  },
+  {
+    "path": "models/Data/Data Exportation/models/Save to GeoJson.gaml",
+    "name": "SavetoGeoJson",
+    "category": "models/Data/Data Exportation",
+    "experiments": "main",
+    "size": 1274,
+    "lines": 41
+  },
+  {
+    "path": "models/Data/Data Exportation/models/Save to Geotiff.gaml",
+    "name": "SavetoGeotiff",
+    "category": "models/Data/Data Exportation",
+    "experiments": "main",
+    "size": 1096,
+    "lines": 33
+  },
+  {
+    "path": "models/Data/Data Exportation/models/Save to KML.gaml",
+    "name": "exportkml",
+    "category": "models/Data/Data Exportation",
+    "experiments": "exportkml",
+    "size": 2399,
+    "lines": 79
+  },
+  {
+    "path": "models/Data/Data Exportation/models/Save to PNG.gaml",
+    "name": "SavetoGeotiff",
+    "category": "models/Data/Data Exportation",
+    "experiments": "main",
+    "size": 1106,
+    "lines": 36
+  },
+  {
+    "path": "models/Data/Data Exportation/models/Save to SHP.gaml",
+    "name": "Savetoshapefile",
+    "category": "models/Data/Data Exportation",
+    "experiments": "main",
+    "size": 1541,
+    "lines": 42
+  },
+  {
+    "path": "models/Data/Data Exportation/models/Save to Text.gaml",
+    "name": "SavetoText",
+    "category": "models/Data/Data Exportation",
+    "experiments": "main",
+    "size": 1790,
+    "lines": 62
+  },
+  {
+    "path": "models/Data/Data Importation/models/3D shapefile Loading.gaml",
+    "name": "shapefile_loading",
+    "category": "models/Data/Data Importation",
+    "experiments": "display_shape",
+    "size": 1318,
+    "lines": 38
+  },
+  {
+    "path": "models/Data/Data Importation/models/ASC File Import.gaml",
+    "name": "ascimport",
+    "category": "models/Data/Data Importation",
+    "experiments": "gridloading",
+    "size": 1545,
+    "lines": 49
+  },
+  {
+    "path": "models/Data/Data Importation/models/BingMap Image Import.gaml",
+    "name": "BingMapImageImport",
+    "category": "models/Data/Data Importation",
+    "experiments": "Display",
+    "size": 1991,
+    "lines": 64
+  },
+  {
+    "path": "models/Data/Data Importation/models/Contour Lines.gaml",
+    "name": "contour_lines_import",
+    "category": "models/Data/Data Importation",
+    "experiments": "contour_lines_import",
+    "size": 2287,
+    "lines": 66
+  },
+  {
+    "path": "models/Data/Data Importation/models/Create Agents from CSV.gaml",
+    "name": "CSVfileloading",
+    "category": "models/Data/Data Importation",
+    "experiments": "main",
+    "size": 1809,
+    "lines": 53
+  },
+  {
+    "path": "models/Data/Data Importation/models/CSV File Import to Dataframe.gaml",
+    "name": "CSVDataframeImport",
+    "category": "models/Data/Data Importation",
+    "experiments": "main",
+    "size": 1518,
+    "lines": 45
+  },
+  {
+    "path": "models/Data/Data Importation/models/CSV File Import to matrix.gaml",
+    "name": "CSVfileloading",
+    "category": "models/Data/Data Importation",
+    "experiments": "main",
+    "size": 1135,
+    "lines": 32
+  },
+  {
+    "path": "models/Data/Data Importation/models/Download Data (OSM-images).gaml",
+    "name": "download_spatial_data",
+    "category": "models/Data/Data Importation",
+    "experiments": "downloadGISdata",
+    "size": 16388,
+    "lines": 454
+  },
+  {
+    "path": "models/Data/Data Importation/models/DXF File Import.gaml",
+    "name": "DXFAgents",
+    "category": "models/Data/Data Importation",
+    "experiments": "DXFAgents",
+    "size": 1733,
+    "lines": 72
+  },
+  {
+    "path": "models/Data/Data Importation/models/GEOJSON File Import.gaml",
+    "name": "geojson_loading",
+    "category": "models/Data/Data Importation",
+    "experiments": "Display",
+    "size": 1287,
+    "lines": 41
+  },
+  {
+    "path": "models/Data/Data Importation/models/GEOTIFF File Import.gaml",
+    "name": "geotiffimport",
+    "category": "models/Data/Data Importation",
+    "experiments": "show_example",
+    "size": 1761,
+    "lines": 44
+  },
+  {
+    "path": "models/Data/Data Importation/models/GIF File Loading.gaml",
+    "name": "AnimatedGIFLoading",
+    "category": "models/Data/Data Importation",
+    "experiments": "",
+    "size": 1182,
+    "lines": 43
+  },
+  {
+    "path": "models/Data/Data Importation/models/GML Import.gaml",
+    "name": "simpleGMLfileLoading",
+    "category": "models/Data/Data Importation",
+    "experiments": "Run",
+    "size": 1418,
+    "lines": 45
+  },
+  {
+    "path": "models/Data/Data Importation/models/Graph Agents Importation.gaml",
+    "name": "GraphAttributesImportation",
+    "category": "models/Data/Data Importation",
+    "experiments": "import_graph",
+    "size": 2191,
+    "lines": 86
+  },
+  {
+    "path": "models/Data/Data Importation/models/Graph Importation.gaml",
+    "name": "GraphImportation",
+    "category": "models/Data/Data Importation",
+    "experiments": "import_graph",
+    "size": 2191,
+    "lines": 79
+  },
+  {
+    "path": "models/Data/Data Importation/models/Grid DEM.gaml",
+    "name": "gridloading ",
+    "category": "models/Data/Data Importation",
+    "experiments": "base,Comparison",
+    "size": 7554,
+    "lines": 184
+  },
+  {
+    "path": "models/Data/Data Importation/models/Image vectorization.gaml",
+    "name": "EscapeTrainingEnvironment",
+    "category": "models/Data/Data Importation",
+    "experiments": "Vectorize",
+    "size": 4368,
+    "lines": 178
+  },
+  {
+    "path": "models/Data/Data Importation/models/JSON File Import.gaml",
+    "name": "json_loading",
+    "category": "models/Data/Data Importation",
+    "experiments": "Display",
+    "size": 1359,
+    "lines": 42
+  },
+  {
+    "path": "models/Data/Data Importation/models/MapBox Image Import As Background Image.gaml",
+    "name": "main",
+    "category": "models/Data/Data Importation",
+    "experiments": "exp",
+    "size": 1901,
+    "lines": 58
+  },
+  {
+    "path": "models/Data/Data Importation/models/MapQuest Image Import.gaml",
+    "name": "MapQuestImageImport",
+    "category": "models/Data/Data Importation",
+    "experiments": "Display",
+    "size": 2241,
+    "lines": 68
+  },
+  {
+    "path": "models/Data/Data Importation/models/Multiple Raster Files Import.gaml",
+    "name": "importationraster",
+    "category": "models/Data/Data Importation",
+    "experiments": "importationraster",
+    "size": 2382,
+    "lines": 55
+  },
+  {
+    "path": "models/Data/Data Importation/models/OBJ file drawing.gaml",
+    "name": "obj_drawing",
+    "category": "models/Data/Data Importation",
+    "experiments": "Display",
+    "size": 1242,
+    "lines": 41
+  },
+  {
+    "path": "models/Data/Data Importation/models/OBJ file loading.gaml",
+    "name": "obj_loading",
+    "category": "models/Data/Data Importation",
+    "experiments": "Display",
+    "size": 952,
+    "lines": 39
+  },
+  {
+    "path": "models/Data/Data Importation/models/OSM File Import.gaml",
+    "name": "simpleOSMLoading",
+    "category": "models/Data/Data Importation",
+    "experiments": "",
+    "size": 2849,
+    "lines": 111
+  },
+  {
+    "path": "models/Data/Data Importation/models/PNG Icons.gaml",
+    "name": "PNGIcons",
+    "category": "models/Data/Data Importation",
+    "experiments": "Icons",
+    "size": 3048,
+    "lines": 110
+  },
+  {
+    "path": "models/Data/Data Importation/models/Raster Image Import.gaml",
+    "name": "HowToImportRaster",
+    "category": "models/Data/Data Importation",
+    "experiments": "main",
+    "size": 3203,
+    "lines": 82
+  },
+  {
+    "path": "models/Data/Data Importation/models/SHP Import.gaml",
+    "name": "simpleShapefileLoading",
+    "category": "models/Data/Data Importation",
+    "experiments": "GIS_agentification",
+    "size": 1546,
+    "lines": 45
+  },
+  {
+    "path": "models/Data/Data Importation/models/URL Image Import.gaml",
+    "name": "URLImageImport",
+    "category": "models/Data/Data Importation",
+    "experiments": "urlImage",
+    "size": 1300,
+    "lines": 37
+  },
+  {
+    "path": "models/Data/DataFrame Importation/models/Dataframe Excel Manipulation.gaml",
+    "name": "ExcelCoffeeShopSales",
+    "category": "models/Data/DataFrame Importation",
+    "experiments": "",
+    "size": 7340,
+    "lines": 199
+  },
+  {
+    "path": "models/Data/DataFrame Importation/models/Dataframe File IO.gaml",
+    "name": "DataframeFileIO",
+    "category": "models/Data/DataFrame Importation",
+    "experiments": "main",
+    "size": 3017,
+    "lines": 79
+  },
+  {
+    "path": "models/Data/DataFrame Importation/models/Dataframe iloc and Indexing.gaml",
+    "name": "DataframeIloc",
+    "category": "models/Data/DataFrame Importation",
+    "experiments": "main",
+    "size": 5474,
+    "lines": 141
+  },
+  {
+    "path": "models/Data/DataFrame Importation/models/Dataframe Join and Pivot.gaml",
+    "name": "DataframeJoinPivot",
+    "category": "models/Data/DataFrame Importation",
+    "experiments": "main",
+    "size": 2703,
+    "lines": 81
+  },
+  {
+    "path": "models/Data/DataFrame Importation/models/Dataframe Operations.gaml",
+    "name": "DataframeOperations",
+    "category": "models/Data/DataFrame Importation",
+    "experiments": "main",
+    "size": 3025,
+    "lines": 88
+  },
+  {
+    "path": "models/Data/DataFrame Importation/models/Dataframe Parquet manipulation.gaml",
+    "name": "ParquetAirbnbListings",
+    "category": "models/Data/DataFrame Importation",
+    "experiments": "",
+    "size": 11800,
+    "lines": 311
+  },
+  {
+    "path": "models/Data/Utils/models/Clean Line Network.gaml",
+    "name": "clean_road_network",
+    "category": "models/Data/Utils",
+    "experiments": "clean_network",
+    "size": 3363,
+    "lines": 94
+  },
+  {
+    "path": "models/Data/Utils/models/from GAMA CRS.gaml",
+    "name": "From_GAMA_CRS",
+    "category": "models/Data/Utils",
+    "experiments": "ProjectionManagement",
+    "size": 1926,
+    "lines": 54
+  },
+  {
+    "path": "models/Data/Utils/models/to GAMA CRS.gaml",
+    "name": "To_GAMA_CRS",
+    "category": "models/Data/Utils",
+    "experiments": "ProjectionManagement",
+    "size": 1721,
+    "lines": 51
+  },
+  {
+    "path": "models/Toy Models/Ants (Foraging and Sorting)/models/Ant Foraging.gaml",
+    "name": "ants",
+    "category": "models/Toy Models/Ants (Foraging and Sorting)",
+    "experiments": "base,that,that",
+    "size": 12475,
+    "lines": 290
+  },
+  {
+    "path": "models/Toy Models/Ants (Foraging and Sorting)/models/Ant Sorting.gaml",
+    "name": "ant_sort",
+    "category": "models/Toy Models/Ants (Foraging and Sorting)",
+    "experiments": "",
+    "size": 3470,
+    "lines": 99
+  },
+  {
+    "path": "models/Toy Models/Art/Gama 1.8/models/GAMA 1.8.gaml",
+    "name": "GAMA",
+    "category": "models/Toy Models/Art/Gama 1.8",
+    "experiments": "",
+    "size": 5096,
+    "lines": 228
+  },
+  {
+    "path": "models/Toy Models/Art/Gama 1.9/models/GAMA 1.9.gaml",
+    "name": "GAMA",
+    "category": "models/Toy Models/Art/Gama 1.9",
+    "experiments": "",
+    "size": 5404,
+    "lines": 212
+  },
+  {
+    "path": "models/Toy Models/Art/L-Trees/models/Tree and Seasons.gaml",
+    "name": "tree",
+    "category": "models/Toy Models/Art/L-Trees",
+    "experiments": "L_Tri",
+    "size": 15904,
+    "lines": 466
+  },
+  {
+    "path": "models/Toy Models/Art/Mondrian City/models/Mondrian City.gaml",
+    "name": "Mondrian_City",
+    "category": "models/Toy Models/Art/Mondrian City",
+    "experiments": "MondrianCity",
+    "size": 15728,
+    "lines": 472
+  },
+  {
+    "path": "models/Toy Models/Art/Mondrian City/models/Mondrian Generator.gaml",
+    "name": "MondrianGeneratorComposition",
+    "category": "models/Toy Models/Art/Mondrian City",
+    "experiments": "MondrianGenerator",
+    "size": 3042,
+    "lines": 123
+  },
+  {
+    "path": "models/Toy Models/Art/Radiohead In Point Cloud/models/Radiohead In Point Coud.gaml",
+    "name": "hail_to_pablo_the_king_of_the_amnesiac_kid_in_a_computer_shaped_thom",
+    "category": "models/Toy Models/Art/Radiohead In Point Cloud",
+    "experiments": "OK_Computer",
+    "size": 2984,
+    "lines": 65
+  },
+  {
+    "path": "models/Toy Models/Art/Voronoi/Voronoi.gaml",
+    "name": "voronoi",
+    "category": "models/Toy Models/Art/Voronoi",
+    "experiments": "voronoi",
+    "size": 3504,
+    "lines": 105
+  },
+  {
+    "path": "models/Toy Models/Boids/models/Boids 3D Analysis.gaml",
+    "name": "boids",
+    "category": "models/Toy Models/Boids",
+    "experiments": "analysis,showcases,base",
+    "size": 17148,
+    "lines": 510
+  },
+  {
+    "path": "models/Toy Models/Boids/models/Boids 3D Motion.gaml",
+    "name": "boids_3D  ",
+    "category": "models/Toy Models/Boids",
+    "experiments": "",
+    "size": 6590,
+    "lines": 185
+  },
+  {
+    "path": "models/Toy Models/Boids/models/Boids With Flocks.gaml",
+    "name": "boids_flock",
+    "category": "models/Toy Models/Boids",
+    "experiments": "boids_flocks",
+    "size": 7413,
+    "lines": 229
+  },
+  {
+    "path": "models/Toy Models/Boids/models/Boids.gaml",
+    "name": "boids",
+    "category": "models/Toy Models/Boids",
+    "experiments": "runs",
+    "size": 9054,
+    "lines": 272
+  },
+  {
+    "path": "models/Toy Models/Bubble Sort/Bubble Sort 3D.gaml",
+    "name": "bubblesort3D",
+    "category": "models/Toy Models/Bubble Sort",
+    "experiments": "Display",
+    "size": 4354,
+    "lines": 133
+  },
+  {
+    "path": "models/Toy Models/Circle/Circle.gaml",
+    "name": "circle_model",
+    "category": "models/Toy Models/Circle",
+    "experiments": "with,with,main",
+    "size": 3308,
+    "lines": 86
+  },
+  {
+    "path": "models/Toy Models/Clock/models/Clock.gaml",
+    "name": "Clock",
+    "category": "models/Toy Models/Clock",
+    "experiments": "Display",
+    "size": 4105,
+    "lines": 90
+  },
+  {
+    "path": "models/Toy Models/Comodels/City Boids/City Boids Comodel.gaml",
+    "name": "city_boids",
+    "category": "models/Toy Models/Comodels/City Boids",
+    "experiments": "from,form,main",
+    "size": 2632,
+    "lines": 85
+  },
+  {
+    "path": "models/Toy Models/Comodels/Co-AntPreyPredator/Comodel Example (Mixed Behaviors).gaml",
+    "name": "modelCouplerAntPP",
+    "category": "models/Toy Models/Comodels/Co-AntPreyPredator",
+    "experiments": "coupling_ant_pp",
+    "size": 3245,
+    "lines": 127
+  },
+  {
+    "path": "models/Toy Models/Comodels/Co-PreyPredator/Comodel Example (Populations Mutated).gaml",
+    "name": "comodeling_example_populations_mutating",
+    "category": "models/Toy Models/Comodels/Co-PreyPredator",
+    "experiments": "main",
+    "size": 4348,
+    "lines": 111
+  },
+  {
+    "path": "models/Toy Models/Comodels/Co-PreyPredator/Prey Predator Adapter.gaml",
+    "name": "prey_predator_coupling",
+    "category": "models/Toy Models/Comodels/Co-PreyPredator",
+    "experiments": "Simple,don",
+    "size": 778,
+    "lines": 38
+  },
+  {
+    "path": "models/Toy Models/Comodels/Co-PreyPredator/Prey Predator.gaml",
+    "name": "prey_predator",
+    "category": "models/Toy Models/Comodels/Co-PreyPredator",
+    "experiments": "",
+    "size": 3113,
+    "lines": 162
+  },
+  {
+    "path": "models/Toy Models/Comodels/Flies and Mosquitos/Adapters/Flies Adapter.gaml",
+    "name": "flies_coupling",
+    "category": "models/Toy Models/Comodels/Flies and Mosquitos/Adapters",
+    "experiments": "Simple",
+    "size": 650,
+    "lines": 29
+  },
+  {
+    "path": "models/Toy Models/Comodels/Flies and Mosquitos/Adapters/Mosquitos Adapter.gaml",
+    "name": "mosquitos_coupling",
+    "category": "models/Toy Models/Comodels/Flies and Mosquitos/Adapters",
+    "experiments": "Generic",
+    "size": 695,
+    "lines": 29
+  },
+  {
+    "path": "models/Toy Models/Comodels/Flies and Mosquitos/Create and kill models.gaml",
+    "name": "simple_comodeling_example",
+    "category": "models/Toy Models/Comodels/Flies and Mosquitos",
+    "experiments": "inside,have,of,main",
+    "size": 1779,
+    "lines": 63
+  },
+  {
+    "path": "models/Toy Models/Comodels/Flies and Mosquitos/Models/Flies.gaml",
+    "name": "F",
+    "category": "models/Toy Models/Comodels/Flies and Mosquitos/Models",
+    "experiments": "Simple",
+    "size": 852,
+    "lines": 53
+  },
+  {
+    "path": "models/Toy Models/Comodels/Flies and Mosquitos/Models/Mosquitos.gaml",
+    "name": "M",
+    "category": "models/Toy Models/Comodels/Flies and Mosquitos/Models",
+    "experiments": "Generic",
+    "size": 910,
+    "lines": 53
+  },
+  {
+    "path": "models/Toy Models/Comodels/Flies and Mosquitos/Simple GUI comodel.gaml",
+    "name": "complex_comodeling_example",
+    "category": "models/Toy Models/Comodels/Flies and Mosquitos",
+    "experiments": "display,inside,have,of,Complex",
+    "size": 1687,
+    "lines": 45
+  },
+  {
+    "path": "models/Toy Models/Comodels/Flood and Evacuation/Flood Evacuation Comodel.gaml",
+    "name": "flood_evacuation_comodeling",
+    "category": "models/Toy Models/Comodels/Flood and Evacuation",
+    "experiments": "from,simple",
+    "size": 3761,
+    "lines": 117
+  },
+  {
+    "path": "models/Toy Models/Comodels/Plant Growth and Weather/Plant Weather Comodel.gaml",
+    "name": "coModel",
+    "category": "models/Toy Models/Comodels/Plant Growth and Weather",
+    "experiments": "",
+    "size": 2040,
+    "lines": 73
+  },
+  {
+    "path": "models/Toy Models/Comodels/Plant Growth and Weather/Simple Comodel Controler.gaml",
+    "name": "coModel",
+    "category": "models/Toy Models/Comodels/Plant Growth and Weather",
+    "experiments": "",
+    "size": 1305,
+    "lines": 48
+  },
+  {
+    "path": "models/Toy Models/Comodels/Plant Growth and Weather/SubModel/Plant Growth.gaml",
+    "name": "plantGrow",
+    "category": "models/Toy Models/Comodels/Plant Growth and Weather/SubModel",
+    "experiments": "",
+    "size": 1827,
+    "lines": 61
+  },
+  {
+    "path": "models/Toy Models/Comodels/Plant Growth and Weather/SubModel/Weather.gaml",
+    "name": "weather",
+    "category": "models/Toy Models/Comodels/Plant Growth and Weather/SubModel",
+    "experiments": "",
+    "size": 1259,
+    "lines": 45
+  },
+  {
+    "path": "models/Toy Models/Comodels/SIR Switch/Legacy_models/SIR_ABM.gaml",
+    "name": "SIR_ABM",
+    "category": "models/Toy Models/Comodels/SIR Switch/Legacy_models",
+    "experiments": "SIR_ABM_exp",
+    "size": 777,
+    "lines": 48
+  },
+  {
+    "path": "models/Toy Models/Comodels/SIR Switch/Legacy_models/SIR_EBM.gaml",
+    "name": "SIR_EBM",
+    "category": "models/Toy Models/Comodels/SIR Switch/Legacy_models",
+    "experiments": "SIR_EBM_exp",
+    "size": 916,
+    "lines": 47
+  },
+  {
+    "path": "models/Toy Models/Comodels/SIR Switch/SIR Comodel.gaml",
+    "name": "Comodel_SIR_Switch",
+    "category": "models/Toy Models/Comodels/SIR Switch",
+    "experiments": "Simple_exp",
+    "size": 3013,
+    "lines": 95
+  },
+  {
+    "path": "models/Toy Models/Comodels/Urban and Traffic/Urbanization And Traffic Comodel.gaml",
+    "name": "urbanization_and_traffic_comodeling ",
+    "category": "models/Toy Models/Comodels/Urban and Traffic",
+    "experiments": "main",
+    "size": 4390,
+    "lines": 158
+  },
+  {
+    "path": "models/Toy Models/Continous Field of Vision/Continuous Field of Vision.gaml",
+    "name": "fieldofvision",
+    "category": "models/Toy Models/Continous Field of Vision",
+    "experiments": "fieldofvision",
+    "size": 3287,
+    "lines": 108
+  },
+  {
+    "path": "models/Toy Models/Economy/ABValuation.gaml",
+    "name": "ABValuation",
+    "category": "models/Toy Models/Economy",
+    "experiments": "ABValuationDemo",
+    "size": 19438,
+    "lines": 631
+  },
+  {
+    "path": "models/Toy Models/Epidemiology/models/SIR (ABM vs EBM).gaml",
+    "name": "comparison_ABM_EBM_SIR",
+    "category": "models/Toy Models/Epidemiology",
+    "experiments": "Simulation_ABM_EBM",
+    "size": 6154,
+    "lines": 168
+  },
+  {
+    "path": "models/Toy Models/Epidemiology/models/SIR (Split in Agents).gaml",
+    "name": "SIR_split_in_agents",
+    "category": "models/Toy Models/Epidemiology",
+    "experiments": "Simulation",
+    "size": 4811,
+    "lines": 143
+  },
+  {
+    "path": "models/Toy Models/Epidemiology/models/SIR (Switch).gaml",
+    "name": "SIR_switch",
+    "category": "models/Toy Models/Epidemiology",
+    "experiments": "mysimulation",
+    "size": 12075,
+    "lines": 381
+  },
+  {
+    "path": "models/Toy Models/Epidemiology/models/SIR with FSM Architecture.gaml",
+    "name": "SIRWithFSM",
+    "category": "models/Toy Models/Epidemiology",
+    "experiments": "FirstModel",
+    "size": 2266,
+    "lines": 81
+  },
+  {
+    "path": "models/Toy Models/Epidemiology/models/Susceptible Infected (SI).gaml",
+    "name": "si",
+    "category": "models/Toy Models/Epidemiology",
+    "experiments": "Simulation",
+    "size": 4768,
+    "lines": 135
+  },
+  {
+    "path": "models/Toy Models/Epidemiology/models/Susceptible Infected Recovered (SIR).gaml",
+    "name": "si",
+    "category": "models/Toy Models/Epidemiology",
+    "experiments": "Simulation",
+    "size": 5784,
+    "lines": 170
+  },
+  {
+    "path": "models/Toy Models/Evacuation/models/City Escape.gaml",
+    "name": "CityEscape",
+    "category": "models/Toy Models/Evacuation",
+    "experiments": "",
+    "size": 8858,
+    "lines": 336
+  },
+  {
+    "path": "models/Toy Models/Evacuation/models/Continuous Move.gaml",
+    "name": "continuous_move",
+    "category": "models/Toy Models/Evacuation",
+    "experiments": "main",
+    "size": 4068,
+    "lines": 122
+  },
+  {
+    "path": "models/Toy Models/Evacuation/models/Evacuation Phuc Xa.gaml",
+    "name": "Mainxp",
+    "category": "models/Toy Models/Evacuation",
+    "experiments": "main",
+    "size": 18069,
+    "lines": 553
+  },
+  {
+    "path": "models/Toy Models/Evacuation/models/Goto on Grid.gaml",
+    "name": "evacuationgoto",
+    "category": "models/Toy Models/Evacuation",
+    "experiments": "evacuationgoto",
+    "size": 2999,
+    "lines": 97
+  },
+  {
+    "path": "models/Toy Models/Evacuation/models/Move on Grid.gaml",
+    "name": "grid_move",
+    "category": "models/Toy Models/Evacuation",
+    "experiments": "Run",
+    "size": 4032,
+    "lines": 120
+  },
+  {
+    "path": "models/Toy Models/Flood Simulation/models/Hydrological Model.gaml",
+    "name": "hydro",
+    "category": "models/Toy Models/Flood Simulation",
+    "experiments": "Run",
+    "size": 11848,
+    "lines": 303
+  },
+  {
+    "path": "models/Toy Models/Games/flappy bird/models/Flappy Bird.gaml",
+    "name": "FlappyBird",
+    "category": "models/Toy Models/Games/flappy bird",
+    "experiments": "main",
+    "size": 6125,
+    "lines": 245
+  },
+  {
+    "path": "models/Toy Models/Games/pacman/models/pacman.gaml",
+    "name": "pacman",
+    "category": "models/Toy Models/Games/pacman",
+    "experiments": "main",
+    "size": 15133,
+    "lines": 665
+  },
+  {
+    "path": "models/Toy Models/Games/snake/Snake.gaml",
+    "name": "snake",
+    "category": "models/Toy Models/Games/snake",
+    "experiments": "snake_game",
+    "size": 6188,
+    "lines": 251
+  },
+  {
+    "path": "models/Toy Models/Games/tetris/tetris.gaml",
+    "name": "tetris",
+    "category": "models/Toy Models/Games/tetris",
+    "experiments": "main",
+    "size": 12866,
+    "lines": 535
+  },
+  {
+    "path": "models/Toy Models/Learning/models/K Nearest Neighbours.gaml",
+    "name": "KNearestNeighbors",
+    "category": "models/Toy Models/Learning",
+    "experiments": "demo",
+    "size": 3045,
+    "lines": 86
+  },
+  {
+    "path": "models/Toy Models/Learning/models/Mas KMeans Interactive.gaml",
+    "name": "MASKmeansInteractive",
+    "category": "models/Toy Models/Learning",
+    "experiments": "clustering2D,clustering3D,SelectPoints2Cluster2D",
+    "size": 4368,
+    "lines": 146
+  },
+  {
+    "path": "models/Toy Models/Learning/models/Mas KMeans.gaml",
+    "name": "MASKMEANS",
+    "category": "models/Toy Models/Learning",
+    "experiments": "clustering2D,clustering3D",
+    "size": 6356,
+    "lines": 220
+  },
+  {
+    "path": "models/Toy Models/Life/Life.gaml",
+    "name": "life",
+    "category": "models/Toy Models/Life",
+    "experiments": "",
+    "size": 5697,
+    "lines": 127
+  },
+  {
+    "path": "models/Toy Models/Life/Particle Life.gaml",
+    "name": "ParticleLife",
+    "category": "models/Toy Models/Life",
+    "experiments": "ParticleLife",
+    "size": 26515,
+    "lines": 501
+  },
+  {
+    "path": "models/Toy Models/Moving 3D Object/Moving 3D Object.gaml",
+    "name": "Moving3Dobject",
+    "category": "models/Toy Models/Moving 3D Object",
+    "experiments": "Display",
+    "size": 2206,
+    "lines": 55
+  },
+  {
+    "path": "models/Toy Models/Multi-level Data Analysis/includes/Common Bug Species.gaml",
+    "name": "Bug",
+    "category": "models/Toy Models/Multi-level Data Analysis",
+    "experiments": "",
+    "size": 644,
+    "lines": 40
+  },
+  {
+    "path": "models/Toy Models/Multi-level Data Analysis/models/Graph From Bug (Distance Graph).gaml",
+    "name": "SpatialGraph",
+    "category": "models/Toy Models/Multi-level Data Analysis",
+    "experiments": "spatialGraph",
+    "size": 2284,
+    "lines": 63
+  },
+  {
+    "path": "models/Toy Models/Multi-level Data Analysis/models/Graph From Bug (Mirror Graph).gaml",
+    "name": "Graph",
+    "category": "models/Toy Models/Multi-level Data Analysis",
+    "experiments": "AdvancedView",
+    "size": 2948,
+    "lines": 92
+  },
+  {
+    "path": "models/Toy Models/Multi-level Data Analysis/models/MODAVI.gaml",
+    "name": "modavi",
+    "category": "models/Toy Models/Multi-level Data Analysis",
+    "experiments": "MODAVI",
+    "size": 9705,
+    "lines": 319
+  },
+  {
+    "path": "models/Toy Models/Multi-Level Usage/Balls, Groups and Clouds.gaml",
+    "name": "balls_groups_clouds",
+    "category": "models/Toy Models/Multi-Level Usage",
+    "experiments": "group_experiment,cloud_experiment",
+    "size": 16645,
+    "lines": 539
+  },
+  {
+    "path": "models/Toy Models/Multi-Level Usage/Corridor (Hybrid vs ABM).gaml",
+    "name": "pedestrian_corridor_Hybrid_vs_ABM",
+    "category": "models/Toy Models/Multi-Level Usage",
+    "experiments": "default_experiment",
+    "size": 6283,
+    "lines": 206
+  },
+  {
+    "path": "models/Toy Models/Multi-Level Usage/Corridor.gaml",
+    "name": "corridor",
+    "category": "models/Toy Models/Multi-Level Usage",
+    "experiments": "to",
+    "size": 7203,
+    "lines": 172
+  },
+  {
+    "path": "models/Toy Models/Multi-Level Usage/Predators, Preys and Shelters.gaml",
+    "name": "preys_predators_shelters",
+    "category": "models/Toy Models/Multi-Level Usage",
+    "experiments": "default_experiment",
+    "size": 6429,
+    "lines": 178
+  },
+  {
+    "path": "models/Toy Models/Multicriteria Decision/Multicriteria Decision.gaml",
+    "name": "multicriteria",
+    "category": "models/Toy Models/Multicriteria Decision",
+    "experiments": "multicriteria",
+    "size": 14291,
+    "lines": 274
+  },
+  {
+    "path": "models/Toy Models/Pedestrian/Moussaid model.gaml",
+    "name": "MoussaidModel",
+    "category": "models/Toy Models/Pedestrian",
+    "experiments": "corridor_xp",
+    "size": 8939,
+    "lines": 351
+  },
+  {
+    "path": "models/Toy Models/Predator Prey/Lotka-Volterra (Influence of Integration Step).gaml",
+    "name": "ODE_LotkaVolterra_InfluenceTimeStep",
+    "category": "models/Toy Models/Predator Prey",
+    "experiments": "maths",
+    "size": 8770,
+    "lines": 101
+  },
+  {
+    "path": "models/Toy Models/Predator Prey/Lotka-Volterra (Simple).gaml",
+    "name": "ODE_LotkaVolterra ",
+    "category": "models/Toy Models/Predator Prey",
+    "experiments": "maths",
+    "size": 5572,
+    "lines": 74
+  },
+  {
+    "path": "models/Toy Models/Procedural City/Procedural City.gaml",
+    "name": "procedural_city",
+    "category": "models/Toy Models/Procedural City",
+    "experiments": "ProceduralCity",
+    "size": 2701,
+    "lines": 70
+  },
+  {
+    "path": "models/Toy Models/Segregation (Schelling)/includes/Common Schelling Segregation.gaml",
+    "name": "segregation_base",
+    "category": "models/Toy Models/Segregation (Schelling)",
+    "experiments": "base_exp",
+    "size": 4366,
+    "lines": 100
+  },
+  {
+    "path": "models/Toy Models/Segregation (Schelling)/models/Segregation (Agents).gaml",
+    "name": "segregation",
+    "category": "models/Toy Models/Segregation (Schelling)",
+    "experiments": "schelling",
+    "size": 3310,
+    "lines": 90
+  },
+  {
+    "path": "models/Toy Models/Segregation (Schelling)/models/Segregation (Cellular Automata).gaml",
+    "name": "segregation",
+    "category": "models/Toy Models/Segregation (Schelling)",
+    "experiments": "schelling",
+    "size": 3139,
+    "lines": 97
+  },
+  {
+    "path": "models/Toy Models/Segregation (Schelling)/models/Segregation (GIS).gaml",
+    "name": "segregation",
+    "category": "models/Toy Models/Segregation (Schelling)",
+    "experiments": "schelling",
+    "size": 5115,
+    "lines": 141
+  },
+  {
+    "path": "models/Toy Models/Segregation (Schelling)/models/Segregation (Map Background).gaml",
+    "name": "segregation",
+    "category": "models/Toy Models/Segregation (Schelling)",
+    "experiments": "schelling",
+    "size": 3946,
+    "lines": 103
+  },
+  {
+    "path": "models/Toy Models/Soccer/models/Soccer Base.gaml",
+    "name": "soccerbase",
+    "category": "models/Toy Models/Soccer",
+    "experiments": "",
+    "size": 14427,
+    "lines": 414
+  },
+  {
+    "path": "models/Toy Models/Soccer/models/Soccer Experiments.gaml",
+    "name": "soccerexpe",
+    "category": "models/Toy Models/Soccer",
+    "experiments": "intelligentTeam_vs_stupidTeam,intelligentTeam_vs_intelligentTeam",
+    "size": 6682,
+    "lines": 149
+  },
+  {
+    "path": "models/Toy Models/Soccer/models/Soccer.gaml",
+    "name": "soccer",
+    "category": "models/Toy Models/Soccer",
+    "experiments": "",
+    "size": 18890,
+    "lines": 558
+  },
+  {
+    "path": "models/Toy Models/Soccer/models/Team1 Strategy.gaml",
+    "name": "team1strategy",
+    "category": "models/Toy Models/Soccer",
+    "experiments": "",
+    "size": 6070,
+    "lines": 166
+  },
+  {
+    "path": "models/Toy Models/Soccer/models/Team2 Strategy.gaml",
+    "name": "team2strategy",
+    "category": "models/Toy Models/Soccer",
+    "experiments": "",
+    "size": 2078,
+    "lines": 63
+  },
+  {
+    "path": "models/Toy Models/Sugarscape/models/Sugarscape.gaml",
+    "name": "sugarscape",
+    "category": "models/Toy Models/Sugarscape",
+    "experiments": "sugarscape",
+    "size": 5454,
+    "lines": 155
+  },
+  {
+    "path": "models/Toy Models/Traffic/models/LWR Traffic Flow Model.gaml",
+    "name": "TraficGroup",
+    "category": "models/Toy Models/Traffic",
+    "experiments": "TraficGroup",
+    "size": 7660,
+    "lines": 204
+  },
+  {
+    "path": "models/Toy Models/Traffic/models/Netlogo - Traffic model - 1 road.gaml",
+    "name": "NetlogoTrafficmodel",
+    "category": "models/Toy Models/Traffic",
+    "experiments": "NetlogoTrafficmodel",
+    "size": 3676,
+    "lines": 137
+  },
+  {
+    "path": "models/Toy Models/Traffic/models/Netlogo - Traffic model - 2 roads.gaml",
+    "name": "NetlogoTrafficmodel",
+    "category": "models/Toy Models/Traffic",
+    "experiments": "NetlogoTrafficmodel",
+    "size": 4779,
+    "lines": 168
+  },
+  {
+    "path": "models/Toy Models/Traffic/models/Traffic and Pollution.gaml",
+    "name": "traffic ",
+    "category": "models/Toy Models/Traffic",
+    "experiments": "traffic",
+    "size": 6745,
+    "lines": 168
+  },
+  {
+    "path": "models/Toy Models/Urban Growth/models/Raster Urban Growth.gaml",
+    "name": "raster3",
+    "category": "models/Toy Models/Urban Growth",
+    "experiments": "raster",
+    "size": 5451,
+    "lines": 163
+  },
+  {
+    "path": "models/Toy Models/Vote/Vote.gaml",
+    "name": "vote",
+    "category": "models/Toy Models/Vote",
+    "experiments": "vote",
+    "size": 12673,
+    "lines": 376
+  },
+  {
+    "path": "models/Toy Models/Waterflow/models/Waterflow Field Elevation.gaml",
+    "name": "WaterOnFields",
+    "category": "models/Toy Models/Waterflow",
+    "experiments": "hydro",
+    "size": 3682,
+    "lines": 111
+  },
+  {
+    "path": "models/Toy Models/Waterflow/models/Waterflow Grid Elevation.gaml",
+    "name": "Waterflowgridelevation",
+    "category": "models/Toy Models/Waterflow",
+    "experiments": "hydro",
+    "size": 5100,
+    "lines": 151
+  },
+  {
+    "path": "models/Toy Models/Waterflow/models/Waterflow Grid Neighborhood.gaml",
+    "name": "Waterflowgridneighborhood",
+    "category": "models/Toy Models/Waterflow",
+    "experiments": "Waterflowgridneighborhood",
+    "size": 2012,
+    "lines": 71
+  },
+  {
+    "path": "models/Toy Models/Waterflow/models/Waterflow River Graph.gaml",
+    "name": "Waterflowrivergraph",
+    "category": "models/Toy Models/Waterflow",
+    "experiments": "flow",
+    "size": 2615,
+    "lines": 100
+  },
+  {
+    "path": "models/Toy Models/Waterflow/models/Waterflow River Water Unit.gaml",
+    "name": "Waterflowriverwaterunit",
+    "category": "models/Toy Models/Waterflow",
+    "experiments": "flow",
+    "size": 1750,
+    "lines": 71
+  },
+  {
+    "path": "models/Toy Models/Waterflow/models/Waterflow Watershed.gaml",
+    "name": "Waterflowwatershed",
+    "category": "models/Toy Models/Waterflow",
+    "experiments": "waterFlow",
+    "size": 2054,
+    "lines": 66
+  },
+  {
+    "path": "models/Toy Models/Worm Heatmap/Worm Heatmap.gaml",
+    "name": "WormHeatmap",
+    "category": "models/Toy Models/Worm Heatmap",
+    "experiments": "",
+    "size": 1453,
+    "lines": 53
+  },
+  {
+    "path": "recipes/Abort statement/Abort.gaml",
+    "name": "Abort",
+    "category": "recipes/Abort statement",
+    "experiments": "is",
+    "size": 1465,
+    "lines": 67
+  },
+  {
+    "path": "recipes/Architectures/Rule Based Behaviors.gaml",
+    "name": "RuleBasedBehaviors",
+    "category": "recipes/Architectures",
+    "experiments": "",
+    "size": 1461,
+    "lines": 43
+  },
+  {
+    "path": "recipes/Charts/models/Ant Foraging (Charts examples).gaml",
+    "name": "ants",
+    "category": "recipes/Charts",
+    "experiments": "bloc,which",
+    "size": 10770,
+    "lines": 263
+  },
+  {
+    "path": "recipes/Charts/models/Bar.gaml",
+    "name": "bars",
+    "category": "recipes/Charts",
+    "experiments": "",
+    "size": 3711,
+    "lines": 127
+  },
+  {
+    "path": "recipes/Charts/models/Distribution.gaml",
+    "name": "distribution",
+    "category": "recipes/Charts",
+    "experiments": "",
+    "size": 5338,
+    "lines": 151
+  },
+  {
+    "path": "recipes/Charts/models/Heatmap.gaml",
+    "name": "heatmaps",
+    "category": "recipes/Charts",
+    "experiments": "Heatmap",
+    "size": 2938,
+    "lines": 130
+  },
+  {
+    "path": "recipes/Charts/models/Long Series.gaml",
+    "name": "long_series",
+    "category": "recipes/Charts",
+    "experiments": "",
+    "size": 1370,
+    "lines": 44
+  },
+  {
+    "path": "recipes/Charts/models/Pie.gaml",
+    "name": "pies",
+    "category": "recipes/Charts",
+    "experiments": "",
+    "size": 2024,
+    "lines": 61
+  },
+  {
+    "path": "recipes/Charts/models/Radar.gaml",
+    "name": "radars",
+    "category": "recipes/Charts",
+    "experiments": "",
+    "size": 3412,
+    "lines": 89
+  },
+  {
+    "path": "recipes/Charts/models/Series.gaml",
+    "name": "series",
+    "category": "recipes/Charts",
+    "experiments": "",
+    "size": 4780,
+    "lines": 129
+  },
+  {
+    "path": "recipes/Charts/models/XY.gaml",
+    "name": "example_xy",
+    "category": "recipes/Charts",
+    "experiments": "main",
+    "size": 1687,
+    "lines": 53
+  },
+  {
+    "path": "recipes/Class Definition/Classes - 01 - Class Definition and Instantiation.gaml",
+    "name": "ClassDefinitionAndInstantiation",
+    "category": "recipes/Class Definition",
+    "experiments": "",
+    "size": 9565,
+    "lines": 230
+  },
+  {
+    "path": "recipes/Class Definition/Classes - 02 - Attributes and Actions.gaml",
+    "name": "AttributesAndActions",
+    "category": "recipes/Class Definition",
+    "experiments": "",
+    "size": 12069,
+    "lines": 316
+  },
+  {
+    "path": "recipes/Class Definition/Classes - 03 - Inheritance.gaml",
+    "name": "ClassInheritance",
+    "category": "recipes/Class Definition",
+    "experiments": "",
+    "size": 14233,
+    "lines": 359
+  },
+  {
+    "path": "recipes/Class Definition/Classes - 04 - Virtual Classes.gaml",
+    "name": "VirtualClasses",
+    "category": "recipes/Class Definition",
+    "experiments": "",
+    "size": 14847,
+    "lines": 355
+  },
+  {
+    "path": "recipes/Class Definition/Classes - 05 - Advanced Features.gaml",
+    "name": "AdvancedFeatures",
+    "category": "recipes/Class Definition",
+    "experiments": "parameters",
+    "size": 14377,
+    "lines": 390
+  },
+  {
+    "path": "recipes/Class Definition/Classes and Objects Showcase.gaml",
+    "name": "ClassesAndObjectsShowcase",
+    "category": "recipes/Class Definition",
+    "experiments": "that,base_params",
+    "size": 21677,
+    "lines": 517
+  },
+  {
+    "path": "recipes/Conditional Structures/If Then Else.gaml",
+    "name": "IfthenelseNewModel",
+    "category": "recipes/Conditional Structures",
+    "experiments": "my_xp",
+    "size": 3321,
+    "lines": 118
+  },
+  {
+    "path": "recipes/Conditional Structures/State Transitions.gaml",
+    "name": "statetransition",
+    "category": "recipes/Conditional Structures",
+    "experiments": "dummy_xp",
+    "size": 3528,
+    "lines": 144
+  },
+  {
+    "path": "recipes/Conditional Structures/Switch And Match.gaml",
+    "name": "switchmatch",
+    "category": "recipes/Conditional Structures",
+    "experiments": "",
+    "size": 2804,
+    "lines": 114
+  },
+  {
+    "path": "recipes/Conditional Structures/When.gaml",
+    "name": "reflex_when",
+    "category": "recipes/Conditional Structures",
+    "experiments": "my_xp",
+    "size": 2241,
+    "lines": 77
+  },
+  {
+    "path": "recipes/Data Types And Structures/Casting.gaml",
+    "name": "Casting",
+    "category": "recipes/Data Types And Structures",
+    "experiments": "Casting",
+    "size": 4098,
+    "lines": 151
+  },
+  {
+    "path": "recipes/Data Types And Structures/Date and Time/Date Type And Real Dates.gaml",
+    "name": "date_model",
+    "category": "recipes/Data Types And Structures/Date and Time",
+    "experiments": "main",
+    "size": 7698,
+    "lines": 144
+  },
+  {
+    "path": "recipes/Data Types And Structures/Date and Time/Simple Time Definition.gaml",
+    "name": "SimpleTimedefinition",
+    "category": "recipes/Data Types And Structures/Date and Time",
+    "experiments": "SimpleTimedefinition",
+    "size": 2042,
+    "lines": 43
+  },
+  {
+    "path": "recipes/Data Types And Structures/Fields.gaml",
+    "name": "Fields",
+    "category": "recipes/Data Types And Structures",
+    "experiments": "Fields,Field_view",
+    "size": 3266,
+    "lines": 101
+  },
+  {
+    "path": "recipes/Data Types And Structures/Graph.gaml",
+    "name": "graph",
+    "category": "recipes/Data Types And Structures",
+    "experiments": "Graph",
+    "size": 14443,
+    "lines": 444
+  },
+  {
+    "path": "recipes/Data Types And Structures/Lists.gaml",
+    "name": "Lists",
+    "category": "recipes/Data Types And Structures",
+    "experiments": "Lists",
+    "size": 11477,
+    "lines": 307
+  },
+  {
+    "path": "recipes/Data Types And Structures/Map Usage Examples.gaml",
+    "name": "MapUsageExamples",
+    "category": "recipes/Data Types And Structures",
+    "experiments": "RunExamples",
+    "size": 4065,
+    "lines": 147
+  },
+  {
+    "path": "recipes/Data Types And Structures/Maps.gaml",
+    "name": "Maps",
+    "category": "recipes/Data Types And Structures",
+    "experiments": "Maps",
+    "size": 10969,
+    "lines": 292
+  },
+  {
+    "path": "recipes/Data Types And Structures/Matrices.gaml",
+    "name": "Matrices",
+    "category": "recipes/Data Types And Structures",
+    "experiments": "Matrices",
+    "size": 11784,
+    "lines": 277
+  },
+  {
+    "path": "recipes/Data Types And Structures/Units And Constants.gaml",
+    "name": "UnitsAndConstants",
+    "category": "recipes/Data Types And Structures",
+    "experiments": "allows,exp",
+    "size": 12580,
+    "lines": 238
+  },
+  {
+    "path": "recipes/Files/models/Different File Utils.gaml",
+    "name": "FileUtils",
+    "category": "recipes/Files",
+    "experiments": "begins,fileUtils",
+    "size": 1601,
+    "lines": 50
+  },
+  {
+    "path": "recipes/Files/models/Zip And Unzip Files.gaml",
+    "name": "ZipUnzip",
+    "category": "recipes/Files",
+    "experiments": "ZipUnzip",
+    "size": 1055,
+    "lines": 26
+  },
+  {
+    "path": "recipes/GUI Design/Parameters and Commands.gaml",
+    "name": "GUIInteractiveElements ",
+    "category": "recipes/GUI Design",
+    "experiments": "interface,UIs",
+    "size": 9794,
+    "lines": 134
+  },
+  {
+    "path": "recipes/Loop And Iterations/Ask Agents.gaml",
+    "name": "Asktoloopoveragents",
+    "category": "recipes/Loop And Iterations",
+    "experiments": "name",
+    "size": 2292,
+    "lines": 52
+  },
+  {
+    "path": "recipes/Loop And Iterations/Break and Continue.gaml",
+    "name": "break_and_continue",
+    "category": "recipes/Loop And Iterations",
+    "experiments": "",
+    "size": 3018,
+    "lines": 108
+  },
+  {
+    "path": "recipes/Loop And Iterations/Iterators.gaml",
+    "name": "Iterators",
+    "category": "recipes/Loop And Iterations",
+    "experiments": "exp",
+    "size": 3113,
+    "lines": 86
+  },
+  {
+    "path": "recipes/Loop And Iterations/Loop Over.gaml",
+    "name": "LoopsOverContainers",
+    "category": "recipes/Loop And Iterations",
+    "experiments": "exp",
+    "size": 10920,
+    "lines": 235
+  },
+  {
+    "path": "recipes/Loop And Iterations/Loop Statement.gaml",
+    "name": "LoopsPossibleUses",
+    "category": "recipes/Loop And Iterations",
+    "experiments": "name",
+    "size": 3585,
+    "lines": 100
+  },
+  {
+    "path": "recipes/Model Exploration/Batch Simulation/Calibration.gaml",
+    "name": "batch_example ",
+    "category": "recipes/Model Exploration/Batch Simulation",
+    "experiments": "modes,per,Simple,explores,PSO,explores,Genetic,explores,Hill_Climbing,explores,Tabu_Search,explores,Reactive_Tabu_Search,explores,Simulated_annealing",
+    "size": 6731,
+    "lines": 143
+  },
+  {
+    "path": "recipes/Model Exploration/Batch Simulation/Exploration.gaml",
+    "name": "Exploration",
+    "category": "recipes/Model Exploration/Batch Simulation",
+    "experiments": "types,definitions,batch_abstract,runs,a,extract,replication_analysis,explores,exhaustive_exploration,tests,explicit_exploration,plan,explicit_from_file,iterate,exploration_with_sampling,exploration_with_factorial,iterate,exploration_with_sampling_and_outputs,samples,Sobol,perform,Morris,computed,plan,Beta_distribution",
+    "size": 8702,
+    "lines": 146
+  },
+  {
+    "path": "recipes/Model Exploration/Experiment species/Experiment and simulation.gaml",
+    "name": "Experimentspecies",
+    "category": "recipes/Model Exploration/Experiment species",
+    "experiments": "species,can,behaviors,and,executed,behavior,basic_exp,can,and,exp_with_init_reflex,contain,contains,is,can,can,and,exp_4_simulations,contains,can,exp_no_simulation,basic_exp,basic_exp_init_step,is,design,batch_4_simu,contains,can,is,one,mem_simu,contains,is,mem_2_simu,contains",
+    "size": 8179,
+    "lines": 212
+  },
+  {
+    "path": "recipes/Model Exploration/Multi-simulation/Multi-simulation.gaml",
+    "name": "multi_simulation",
+    "category": "recipes/Model Exploration/Multi-simulation",
+    "experiments": "in,accesses,main",
+    "size": 2101,
+    "lines": 58
+  },
+  {
+    "path": "recipes/Multi-thread simulation/Multi-thread.gaml",
+    "name": "multithread",
+    "category": "recipes/Multi-thread simulation",
+    "experiments": "multithread",
+    "size": 1408,
+    "lines": 47
+  },
+  {
+    "path": "recipes/Networking/models/Test if Web Address is Reachable.gaml",
+    "name": "WebUtils",
+    "category": "recipes/Networking",
+    "experiments": "testWebAddress",
+    "size": 978,
+    "lines": 23
+  },
+  {
+    "path": "recipes/Scheduler/Default Scheduler.gaml",
+    "name": "schedullingagents",
+    "category": "recipes/Scheduler",
+    "experiments": "example_default_scheduler",
+    "size": 1597,
+    "lines": 58
+  },
+  {
+    "path": "recipes/Scheduler/No Scheduler.gaml",
+    "name": "schedullingagents",
+    "category": "recipes/Scheduler",
+    "experiments": "",
+    "size": 1159,
+    "lines": 49
+  },
+  {
+    "path": "recipes/Scheduler/Random Scheduler.gaml",
+    "name": "randomscheduler",
+    "category": "recipes/Scheduler",
+    "experiments": "",
+    "size": 1301,
+    "lines": 51
+  },
+  {
+    "path": "recipes/Scheduler/Species Manager.gaml",
+    "name": "managerscheduler",
+    "category": "recipes/Scheduler",
+    "experiments": "",
+    "size": 1750,
+    "lines": 55
+  },
+  {
+    "path": "recipes/Simulation Initialization/Init Action.gaml",
+    "name": "InitAction",
+    "category": "recipes/Simulation Initialization",
+    "experiments": "to,is,InitAction",
+    "size": 1493,
+    "lines": 55
+  },
+  {
+    "path": "recipes/Spatial Topology/Agent movement/models/Follow Path.gaml",
+    "name": "path_and_follow",
+    "category": "recipes/Spatial Topology/Agent movement",
+    "experiments": "main",
+    "size": 3483,
+    "lines": 113
+  },
+  {
+    "path": "recipes/Spatial Topology/Agent movement/models/Follow Weighted Network (Agents).gaml",
+    "name": "weightperagents",
+    "category": "recipes/Spatial Topology/Agent movement",
+    "experiments": "weightperagents",
+    "size": 2755,
+    "lines": 102
+  },
+  {
+    "path": "recipes/Spatial Topology/Agent movement/models/Goto Directed Graph.gaml",
+    "name": "simplemodel",
+    "category": "recipes/Spatial Topology/Agent movement",
+    "experiments": "simplemodel",
+    "size": 2666,
+    "lines": 85
+  },
+  {
+    "path": "recipes/Spatial Topology/Agent movement/models/Goto Grid Weights.gaml",
+    "name": "Grid",
+    "category": "recipes/Spatial Topology/Agent movement",
+    "experiments": "goto_grid",
+    "size": 3294,
+    "lines": 93
+  },
+  {
+    "path": "recipes/Spatial Topology/Agent movement/models/Goto Grid.gaml",
+    "name": "Grid",
+    "category": "recipes/Spatial Topology/Agent movement",
+    "experiments": "goto_grid",
+    "size": 3332,
+    "lines": 85
+  },
+  {
+    "path": "recipes/Spatial Topology/Agent movement/models/Goto Network.gaml",
+    "name": "Network",
+    "category": "recipes/Spatial Topology/Agent movement",
+    "experiments": "goto_network",
+    "size": 6208,
+    "lines": 110
+  },
+  {
+    "path": "recipes/Spatial Topology/Agent movement/models/Goto Polygon.gaml",
+    "name": "polygon",
+    "category": "recipes/Spatial Topology/Agent movement",
+    "experiments": "goto_polygon",
+    "size": 2767,
+    "lines": 108
+  },
+  {
+    "path": "recipes/Spatial Topology/Agent movement/models/Moving3D.gaml",
+    "name": "Moving3DModel",
+    "category": "recipes/Spatial Topology/Agent movement",
+    "experiments": "base,Moving,Wandering,Goto,GotoOnNetwork,Complete",
+    "size": 5873,
+    "lines": 207
+  },
+  {
+    "path": "recipes/Spatial Topology/Agent movement/models/Wander on Graph.gaml",
+    "name": "WanderonGraph",
+    "category": "recipes/Spatial Topology/Agent movement",
+    "experiments": "WanderonGraph",
+    "size": 2276,
+    "lines": 73
+  },
+  {
+    "path": "recipes/Spatial Topology/Fields/Accessing Fields.gaml",
+    "name": "AccessingFields",
+    "category": "recipes/Spatial Topology/Fields",
+    "experiments": "",
+    "size": 1552,
+    "lines": 58
+  },
+  {
+    "path": "recipes/Spatial Topology/Graphs/models/3D Graph.gaml",
+    "name": "graph3D",
+    "category": "recipes/Spatial Topology/Graphs",
+    "experiments": "with,Display",
+    "size": 2892,
+    "lines": 106
+  },
+  {
+    "path": "recipes/Spatial Topology/Graphs/models/Classic Graph Generation.gaml",
+    "name": "classicgraphgeneration",
+    "category": "recipes/Spatial Topology/Graphs",
+    "experiments": "loadgraph",
+    "size": 2218,
+    "lines": 71
+  },
+  {
+    "path": "recipes/Spatial Topology/Graphs/models/Clustering.gaml",
+    "name": "Clustering",
+    "category": "recipes/Spatial Topology/Graphs",
+    "experiments": "clustering",
+    "size": 2534,
+    "lines": 97
+  },
+  {
+    "path": "recipes/Spatial Topology/Graphs/models/Graph Building From Agents.gaml",
+    "name": "graphbuilding",
+    "category": "recipes/Spatial Topology/Graphs",
+    "experiments": "loadgraph",
+    "size": 1771,
+    "lines": 56
+  },
+  {
+    "path": "recipes/Spatial Topology/Graphs/models/Graph Loading Layout.gaml",
+    "name": "graphloadinglayout",
+    "category": "recipes/Spatial Topology/Graphs",
+    "experiments": "loadgraph",
+    "size": 3033,
+    "lines": 82
+  },
+  {
+    "path": "recipes/Spatial Topology/Graphs/models/Graph Operators.gaml",
+    "name": "graphoperators",
+    "category": "recipes/Spatial Topology/Graphs",
+    "experiments": "graphoperators",
+    "size": 2426,
+    "lines": 68
+  },
+  {
+    "path": "recipes/Spatial Topology/Graphs/models/Hand Made Graph.gaml",
+    "name": "handMadeGraph",
+    "category": "recipes/Spatial Topology/Graphs",
+    "experiments": "create_graph",
+    "size": 1925,
+    "lines": 70
+  },
+  {
+    "path": "recipes/Spatial Topology/Graphs/models/Multigraph.gaml",
+    "name": "multigraph",
+    "category": "recipes/Spatial Topology/Graphs",
+    "experiments": "multigraph",
+    "size": 2938,
+    "lines": 105
+  },
+  {
+    "path": "recipes/Spatial Topology/Graphs/models/Shortest paths.gaml",
+    "name": "Network",
+    "category": "recipes/Spatial Topology/Graphs",
+    "experiments": "goto_network",
+    "size": 8075,
+    "lines": 137
+  },
+  {
+    "path": "recipes/Spatial Topology/Graphs/models/Strahler.gaml",
+    "name": "exempleStrahler",
+    "category": "recipes/Spatial Topology/Graphs",
+    "experiments": "testStrahler",
+    "size": 1374,
+    "lines": 44
+  },
+  {
+    "path": "recipes/Spatial Topology/Grids/models/Hexagonal Grid.gaml",
+    "name": "HexagonalGrid",
+    "category": "recipes/Spatial Topology/Grids",
+    "experiments": "hexagonal",
+    "size": 1221,
+    "lines": 42
+  },
+  {
+    "path": "recipes/Spatial Topology/Grids/models/Shortest Path on Grid.gaml",
+    "name": "Grid",
+    "category": "recipes/Spatial Topology/Grids",
+    "experiments": "goto_grid",
+    "size": 3786,
+    "lines": 99
+  },
+  {
+    "path": "recipes/Spatial Topology/Grids/models/Weighted Shortest Path on Grid.gaml",
+    "name": "Grid",
+    "category": "recipes/Spatial Topology/Grids",
+    "experiments": "goto_grid",
+    "size": 3379,
+    "lines": 85
+  },
+  {
+    "path": "recipes/Spatial Topology/Spatial Operators/models/Geometry Discretization.gaml",
+    "name": "discretization",
+    "category": "recipes/Spatial Topology/Spatial Operators",
+    "experiments": "to_squares,to_rectangles,point_on_contours,triangles_voronoi,to_sub_geometries",
+    "size": 5892,
+    "lines": 165
+  },
+  {
+    "path": "recipes/Spatial Topology/Spatial Operators/models/Moran Index.gaml",
+    "name": "moranIndex",
+    "category": "recipes/Spatial Topology/Spatial Operators",
+    "experiments": "",
+    "size": 2497,
+    "lines": 77
+  },
+  {
+    "path": "recipes/Spatial Topology/Spatial Operators/models/Simplification and Buffer.gaml",
+    "name": "Tolerance",
+    "category": "recipes/Spatial Topology/Spatial Operators",
+    "experiments": "",
+    "size": 1717,
+    "lines": 58
+  },
+  {
+    "path": "recipes/Spatial Topology/Spatial Operators/models/Spatial Interpolation.gaml",
+    "name": "spatialinterpolation",
+    "category": "recipes/Spatial Topology/Spatial Operators",
+    "experiments": "spatialinterpolation",
+    "size": 3042,
+    "lines": 95
+  },
+  {
+    "path": "recipes/Spatial Topology/Spatial Operators/models/Spatial Operators (Examples).gaml",
+    "name": "example_spatial_operators",
+    "category": "recipes/Spatial Topology/Spatial Operators",
+    "experiments": "example_spatial_operators",
+    "size": 4709,
+    "lines": 113
+  },
+  {
+    "path": "recipes/Spatial Topology/Spatial Operators/models/Spatial Queries.gaml",
+    "name": "Spatialqueries",
+    "category": "recipes/Spatial Topology/Spatial Operators",
+    "experiments": "Spatialqueries",
+    "size": 4559,
+    "lines": 133
+  },
+  {
+    "path": "recipes/Spatial Topology/Spatial Operators/models/Topologies.gaml",
+    "name": "gridfilter",
+    "category": "recipes/Spatial Topology/Spatial Operators",
+    "experiments": "topology_test",
+    "size": 8243,
+    "lines": 242
+  },
+  {
+    "path": "recipes/Species Definition/Attribute access.gaml",
+    "name": "AttributeAccess",
+    "category": "recipes/Species Definition",
+    "experiments": "Attributeaccess",
+    "size": 3822,
+    "lines": 116
+  },
+  {
+    "path": "recipes/Species Definition/Inheritance.gaml",
+    "name": "Inheritance",
+    "category": "recipes/Species Definition",
+    "experiments": "Run",
+    "size": 1825,
+    "lines": 60
+  },
+  {
+    "path": "recipes/Species Definition/Mirror species - creation and death of agents.gaml",
+    "name": "Mirror",
+    "category": "recipes/Species Definition",
+    "experiments": "mirroExp",
+    "size": 3007,
+    "lines": 93
+  },
+  {
+    "path": "recipes/Species Definition/Mirror species.gaml",
+    "name": "Mirrorsimple",
+    "category": "recipes/Species Definition",
+    "experiments": "mirroExp",
+    "size": 1459,
+    "lines": 50
+  },
+  {
+    "path": "recipes/System/Benchmarking.gaml",
+    "name": "Benchmarking",
+    "category": "recipes/System",
+    "experiments": "Benchmarking",
+    "size": 1546,
+    "lines": 41
+  },
+  {
+    "path": "recipes/System/Buffering execution order.gaml",
+    "name": "Bufferingexecutionorder",
+    "category": "recipes/System",
+    "experiments": "a",
+    "size": 2180,
+    "lines": 46
+  },
+  {
+    "path": "recipes/System/Buffering performances.gaml",
+    "name": "BufferingPerformances",
+    "category": "recipes/System",
+    "experiments": "compare",
+    "size": 2016,
+    "lines": 55
+  },
+  {
+    "path": "recipes/System/Clipboard.gaml",
+    "name": "Clipboard",
+    "category": "recipes/System",
+    "experiments": "run",
+    "size": 1179,
+    "lines": 33
+  },
+  {
+    "path": "recipes/System/Elements of Syntax.gaml",
+    "name": "syntax",
+    "category": "recipes/System",
+    "experiments": "",
+    "size": 13047,
+    "lines": 357
+  },
+  {
+    "path": "recipes/System/Errors.gaml",
+    "name": "Errors",
+    "category": "recipes/System",
+    "experiments": "",
+    "size": 2671,
+    "lines": 98
+  },
+  {
+    "path": "recipes/System/Preferences.gaml",
+    "name": "preferences",
+    "category": "recipes/System",
+    "experiments": "behavior,when,when",
+    "size": 19866,
+    "lines": 558
+  },
+  {
+    "path": "recipes/System/RunThread.gaml",
+    "name": "testThread",
+    "category": "recipes/System",
+    "experiments": "",
+    "size": 1704,
+    "lines": 53
+  },
+  {
+    "path": "recipes/System/System.gaml",
+    "name": "System",
+    "category": "recipes/System",
+    "experiments": "Run",
+    "size": 1507,
+    "lines": 37
+  },
+  {
+    "path": "recipes/User Interaction/models/Confirm Dialog.gaml",
+    "name": "Confirmdialog_example",
+    "category": "recipes/User Interaction",
+    "experiments": "Confirmdialog_example",
+    "size": 713,
+    "lines": 19
+  },
+  {
+    "path": "recipes/User Interaction/models/Display Constants.gaml",
+    "name": "DisplayConstants",
+    "category": "recipes/User Interaction",
+    "experiments": "",
+    "size": 1345,
+    "lines": 46
+  },
+  {
+    "path": "recipes/User Interaction/models/Event Layer.gaml",
+    "name": "event_layer_model",
+    "category": "recipes/User Interaction",
+    "experiments": "Displays,or,will",
+    "size": 4584,
+    "lines": 146
+  },
+  {
+    "path": "recipes/User Interaction/models/Mouse Drag.gaml",
+    "name": "mouse_event",
+    "category": "recipes/User Interaction",
+    "experiments": "",
+    "size": 2285,
+    "lines": 84
+  },
+  {
+    "path": "recipes/User Interaction/models/Mouse Exit and Enter.gaml",
+    "name": "MouseExitandEnter",
+    "category": "recipes/User Interaction",
+    "experiments": "Run",
+    "size": 1613,
+    "lines": 72
+  },
+  {
+    "path": "recipes/User Interaction/models/Moving Agents.gaml",
+    "name": "MovingAgents",
+    "category": "recipes/User Interaction",
+    "experiments": "",
+    "size": 3283,
+    "lines": 147
+  },
+  {
+    "path": "recipes/User Interaction/models/Tools Panel.gaml",
+    "name": "ToolsPanel",
+    "category": "recipes/User Interaction",
+    "experiments": "ToolsPanel",
+    "size": 2651,
+    "lines": 99
+  },
+  {
+    "path": "recipes/User Interaction/models/User Command.gaml",
+    "name": "usercommand",
+    "category": "recipes/User Interaction",
+    "experiments": "interface,Displays",
+    "size": 2276,
+    "lines": 71
+  },
+  {
+    "path": "recipes/User Interaction/models/User Control Architecture.gaml",
+    "name": "user_control",
+    "category": "recipes/User Interaction",
+    "experiments": "Displays",
+    "size": 2147,
+    "lines": 77
+  },
+  {
+    "path": "recipes/User Interaction/models/User input.gaml",
+    "name": "Confirmdialog_example",
+    "category": "recipes/User Interaction",
+    "experiments": "UserInputdialog_example",
+    "size": 1014,
+    "lines": 22
+  },
+  {
+    "path": "recipes/User Interaction/models/User Pause and Resume.gaml",
+    "name": "UserPauseandResume",
+    "category": "recipes/User Interaction",
+    "experiments": "",
+    "size": 1718,
+    "lines": 81
+  },
+  {
+    "path": "recipes/User Interaction/models/Wizard.gaml",
+    "name": "Wizard_example",
+    "category": "recipes/User Interaction",
+    "experiments": "Wizard_example",
+    "size": 1293,
+    "lines": 32
+  },
+  {
+    "path": "recipes/Variables/Declaration of Parameters.gaml",
+    "name": "Parameters",
+    "category": "recipes/Variables",
+    "experiments": "inheritance,base_experiment,will,as,attribute",
+    "size": 2120,
+    "lines": 47
+  },
+  {
+    "path": "recipes/Variables/Notifying Variables.gaml",
+    "name": "NotifyingVariables",
+    "category": "recipes/Variables",
+    "experiments": "Notification",
+    "size": 2060,
+    "lines": 73
+  },
+  {
+    "path": "recipes/Visualization/models/Aspects.gaml",
+    "name": "Aspects",
+    "category": "recipes/Visualization",
+    "experiments": "Aspects",
+    "size": 9343,
+    "lines": 196
+  },
+  {
+    "path": "recipes/Visualization/models/Building Elevation.gaml",
+    "name": "tutorial_gis_city_traffic",
+    "category": "recipes/Visualization",
+    "experiments": "",
+    "size": 4839,
+    "lines": 147
+  },
+  {
+    "path": "recipes/Visualization/models/Building Heatmap.gaml",
+    "name": "BuildingHeatmap",
+    "category": "recipes/Visualization",
+    "experiments": "",
+    "size": 2415,
+    "lines": 52
+  },
+  {
+    "path": "recipes/Visualization/models/Built-In Shapes.gaml",
+    "name": "shape",
+    "category": "recipes/Visualization",
+    "experiments": "",
+    "size": 4835,
+    "lines": 127
+  },
+  {
+    "path": "recipes/Visualization/models/Camera Definitions.gaml",
+    "name": "camera_locationition",
+    "category": "recipes/Visualization",
+    "experiments": "Display",
+    "size": 2718,
+    "lines": 72
+  },
+  {
+    "path": "recipes/Visualization/models/Camera Shared Zoom.gaml",
+    "name": "Camera Shared Zoom",
+    "category": "recipes/Visualization",
+    "experiments": "can,on",
+    "size": 1844,
+    "lines": 50
+  },
+  {
+    "path": "recipes/Visualization/models/Color Brewer.gaml",
+    "name": "ColorBrewer",
+    "category": "recipes/Visualization",
+    "experiments": "displays,BrewerPalette,BrewerColoredAgent",
+    "size": 4710,
+    "lines": 125
+  },
+  {
+    "path": "recipes/Visualization/models/DEM Generator.gaml",
+    "name": "RandomMaps",
+    "category": "recipes/Visualization",
+    "experiments": "Terrain",
+    "size": 3241,
+    "lines": 99
+  },
+  {
+    "path": "recipes/Visualization/models/Legend - Overlay.gaml",
+    "name": "Overlay",
+    "category": "recipes/Visualization",
+    "experiments": "",
+    "size": 2005,
+    "lines": 50
+  },
+  {
+    "path": "recipes/Visualization/models/Lighting.gaml",
+    "name": "lighting",
+    "category": "recipes/Visualization",
+    "experiments": "Display",
+    "size": 4530,
+    "lines": 90
+  },
+  {
+    "path": "recipes/Visualization/models/Palettes and Gradients.gaml",
+    "name": "PalettesandGradients",
+    "category": "recipes/Visualization",
+    "experiments": "Palettes",
+    "size": 1680,
+    "lines": 54
+  },
+  {
+    "path": "recipes/Visualization/models/Quadratic Linear and Constant attenuation.gaml",
+    "name": "QuadraticLinearandConstantattenuation",
+    "category": "recipes/Visualization",
+    "experiments": "Display",
+    "size": 2679,
+    "lines": 76
+  },
+  {
+    "path": "recipes/Visualization/models/Specular Effects.gaml",
+    "name": "specular_light",
+    "category": "recipes/Visualization",
+    "experiments": "specular_light",
+    "size": 2803,
+    "lines": 124
+  },
+  {
+    "path": "recipes/Visualization/models/Text Display.gaml",
+    "name": "TextDisplay",
+    "category": "recipes/Visualization",
+    "experiments": "Strings",
+    "size": 3087,
+    "lines": 63
+  },
+  {
+    "path": "tutorials/Incremental Model/models/Incremental Model 1.gaml",
+    "name": "SI_city",
+    "category": "tutorials/Incremental Model",
+    "experiments": "main_experiment",
+    "size": 1696,
+    "lines": 64
+  },
+  {
+    "path": "tutorials/Incremental Model/models/Incremental Model 2.gaml",
+    "name": "SI_city",
+    "category": "tutorials/Incremental Model",
+    "experiments": "main_experiment",
+    "size": 2269,
+    "lines": 76
+  },
+  {
+    "path": "tutorials/Incremental Model/models/Incremental Model 3.gaml",
+    "name": "model3",
+    "category": "tutorials/Incremental Model",
+    "experiments": "main_experiment",
+    "size": 2756,
+    "lines": 98
+  },
+  {
+    "path": "tutorials/Incremental Model/models/Incremental Model 4.gaml",
+    "name": "model4",
+    "category": "tutorials/Incremental Model",
+    "experiments": "main_experiment",
+    "size": 3280,
+    "lines": 107
+  },
+  {
+    "path": "tutorials/Incremental Model/models/Incremental Model 5.gaml",
+    "name": "model5",
+    "category": "tutorials/Incremental Model",
+    "experiments": "main_experiment",
+    "size": 3816,
+    "lines": 117
+  },
+  {
+    "path": "tutorials/Incremental Model/models/Incremental Model 6.gaml",
+    "name": "model6",
+    "category": "tutorials/Incremental Model",
+    "experiments": "main_experiment",
+    "size": 4451,
+    "lines": 140
+  },
+  {
+    "path": "tutorials/Incremental Model/models/Incremental Model 7.gaml",
+    "name": "model7",
+    "category": "tutorials/Incremental Model",
+    "experiments": "main_experiment",
+    "size": 5149,
+    "lines": 168
+  },
+  {
+    "path": "tutorials/Luneray flu/models/model1.gaml",
+    "name": "model1",
+    "category": "tutorials/Luneray flu",
+    "experiments": "main",
+    "size": 1338,
+    "lines": 56
+  },
+  {
+    "path": "tutorials/Luneray flu/models/model2.gaml",
+    "name": "model2",
+    "category": "tutorials/Luneray flu",
+    "experiments": "main",
+    "size": 1932,
+    "lines": 72
+  },
+  {
+    "path": "tutorials/Luneray flu/models/model3.gaml",
+    "name": "model3",
+    "category": "tutorials/Luneray flu",
+    "experiments": "main",
+    "size": 2446,
+    "lines": 94
+  },
+  {
+    "path": "tutorials/Luneray flu/models/model4.gaml",
+    "name": "model4",
+    "category": "tutorials/Luneray flu",
+    "experiments": "main",
+    "size": 2753,
+    "lines": 106
+  },
+  {
+    "path": "tutorials/Luneray flu/models/model5.gaml",
+    "name": "model5",
+    "category": "tutorials/Luneray flu",
+    "experiments": "main",
+    "size": 3347,
+    "lines": 127
+  },
+  {
+    "path": "tutorials/Luneray flu/models/model6.gaml",
+    "name": "model6",
+    "category": "tutorials/Luneray flu",
+    "experiments": "searches,exhaustively,main,test_robustness,explore_model,calibration_model",
+    "size": 4508,
+    "lines": 161
+  },
+  {
+    "path": "tutorials/Predator Prey/models/Model 01.gaml",
+    "name": "prey_predator",
+    "category": "tutorials/Predator Prey",
+    "experiments": "prey_predator",
+    "size": 969,
+    "lines": 35
+  },
+  {
+    "path": "tutorials/Predator Prey/models/Model 02.gaml",
+    "name": "prey_predator",
+    "category": "tutorials/Predator Prey",
+    "experiments": "prey_predator",
+    "size": 1483,
+    "lines": 48
+  },
+  {
+    "path": "tutorials/Predator Prey/models/Model 03.gaml",
+    "name": "prey_predator",
+    "category": "tutorials/Predator Prey",
+    "experiments": "prey_predator",
+    "size": 2395,
+    "lines": 74
+  },
+  {
+    "path": "tutorials/Predator Prey/models/Model 04.gaml",
+    "name": "prey_predator",
+    "category": "tutorials/Predator Prey",
+    "experiments": "prey_predator",
+    "size": 2478,
+    "lines": 79
+  },
+  {
+    "path": "tutorials/Predator Prey/models/Model 05.gaml",
+    "name": "prey_predator",
+    "category": "tutorials/Predator Prey",
+    "experiments": "prey_predator",
+    "size": 3873,
+    "lines": 127
+  },
+  {
+    "path": "tutorials/Predator Prey/models/Model 06.gaml",
+    "name": "prey_predator",
+    "category": "tutorials/Predator Prey",
+    "experiments": "prey_predator",
+    "size": 5341,
+    "lines": 161
+  },
+  {
+    "path": "tutorials/Predator Prey/models/Model 07.gaml",
+    "name": "prey_predator",
+    "category": "tutorials/Predator Prey",
+    "experiments": "prey_predator",
+    "size": 5847,
+    "lines": 177
+  },
+  {
+    "path": "tutorials/Predator Prey/models/Model 08.gaml",
+    "name": "prey_predator",
+    "category": "tutorials/Predator Prey",
+    "experiments": "prey_predator",
+    "size": 6235,
+    "lines": 194
+  },
+  {
+    "path": "tutorials/Predator Prey/models/Model 09.gaml",
+    "name": "prey_predator",
+    "category": "tutorials/Predator Prey",
+    "experiments": "execution,prey_predator",
+    "size": 6299,
+    "lines": 198
+  },
+  {
+    "path": "tutorials/Predator Prey/models/Model 10.gaml",
+    "name": "prey_predator",
+    "category": "tutorials/Predator Prey",
+    "experiments": "prey_predator",
+    "size": 7530,
+    "lines": 217
+  },
+  {
+    "path": "tutorials/Predator Prey/models/Model 11.gaml",
+    "name": "prey_predator",
+    "category": "tutorials/Predator Prey",
+    "experiments": "prey_predator",
+    "size": 8000,
+    "lines": 227
+  },
+  {
+    "path": "tutorials/Predator Prey/models/Model 12.gaml",
+    "name": "prey_predator",
+    "category": "tutorials/Predator Prey",
+    "experiments": "prey_predator",
+    "size": 8324,
+    "lines": 234
+  },
+  {
+    "path": "tutorials/Predator Prey/models/Model 13.gaml",
+    "name": "prey_predator",
+    "category": "tutorials/Predator Prey",
+    "experiments": "that,type,prey_predator,Optimization",
+    "size": 9251,
+    "lines": 253
+  },
+  {
+    "path": "tutorials/Road Traffic/models/Model 01.gaml",
+    "name": "tutorial_gis_city_traffic",
+    "category": "tutorials/Road Traffic",
+    "experiments": "road_traffic",
+    "size": 1691,
+    "lines": 56
+  },
+  {
+    "path": "tutorials/Road Traffic/models/Model 02.gaml",
+    "name": "tutorial_gis_city_traffic",
+    "category": "tutorials/Road Traffic",
+    "experiments": "road_traffic",
+    "size": 2079,
+    "lines": 72
+  },
+  {
+    "path": "tutorials/Road Traffic/models/Model 03.gaml",
+    "name": "tutorial_gis_city_traffic",
+    "category": "tutorials/Road Traffic",
+    "experiments": "road_traffic",
+    "size": 3975,
+    "lines": 121
+  },
+  {
+    "path": "tutorials/Road Traffic/models/Model 04.gaml",
+    "name": "tutorial_gis_city_traffic",
+    "category": "tutorials/Road Traffic",
+    "experiments": "road_traffic",
+    "size": 4443,
+    "lines": 124
+  },
+  {
+    "path": "tutorials/Road Traffic/models/Model 05.gaml",
+    "name": "tutorial_gis_city_traffic",
+    "category": "tutorials/Road Traffic",
+    "experiments": "road_traffic",
+    "size": 4968,
+    "lines": 136
+  },
+  {
+    "path": "tutorials/Road Traffic/models/Model 06.gaml",
+    "name": "tutorial_gis_city_traffic",
+    "category": "tutorials/Road Traffic",
+    "experiments": "showing,road_traffic",
+    "size": 5584,
+    "lines": 147
+  },
+  {
+    "path": "tutorials/Road Traffic/models/Model 07.gaml",
+    "name": "tutorial_gis_city_traffic",
+    "category": "tutorials/Road Traffic",
+    "experiments": "road_traffic",
+    "size": 5996,
+    "lines": 155
+  },
+  {
+    "path": "tutorials/SIRAnalysis/models/SIR_Betad.gaml",
+    "name": "SIR_Betad",
+    "category": "tutorials/SIRAnalysis",
+    "experiments": "SIR_gui,SIR_Betad",
+    "size": 5761,
+    "lines": 157
+  },
+  {
+    "path": "tutorials/SIRAnalysis/models/SIR_LHS.gaml",
+    "name": "SIR",
+    "category": "tutorials/SIRAnalysis",
+    "experiments": "SIR_gui,with,SIR_LHS",
+    "size": 4063,
+    "lines": 117
+  },
+  {
+    "path": "tutorials/SIRAnalysis/models/SIR_Morris.gaml",
+    "name": "SIR_Morris",
+    "category": "tutorials/SIRAnalysis",
+    "experiments": "SIR_gui,SIR_Morris",
+    "size": 5183,
+    "lines": 138
+  },
+  {
+    "path": "tutorials/SIRAnalysis/models/SIR_sobol.gaml",
+    "name": "SIR_Sobol",
+    "category": "tutorials/SIRAnalysis",
+    "experiments": "SIR_gui,SIR_Sobol",
+    "size": 6186,
+    "lines": 154
+  },
+  {
+    "path": "tutorials/SIRAnalysis/models/SIR_Stochanalysis.gaml",
+    "name": "SIR_Stochanalyse",
+    "category": "tutorials/SIRAnalysis",
+    "experiments": "SIR_gui,SIR_Stochanalyse",
+    "size": 6869,
+    "lines": 180
+  },
+  {
+    "path": "tutorials/SIRAnalysis/models/SIR.gaml",
+    "name": "SIR",
+    "category": "tutorials/SIRAnalysis",
+    "experiments": "SIR_simulation",
+    "size": 2676,
+    "lines": 85
+  }
+]

@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GAMA Web - Browser-based Simulation</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
+</head>
+<body>
+    <div id="app">
+        <header id="toolbar">
+            <div class="toolbar-left">
+                <h1>GAMA Web</h1>
+                <span id="status" class="status-badge">Ready</span>
+            </div>
+            <div class="toolbar-center">
+                <button id="btn-run" class="btn btn-success" disabled title="Run simulation (Space)">
+                    &#9654; Run
+                </button>
+                <button id="btn-pause" class="btn btn-warning" disabled title="Pause">
+                    &#10074;&#10074; Pause
+                </button>
+                <button id="btn-step" class="btn btn-info" disabled title="Step one tick">
+                    &#9197; Step
+                </button>
+                <button id="btn-stop" class="btn btn-danger" disabled title="Stop">
+                    &#9632; Stop
+                </button>
+                <span class="toolbar-sep"></span>
+                <button id="btn-save" class="btn btn-secondary" disabled title="Save model (Ctrl+S)">
+                    &#128190; Save
+                </button>
+            </div>
+            <div class="toolbar-right">
+                <span id="step-counter">Step: 0</span>
+                <span id="exp-info" class="exp-info"></span>
+            </div>
+        </header>
+
+        <div id="main-layout">
+            <aside id="sidebar">
+                <div id="sidebar-header">
+                    <span>Library</span>
+                    <input type="text" id="search-box" placeholder="Search models...">
+                </div>
+                <div id="file-tree"></div>
+            </aside>
+
+            <div id="sidebar-resize"></div>
+
+            <div id="center-panel">
+                <div id="tabs-bar">
+                    <div id="tabs"></div>
+                </div>
+
+                <div id="editor-panel">
+                    <textarea id="code-editor"></textarea>
+                    <div id="editor-placeholder">
+                        <div class="placeholder-content">
+                            <h2>Welcome to GAMA Web</h2>
+                            <p>Select a model from the library on the left to start editing and running simulations.</p>
+                            <div class="placeholder-features">
+                                <div class="feature">
+                                    <strong>303 Models</strong>
+                                    <span>Tutorials, recipes, toy models</span>
+                                </div>
+                                <div class="feature">
+                                    <strong>In-Browser</strong>
+                                    <span>No server required</span>
+                                </div>
+                                <div class="feature">
+                                    <strong>Canvas2D Rendering</strong>
+                                    <span>2D visualization</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="viewport-container" class="hidden">
+                        <canvas id="viewport"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <aside id="right-panel" class="hidden">
+                <div id="right-panel-header">
+                    <span>Experiment</span>
+                    <button id="btn-close-right" class="btn-tiny">&times;</button>
+                </div>
+                <div id="experiment-config">
+                    <div class="config-group">
+                        <label>Experiment:</label>
+                        <select id="experiment-select"></select>
+                    </div>
+                    <div class="config-group">
+                        <label>Parameters:</label>
+                        <div id="params-container"></div>
+                    </div>
+                    <div class="config-group">
+                        <label>Outputs:</label>
+                        <div id="outputs-container"></div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+
+        <footer id="statusbar">
+            <span id="fps">FPS: 0</span>
+            <span id="mouse-coords">Model: (0, 0)</span>
+            <span id="file-info"></span>
+        </footer>
+    </div>
+
+    <!-- CodeMirror (global CodeMirror) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
+    <!-- GAMA Web — Clean architecture (4 modules) -->
+    <script src="js/gama-runtime.js"></script>
+    <script src="js/gama-compiler.js"></script>
+    <script src="js/gama-renderer.js"></script>
+    <script src="js/gama-session.js"></script>
+    <script src="js/gama-app.js"></script>
+</body>
+</html>
