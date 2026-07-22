@@ -30,7 +30,7 @@ GamlTokenizer.KEYWORDS = new Set([
     'chart', 'series', 'refresh', 'every', 'cycles',
     'among', 'at_distance', 'overlapping', 'inside', 'on',
     'accumulate', 'count', 'length', 'flip', 'rnd', 'one_of',
-    'empty', 'copy_of', 'reverse', 'sort_by',
+    'empty', 'copy_of', 'reverse', 'sort_by', 'collect',
     'neighbors_at', 'neighbors', 'closest_points_with',
     'write', 'save', 'to', 'format', 'rewrite', 'header',
     'simulations', 'envelope', 'shape', 'location', 'speed',
@@ -320,6 +320,9 @@ GamlParser.prototype.parseStatement = function () {
     // ask
     if (this.matchKW('ask')) return this.parseAsk();
 
+    // switch
+    if (this.matchKW('switch')) return this.parseSwitch();
+
     // return
     if (this.matchKW('return')) {
         var ret = { type: 'return', expr: null };
@@ -345,7 +348,7 @@ GamlParser.prototype.parseStatement = function () {
 
     // Skip display/output/parameter/monitor/layout/chart/equation/solve/method/save/data
     if (this.peek().type === 'KW' && ['display', 'output', 'parameter', 'monitor', 'layout',
-        'chart', 'data', 'save', 'equation', 'solve', 'method', 'switch'].indexOf(this.peek().value) >= 0) {
+        'chart', 'data', 'save', 'equation', 'solve', 'method'].indexOf(this.peek().value) >= 0) {
         this.skipToBrace();
         return { type: 'skip' };
     }
@@ -545,6 +548,40 @@ GamlParser.prototype.parseAsk = function () {
         this.match(';');
     }
     return ask;
+};
+
+GamlParser.prototype.parseSwitch = function () {
+    var sw = { type: 'switch', expr: this.parseExpression(), cases: [], defaultCase: null };
+    if (this.peek().type === '{') {
+        this.next();
+        while (this.peek().type !== '}' && !this.atEnd()) {
+            if (this.matchKW('match')) {
+                var val = this.parseExpression();
+                var stmts = [];
+                if (this.peek().type === '{') {
+                    this.next();
+                    while (this.peek().type !== '}' && !this.atEnd()) {
+                        stmts.push(this.parseStatement());
+                    }
+                    this.match('}');
+                }
+                sw.cases.push({ value: val, statements: stmts });
+            } else if (this.matchKW('default')) {
+                sw.defaultCase = [];
+                if (this.peek().type === '{') {
+                    this.next();
+                    while (this.peek().type !== '}' && !this.atEnd()) {
+                        sw.defaultCase.push(this.parseStatement());
+                    }
+                    this.match('}');
+                }
+            } else {
+                this.next();
+            }
+        }
+        this.match('}');
+    }
+    return sw;
 };
 
 GamlParser.prototype.parseAction = function () {
@@ -761,6 +798,12 @@ GamlParser.prototype.parsePostfix = function () {
             var accExpr = this.parseExpression();
             this.expect(')', ')');
             base = { type: 'accumulate', base: base, expr: accExpr };
+        } else if (this.peek().type === 'KW' && this.peek().value === 'collect') {
+            this.next();
+            this.expect('(', '(');
+            var collExpr = this.parseExpression();
+            this.expect(')', ')');
+            base = { type: 'collect_call', base: base, expr: collExpr };
         } else if (this.peek().type === 'KW' && this.peek().value === 'neighbors_at') {
             // GAML: expr neighbors_at(dist) -> neighbors_at(expr, dist)
             this.next();
@@ -1237,6 +1280,7 @@ GamlCompiler.prototype._genStmt = function (stmt) {
         case 'do': return this._genDo(stmt);
         case 'create': return this._genCreate(stmt);
         case 'ask': return this._genAsk(stmt);
+        case 'switch': return this._genSwitch(stmt);
         case 'return': return 'return ' + (stmt.expr ? this._exprToJS(stmt.expr) : '') + ';';
         case 'write': return 'console.log(' + this._exprToJS(stmt.expr) + ');';
         case 'expr_stmt': return this._exprToJS(stmt.expr) + ';';
@@ -1249,7 +1293,19 @@ GamlCompiler.prototype._genLoop = function (stmt) {
     var code = '';
     var loopLocals = {};
     if (stmt.name) loopLocals[stmt.name] = true;
-    if (stmt.over) {
+    if (stmt.over && stmt.while_) {
+        var v0 = stmt.name || '_lv';
+        loopLocals[v0] = true;
+        code += 'var _co = ' + this._exprToJS(stmt.over) + ';\n';
+        code += 'for (var _li = 0; _li < _co.length; _li++) {\n';
+        code += '  var ' + v0 + ' = _co[_li];\n';
+        code += '  if (!(' + this._exprToJS(stmt.while_) + ')) continue;\n';
+        var savedLocals0 = this._localVars;
+        this._localVars = (this._localVars || []).concat([loopLocals]);
+        for (var m = 0; m < stmt.statements.length; m++) code += '  ' + this._genStmt(stmt.statements[m]) + '\n';
+        this._localVars = savedLocals0;
+        code += '}';
+    } else if (stmt.over) {
         var v = stmt.name || '_lv';
         loopLocals[v] = true;
         code += 'var _co = ' + this._exprToJS(stmt.over) + ';\n';
@@ -1385,6 +1441,30 @@ GamlCompiler.prototype._genAsk = function (stmt) {
     return code;
 };
 
+GamlCompiler.prototype._genSwitch = function (stmt) {
+    var exprJS = this._exprToJS(stmt.expr);
+    var code = '(function() { var _sv = ' + exprJS + ';\n';
+    for (var i = 0; i < stmt.cases.length; i++) {
+        var caseVal = this._exprToJS(stmt.cases[i].value);
+        code += '  if (_sv === ' + caseVal + ') {\n';
+        for (var j = 0; j < stmt.cases[i].statements.length; j++) {
+            code += '    ' + this._genStmt(stmt.cases[i].statements[j]) + '\n';
+        }
+        code += '  } else ';
+    }
+    if (stmt.defaultCase) {
+        code += '{\n';
+        for (var k = 0; k < stmt.defaultCase.length; k++) {
+            code += '    ' + this._genStmt(stmt.defaultCase[k]) + '\n';
+        }
+        code += '  }\n';
+    } else {
+        code += ' {}\n';
+    }
+    code += '})();';
+    return code;
+};
+
 // === Expression to JavaScript ===
 
 GamlCompiler.prototype._exprToJS = function (expr) {
@@ -1418,6 +1498,7 @@ GamlCompiler.prototype._exprToJS = function (expr) {
         case 'methodcall': return this._methodcallToJS(expr);
         case 'count_filtered': return this._countFilteredToJS(expr);
         case 'accumulate': return '(function(){var _b=' + this._exprToJS(expr.base) + ';return Array.isArray(_b)?_b:[_b];})()';
+        case 'collect_call': return '(' + this._exprToJS(expr.base) + ').map(function(_each){return ' + this._exprToJS(expr.expr) + ';})';
         case 'array': return '[' + expr.items.map(this._exprToJS.bind(this)).join(',') + ']';
         case 'point': return '{x:' + expr.coords.map(this._exprToJS.bind(this)).join(',y:') + '}';
         default: return '/*?' + expr.type + '*/';
@@ -1441,6 +1522,7 @@ GamlCompiler.prototype._unaryToJS = function (expr) {
 GamlCompiler.prototype._varRef = function (name) {
     // Built-in variables
     if (name === 'self' || name === 'myself') return '_a';
+    if (name === 'each') return '_each';
     if (name === 'cycle' || name === 'time') return 'sim.cycle';
     if (name === 'location') return '_a.location';
     if (name === 'color') return '_a.color';
@@ -1476,35 +1558,76 @@ GamlCompiler.prototype._callToJS = function (expr) {
     var args = expr.args.map(this._exprToJS.bind(this));
 
     switch (name) {
-        case 'length': return '(' + args[0] + ').length';
-        case 'flip': return 'sim.rng.flip(' + args[0] + ')';
-        case 'rnd': return args.length > 1 ? 'sim.rng.rnd(' + args.join(',') + ')' : 'sim.rng.rnd(' + args[0] + ')';
-        case 'one_of': return 'sim.rng.one_of(' + args[0] + ')';
+        // Collection operations
+        case 'length': return '(function(v){return v==null?0:Array.isArray(v)?v.length:typeof v==="string"?v.length:0;})(' + args[0] + ')';
         case 'empty': return '(!' + args[0] + '||' + args[0] + '.length===0)';
-        case 'among': return 'sim.rng.shuffle(' + args[1] + ').slice(0,' + args[0] + ')';
-        case 'count': return '(sim.populations[_a._species]||[]).filter(function(a){return ' + args[0] + ';}).length';
-        case 'min': return args.length > 1 ? 'Math.min(' + args.join(',') + ')' : 'sim.rng.min_list(' + args[0] + ')';
-        case 'max': return args.length > 1 ? 'Math.max(' + args.join(',') + ')' : 'sim.rng.max_list(' + args[0] + ')';
-        case 'abs': return 'Math.abs(' + args[0] + ')';
-        case 'sqrt': return 'Math.sqrt(' + args[0] + ')';
-        case 'sin': return 'Math.sin(' + args[0] + ')';
-        case 'cos': return 'Math.cos(' + args[0] + ')';
-        case 'tan': return 'Math.tan(' + args[0] + ')';
-        case 'exp': return 'Math.exp(' + args[0] + ')';
-        case 'ln': return 'Math.log(' + args[0] + ')';
-        case 'log': return 'Math.log(' + args[0] + ')/Math.log(10)';
-        case 'round': return 'Math.round(' + args[0] + ')';
-        case 'floor': return 'Math.floor(' + args[0] + ')';
-        case 'ceil': return 'Math.ceil(' + args[0] + ')';
-        case 'int': return 'Math.floor(' + args[0] + ')';
-        case 'float': return 'parseFloat(' + args[0] + ')';
-        case 'string': return 'String(' + args[0] + ')';
-        case 'copy_of': return 'JSON.parse(JSON.stringify(' + args[0] + '))';
-        case 'reverse': return '(' + args[0] + ').slice().reverse()';
-        case 'rgb': return '"rgb("+' + args.join('+","+') + '+")"';
-        case 'write': return 'console.log(' + args.join(',') + ')';
-        case 'distance_to':
-            return '(function(){var _o=' + args[0] + ';var dx=_a.x-_o.x;var dy=_a.y-_o.y;return Math.sqrt(dx*dx+dy*dy);})()';
+        case 'not_empty': return '(' + args[0] + '&&' + args[0] + '.length>0)';
+        case 'first': return 'GamaBuiltins.gama_first(' + args[0] + ')';
+        case 'last': return 'GamaBuiltins.gama_last(' + args[0] + ')';
+        case 'second': return 'GamaBuiltins.gama_second(' + args[0] + ')';
+        case 'third': return 'GamaBuiltins.gama_third(' + args[0] + ')';
+        case 'nth': return 'GamaBuiltins.gama_nth(' + args[0] + ',' + args[1] + ')';
+        case 'any': return 'GamaBuiltins.gama_any(' + args[0] + ')';
+        case 'all': return 'GamaBuiltins.gama_any(' + args[0] + ')';
+        case 'none': return 'GamaBuiltins.gama_none(' + args[0] + ')';
+        case 'contains': return 'GamaBuiltins.gama_contains(' + args[0] + ',' + args[1] + ')';
+        case 'index_of': return 'GamaBuiltins.gama_index_of(' + args[0] + ',' + args[1] + ')';
+        case 'last_index_of': return 'GamaBuiltins.gama_last_index_of(' + args[0] + ',' + args[1] + ')';
+        case 'sum': return 'GamaBuiltins.gama_sum(' + args[0] + ')';
+        case 'mean': return 'GamaBuiltins.gama_mean(' + args[0] + ')';
+        case 'product': return 'GamaBuiltins.gama_product(' + args[0] + ')';
+        case 'variance': return 'GamaBuiltins.gama_variance(' + args[0] + ')';
+        case 'std_dev': return 'GamaBuiltins.gama_std_dev(' + args[0] + ')';
+        case 'copy_of': return 'GamaBuiltins.gama_copy_of(' + args[0] + ')';
+        case 'reverse': return 'GamaBuiltins.gama_reverse(' + args[0] + ')';
+        case 'sort': return 'GamaBuiltins.gama_sort(' + args[0] + ')';
+        case 'sort_by': return '(' + args[0] + ').slice().sort(function(a,b){return (function(_each){return ' + args[1] + ';})(a)-(function(_each){return ' + args[1] + ';})(b);})';
+        case 'shuffle': return 'sim.rng.shuffle(' + args[0] + ')';
+        case 'accumulate': return '(function(){var _b=' + args[0] + ';return Array.isArray(_b)?_b:[_b];})()';
+        case 'collect': return '(' + args[0] + ').map(function(_each){return ' + args[1] + ';})';
+
+        // Type casting
+        case 'int': return 'GamaBuiltins.gama_int(' + args[0] + ')';
+        case 'float': return 'GamaBuiltins.gama_float(' + args[0] + ')';
+        case 'string': return 'GamaBuiltins.gama_string(' + args[0] + ')';
+        case 'rgb': return 'GamaBuiltins.gama_rgb(' + args.join(',') + ')';
+
+        // Math
+        case 'abs': return 'GamaBuiltins.gama_abs(' + args[0] + ')';
+        case 'sqrt': return 'GamaBuiltins.gama_sqrt(' + args[0] + ')';
+        case 'sin': return 'GamaBuiltins.gama_sin(' + args[0] + ')';
+        case 'cos': return 'GamaBuiltins.gama_cos(' + args[0] + ')';
+        case 'tan': return 'GamaBuiltins.gama_tan(' + args[0] + ')';
+        case 'exp': return 'GamaBuiltins.gama_exp(' + args[0] + ')';
+        case 'ln': return 'GamaBuiltins.gama_ln(' + args[0] + ')';
+        case 'log': return 'GamaBuiltins.gama_log(' + args[0] + ')';
+        case 'round': return 'GamaBuiltins.gama_round(' + args[0] + ')';
+        case 'floor': return 'GamaBuiltins.gama_floor(' + args[0] + ')';
+        case 'ceil': return 'GamaBuiltins.gama_ceil(' + args[0] + ')';
+        case 'mod': return 'GamaBuiltins.gama_mod(' + args[0] + ',' + args[1] + ')';
+        case 'div': return 'GamaBuiltins.gama_div(' + args[0] + ',' + args[1] + ')';
+        case 'gauss': return args.length > 1 ? 'GamaBuiltins.gama_gauss(' + args[0] + ',' + args[1] + ')' : 'GamaBuiltins.gama_gauss(' + args[0] + ')';
+        case 'between': return 'GamaBuiltins.gama_between(' + args[0] + ',' + args[1] + ',' + args[2] + ')';
+        case 'lognormal': return args.length > 1 ? 'GamaBuiltins.gama_lognormal(' + args[0] + ',' + args[1] + ')' : 'GamaBuiltins.gama_lognormal(' + args[0] + ')';
+        case 'poisson': return 'GamaBuiltins.gama_poisson(' + args[0] + ')';
+
+        // String
+        case 'uppercase': return 'GamaBuiltins.gama_uppercase(' + args[0] + ')';
+        case 'lowercase': return 'GamaBuiltins.gama_lowercase(' + args[0] + ')';
+        case 'replace': return 'GamaBuiltins.gama_replace(' + args[0] + ',' + args[1] + ',' + args[2] + ')';
+        case 'replace_all': return 'GamaBuiltins.gama_replace_all(' + args[0] + ',' + args[1] + ',' + args[2] + ')';
+        case 'matches': return 'GamaBuiltins.gama_matches(' + args[0] + ',' + args[1] + ')';
+        case 'split': return 'GamaBuiltins.gama_split(' + args[0] + ',' + args[1] + ')';
+        case 'trim': return 'GamaBuiltins.gama_trim(' + args[0] + ')';
+        case 'pad_left': return 'GamaBuiltins.gama_pad_left(' + args[0] + ',' + args[1] + ',' + args[2] + ')';
+        case 'intersperse': return 'GamaBuiltins.gama_intersperse(' + args[0] + ',' + args[1] + ')';
+        case 'length_str': return 'GamaBuiltins.gama_length_str(' + args[0] + ')';
+
+        // Spatial
+        case 'distance_to': return '(function(_o){return GamaBuiltins.gama_distance(_a.x,_a.y,_o.x,_o.y);})(' + args[0] + ')';
+        case 'distance_agents': return 'GamaBuiltins.gama_distance_agents(' + args[0] + ',' + args[1] + ')';
+        case 'angle': return 'GamaBuiltins.gama_angle(' + args[0] + ',' + args[1] + ')';
+        case 'heading': return 'GamaBuiltins.gama_heading(' + args[0] + ')';
         case 'at_distance':
             return '(function(){var _d=' + args[1] + ';var _p=sim.populations[_a._species]||[];return _p.filter(function(b){var dx=_a.x-b.x;var dy=_a.y-b.y;return Math.sqrt(dx*dx+dy*dy)<=_d;});})()';
         case 'overlapping':
@@ -1512,25 +1635,25 @@ GamlCompiler.prototype._callToJS = function (expr) {
             return '(function(){var _s=' + args[0] + ';return Array.isArray(_s)?_s.slice():(sim.populations[String(_s)]||[]).slice();})()';
         case 'neighbors_at':
             return '(function(){var _dist=' + args[1] + ';var _pop=sim.populations[_a._species]||[];return _pop.filter(function(b){if(b===_a||b._dead)return false;var dx=_a.x-b.x;var dy=_a.y-b.y;return Math.sqrt(dx*dx+dy*dy)<=_dist;});})()';
-        case 'accumulate':
-            return '(function(){var _b=' + args[0] + ';return Array.isArray(_b)?_b:[_b];})()';
         case 'envelope': return '(function(){var _g=' + args[0] + ';return _g&&_g.width?_g:{width:500,height:500};})()';
         case 'square': return '{width:' + args[0] + ',height:' + args[0] + '}';
         case 'circle': return '{radius:' + args[0] + '}';
-        case 'sort_by': return '(' + args[0] + ').slice().sort(function(a,b){return ' + args[1] + ';})';
-        case 'copy_of': return 'JSON.parse(JSON.stringify(' + args[0] + '))';
-        case 'reverse': return '(' + args[0] + ').slice().reverse()';
         case 'dead': return '(function(_ag){return !_ag||_ag._dead;})(' + args[0] + ')';
-        case 'first': return '(' + args[0] + ')[0]';
-        case 'last': return '(' + args[0] + ')[' + args[0] + '.length-1]';
-        case 'any': return '(' + args[0] + '.length > 0)';
-        case 'none': return '(' + args[0] + '.length === 0)';
+
+        // Utilities
+        case 'flip': return 'sim.rng.flip(' + args[0] + ')';
+        case 'rnd': return args.length > 1 ? 'sim.rng.rnd(' + args.join(',') + ')' : 'sim.rng.rnd(' + args[0] + ')';
+        case 'one_of': return 'sim.rng.one_of(' + args[0] + ')';
+        case 'among': return 'sim.rng.shuffle(' + args[1] + ').slice(0,' + args[0] + ')';
+        case 'count': return '(sim.populations[_a._species]||[]).filter(function(a){return ' + args[0] + ';}).length';
+        case 'min': return args.length > 1 ? 'Math.min(' + args.join(',') + ')' : 'sim.rng.min_list(' + args[0] + ')';
+        case 'max': return args.length > 1 ? 'Math.max(' + args.join(',') + ')' : 'sim.rng.max_list(' + args[0] + ')';
+        case 'write': return 'console.log(' + args.join(',') + ')';
+
         default:
-            // Check if species reference used as collection
             if (this._allSpecies[name]) {
                 return '(sim.populations[' + JSON.stringify(name) + ']||[])';
             }
-            // Check if global variable used as collection
             if (this._globalVars[name]) {
                 return 'sim.world.' + name;
             }

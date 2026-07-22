@@ -328,10 +328,186 @@ SpeciesDef.prototype.createAgent = function (sim) {
     return agent;
 };
 
-// Export globals
+// ============================================================
+// Builtins — GAML standard library functions
+// ============================================================
+var GamaBuiltins = {};
+
+// Type casting
+GamaBuiltins.gama_int = function (v) { return typeof v === 'number' ? Math.trunc(v) : parseInt(v, 10) || 0; };
+GamaBuiltins.gama_float = function (v) { return typeof v === 'number' ? v : parseFloat(v) || 0.0; };
+GamaBuiltins.gama_bool = function (v) { return !!v; };
+GamaBuiltins.gama_string = function (v) { return '' + v; };
+GamaBuiltins.gama_rgb = function (r, g, b) {
+    if (arguments.length === 1 && typeof r === 'string') return r;
+    if (arguments.length === 1 && typeof r === 'number') {
+        var rv = Math.max(0, Math.min(255, Math.round(r)));
+        return 'rgb(' + rv + ',' + rv + ',' + rv + ')';
+    }
+    if (arguments.length === 3) {
+        return 'rgb(' + Math.max(0, Math.min(255, Math.round(r))) + ',' +
+               Math.max(0, Math.min(255, Math.round(g))) + ',' +
+               Math.max(0, Math.min(255, Math.round(b))) + ')';
+    }
+    return '#808080';
+};
+
+// Collection — basic
+GamaBuiltins.gama_length = function (v) { return v == null ? 0 : (Array.isArray(v) ? v.length : (typeof v === 'string' ? v.length : 0)); };
+GamaBuiltins.gama_empty = function (v) { return v == null || (Array.isArray(v) ? v.length === 0 : false); };
+GamaBuiltins.gama_not_empty = function (v) { return !GamaBuiltins.gama_empty(v); };
+GamaBuiltins.gama_copy_of = function (v) { return JSON.parse(JSON.stringify(v)); };
+GamaBuiltins.gama_reverse = function (v) { return v.slice().reverse(); };
+
+// Collection — element access
+GamaBuiltins.gama_first = function (v) { return v && v.length > 0 ? v[0] : null; };
+GamaBuiltins.gama_last = function (v) { return v && v.length > 0 ? v[v.length - 1] : null; };
+GamaBuiltins.gama_second = function (v) { return v && v.length > 1 ? v[1] : null; };
+GamaBuiltins.gama_third = function (v) { return v && v.length > 2 ? v[2] : null; };
+GamaBuiltins.gama_nth = function (n, v) { return v && n >= 0 && n < v.length ? v[n] : null; };
+
+// Collection — predicates
+GamaBuiltins.gama_any = function (v) { return v && v.length > 0; };
+GamaBuiltins.gama_none = function (v) { return !v || v.length === 0; };
+GamaBuiltins.gama_contains = function (col, v) {
+    if (col == null) return false;
+    if (Array.isArray(col)) return col.indexOf(v) >= 0;
+    if (typeof col === 'string') return col.indexOf(v) >= 0;
+    return false;
+};
+
+// Collection — search
+GamaBuiltins.gama_index_of = function (col, v) { return col ? col.indexOf(v) : -1; };
+GamaBuiltins.gama_last_index_of = function (col, v) { return col ? col.lastIndexOf(v) : -1; };
+
+// Collection — aggregate
+GamaBuiltins.gama_sum = function (v) {
+    if (!v || v.length === 0) return 0;
+    var s = 0; for (var i = 0; i < v.length; i++) s += (typeof v[i] === 'number' ? v[i] : 0);
+    return s;
+};
+GamaBuiltins.gama_mean = function (v) {
+    if (!v || v.length === 0) return 0;
+    return GamaBuiltins.gama_sum(v) / v.length;
+};
+GamaBuiltins.gama_product = function (v) {
+    if (!v || v.length === 0) return 0;
+    var p = 1; for (var i = 0; i < v.length; i++) p *= (typeof v[i] === 'number' ? v[i] : 1);
+    return p;
+};
+GamaBuiltins.gama_variance = function (v) {
+    if (!v || v.length <= 1) return 0;
+    var m = GamaBuiltins.gama_mean(v), s = 0;
+    for (var i = 0; i < v.length; i++) { var d = v[i] - m; s += d * d; }
+    return s / v.length;
+};
+GamaBuiltins.gama_std_dev = function (v) { return Math.sqrt(GamaBuiltins.gama_variance(v)); };
+
+// Collection — transform
+GamaBuiltins.gama_sort = function (v) { return v.slice().sort(function (a, b) { return a - b; }); };
+GamaBuiltins.gama_sort_by = function (v, fn) { return v.slice().sort(function (a, b) { return fn(a) - fn(b); }); };
+GamaBuiltins.gama_collector = function (v) {
+    if (!v) return [];
+    var result = [];
+    for (var i = 0; i < v.length; i++) {
+        if (v[i] != null) result.push(v[i]);
+    }
+    return result;
+};
+GamaBuiltins.gama_accumulate = function (v) {
+    if (!v) return [];
+    var result = [v[0]];
+    for (var i = 1; i < v.length; i++) result.push(result[i - 1] + v[i]);
+    return result;
+};
+GamaBuiltins.gama_matrix = function (v, cols) {
+    if (!v) return [];
+    var result = [];
+    for (var i = 0; i < v.length; i += cols) {
+        result.push(v.slice(i, i + cols));
+    }
+    return result;
+};
+
+// Math
+GamaBuiltins.gama_abs = Math.abs;
+GamaBuiltins.gama_sqrt = Math.sqrt;
+GamaBuiltins.gama_sin = Math.sin;
+GamaBuiltins.gama_cos = Math.cos;
+GamaBuiltins.gama_tan = Math.tan;
+GamaBuiltins.gama_exp = Math.exp;
+GamaBuiltins.gama_ln = Math.log;
+GamaBuiltins.gama_log = function (v) { return Math.log(v) / Math.LN10; };
+GamaBuiltins.gama_round = Math.round;
+GamaBuiltins.gama_floor = Math.floor;
+GamaBuiltins.gama_ceil = Math.ceil;
+GamaBuiltins.gama_mod = function (a, b) { return a % b; };
+GamaBuiltins.gama_div = function (a, b) { return Math.floor(a / b); };
+GamaBuiltins.gama_between = function (a, b) { return a + Math.random() * (b - a); };
+GamaBuiltins.gama_gauss = function (m, s) {
+    var u = 0, v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    return m + s * Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+};
+GamaBuiltins.gama_lognormal = function (m, s) { return Math.exp(GamaBuiltins.gama_gauss(m, s)); };
+GamaBuiltins.gama_poisson = function (lambda) {
+    var L = Math.exp(-lambda), k = 0, p = 1;
+    do { k++; p *= Math.random(); } while (p > L);
+    return k - 1;
+};
+
+// String
+GamaBuiltins.gama_length_str = function (s) { return s ? s.length : 0; };
+GamaBuiltins.gama_uppercase = function (s) { return s ? s.toUpperCase() : ''; };
+GamaBuiltins.gama_lowercase = function (s) { return s ? s.toLowerCase() : ''; };
+GamaBuiltins.gama_replace = function (s, old, nw) { return s ? s.replace(old, nw) : ''; };
+GamaBuiltins.gama_replace_all = function (s, old, nw) {
+    if (!s) return '';
+    return s.split(old).join(nw);
+};
+GamaBuiltins.gama_matches = function (s, regex) { return s ? new RegExp(regex).test(s) : false; };
+GamaBuiltins.gama_matches_regexp = GamaBuiltins.gama_matches;
+GamaBuiltins.gama_substrings = function (s, regex) {
+    if (!s) return [];
+    var m = s.match(new RegExp(regex));
+    return m || [];
+};
+GamaBuiltins.gama_split = function (s, sep) { return s ? s.split(sep) : []; };
+GamaBuiltins.gama_trim = function (s) { return s ? s.trim() : ''; };
+GamaBuiltins.gama_pad_left = function (s, len, ch) {
+    s = '' + s; ch = ch || ' ';
+    while (s.length < len) s = ch + s;
+    return s;
+};
+GamaBuiltins.gama_intersperse = function (list, sep) {
+    if (!list || list.length === 0) return '';
+    var r = '' + list[0];
+    for (var i = 1; i < list.length; i++) r += sep + list[i];
+    return r;
+};
+
+// Spatial helpers
+GamaBuiltins.gama_distance = function (x1, y1, x2, y2) {
+    var dx = x1 - x2, dy = y1 - y2;
+    return Math.sqrt(dx * dx + dy * dy);
+};
+GamaBuiltins.gama_distance_agents = function (a, b) {
+    return GamaBuiltins.gama_distance(a.x || 0, a.y || 0, b.x || 0, b.y || 0);
+};
+GamaBuiltins.gama_angle = function (x1, y1, x2, y2) {
+    return Math.atan2(y2 - y1, x2 - x1);
+};
+GamaBuiltins.gama_heading = function (x1, y1, x2, y2) {
+    var a = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
+    return (a + 360) % 360;
+};
+
+// Export
 window.GamaRNG = GamaRNG;
 window.Agent = Agent;
 window.World = World;
 window.Updater = Updater;
 window.Simulation = Simulation;
 window.SpeciesDef = SpeciesDef;
+window.GamaBuiltins = GamaBuiltins;

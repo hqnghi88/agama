@@ -35,8 +35,8 @@ GamaSession.prototype.createSimulation = function () {
     // Register species from compiled code, then initialize
     var code = this._compiledJS + '\nreturn _initSimulation(sim);';
     try {
-        var fn = new Function('sim', 'SpeciesDef', 'Agent', 'World', 'Simulation', 'GamaRNG', code);
-        sim = fn(sim, SpeciesDef, Agent, World, Simulation, GamaRNG);
+        var fn = new Function('sim', 'SpeciesDef', 'Agent', 'World', 'Simulation', 'GamaRNG', 'GamaBuiltins', code);
+        sim = fn(sim, SpeciesDef, Agent, World, Simulation, GamaRNG, GamaBuiltins);
     } catch (e) {
         console.error('GAML runtime error:', e);
         console.error('Generated JS:\n', this._compiledJS);
