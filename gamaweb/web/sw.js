@@ -11,8 +11,8 @@
  * - Model files: IndexedDB (separate from service worker)
  */
 
-const CACHE_NAME = 'gama-web-v24';
-const RUNTIME_CACHE = 'gama-runtime-v24';
+const CACHE_NAME = 'gama-web-v25';
+const RUNTIME_CACHE = 'gama-runtime-v25';
 
 // App shell files to pre-cache
 const APP_SHELL = [

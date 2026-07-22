@@ -112,6 +112,26 @@ Agent.prototype.wander = function (speed) {
     }
 };
 
+Agent.prototype.move = function (opts) {
+    var spd = (opts && typeof opts.speed === 'number') ? opts.speed : this.speed;
+    var hdg = (opts && typeof opts.heading === 'number') ? opts.heading : this.heading;
+    var rad = hdg * Math.PI / 180;
+    this.x += Math.cos(rad) * spd;
+    this.y += Math.sin(rad) * spd;
+    this.location.x = this.x;
+    this.location.y = this.y;
+    if (this._sim && this._sim.world) {
+        var w = this._sim.world.width || 50;
+        var h = this._sim.world.height || 50;
+        var halfW = w / 2;
+        var halfH = h / 2;
+        this.x = Math.max(-halfW, Math.min(halfW, this.x));
+        this.y = Math.max(-halfH, Math.min(halfH, this.y));
+        this.location.x = this.x;
+        this.location.y = this.y;
+    }
+};
+
 Agent.prototype.distance_to = function (other) {
     var dx = this.x - other.x;
     var dy = this.y - other.y;

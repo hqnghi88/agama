@@ -31,7 +31,7 @@ GamlTokenizer.KEYWORDS = new Set([
     'among', 'at_distance', 'overlapping', 'inside', 'on',
     'accumulate', 'count', 'length', 'flip', 'rnd', 'one_of',
     'empty', 'copy_of', 'reverse', 'sort_by', 'collect',
-    'neighbors_at', 'neighbors', 'closest_points_with',
+    'neighbors_at', 'neighbors', 'closest_points_with', 'distance_to', 'towards', 'of_species',
     'write', 'save', 'to', 'format', 'rewrite', 'header',
     'simulations', 'envelope', 'shape', 'location', 'speed',
     'method', 'tabu', 'maximize', 'minimize', 'iter_max', 'tabu_list_size',
@@ -289,6 +289,12 @@ GamlParser.prototype.parseStatement = function () {
         return this.parseVarDef();
     }
 
+    // Species type vardef: species_name name <- expr; (e.g. "cell close <- ...")
+    if (t.type === 'ID' && this.tokens[this.pos + 1] && this.tokens[this.pos + 1].type === 'ID' &&
+        this.tokens[this.pos + 2] && (this.tokens[this.pos + 2].value === '<-' || this.tokens[this.pos + 2].value === '->')) {
+        return this.parseVarDef();
+    }
+
     // var/let
     if ((t.type === 'KW' && t.value === 'var') || (t.type === 'KW' && t.value === 'let')) {
         this.next();
@@ -392,6 +398,18 @@ GamlParser.prototype.parseVarDef = function () {
 
     var name = this.next().value;
     var def = { type: 'vardef', varType: typeTok.value, name: name, init: null, derived: false };
+
+    // Skip attribute facets: min: expr, max: expr, const: true, among: expr, unit: expr, etc.
+    while (this.peek().type !== '<-' && this.peek().type !== '->' && this.peek().type !== ';' && this.peek().type !== '}' && !this.atEnd()) {
+        if ((this.peek().type === 'ID' || this.peek().type === 'KW') &&
+            this.tokens[this.pos + 1] && this.tokens[this.pos + 1].value === ':') {
+            this.next(); // key
+            this.next(); // skip :
+            this.parseExpression(); // consume value (discard)
+        } else {
+            break;
+        }
+    }
 
     if (this.peek().value === '<-') {
         this.next();
@@ -497,10 +515,28 @@ GamlParser.prototype.parseLoop = function () {
 
 GamlParser.prototype.parseDo = function () {
     this.next(); // skip do/invoke
-    var stmt = { type: 'do', target: this.parseExpression(), facets: [] };
-    // Parse facets: key: expr until ; or {
+    // Parse target name (just an ID/KW, not a full expression to avoid consuming facet parens)
+    var targetName = this.next().value;
+    var stmt = { type: 'do', target: { type: 'var', name: targetName }, facets: [] };
+
+    // Parse facets: (key: expr, ...) or key: expr ...
     while (this.peek().type !== ';' && this.peek().type !== '{' && this.peek().type !== '}' && !this.atEnd()) {
-        if ((this.peek().type === 'ID' || this.peek().type === 'KW') && this.tokens[this.pos + 1] && this.tokens[this.pos + 1].value === ':') {
+        if (this.peek().type === '(') {
+            this.next(); // skip (
+            while (this.peek().type !== ')' && !this.atEnd()) {
+                if ((this.peek().type === 'ID' || this.peek().type === 'KW') &&
+                    this.tokens[this.pos + 1] && this.tokens[this.pos + 1].value === ':') {
+                    var fk = this.next().value;
+                    this.next(); // skip :
+                    stmt.facets.push({ key: fk, value: this.parseExpression() });
+                } else {
+                    break;
+                }
+                if (this.peek().type === ',') this.next();
+            }
+            this.expect(')', ')');
+        } else if ((this.peek().type === 'ID' || this.peek().type === 'KW') &&
+            this.tokens[this.pos + 1] && this.tokens[this.pos + 1].value === ':') {
             var fk = this.next().value;
             this.next(); // skip :
             stmt.facets.push({ key: fk, value: this.parseExpression() });
@@ -691,6 +727,9 @@ GamlParser.prototype.parseComparison = function () {
         } else if (t.value === '>') {
             this.next();
             left = { type: 'binary', op: '>', left: left, right: this.parseAddSub() };
+        } else if (t.type === 'KW' && t.value === 'towards') {
+            this.next();
+            left = { type: 'binary', op: 'towards', left: left, right: this.parseAddSub() };
         } else {
             break;
         }
@@ -805,12 +844,34 @@ GamlParser.prototype.parsePostfix = function () {
             this.expect(')', ')');
             base = { type: 'collect_call', base: base, expr: collExpr };
         } else if (this.peek().type === 'KW' && this.peek().value === 'neighbors_at') {
-            // GAML: expr neighbors_at(dist) -> neighbors_at(expr, dist)
+            // GAML: expr neighbors_at(dist) or expr neighbors_at dist
+            this.next();
+            var nad;
+            if (this.peek().type === '(') {
+                this.next();
+                nad = this.parseExpression();
+                this.expect(')', ')');
+            } else {
+                nad = this.parseUnary();
+            }
+            base = { type: 'call', name: 'neighbors_at', args: [base, nad] };
+        } else if (this.peek().type === 'KW' && this.peek().value === 'of_species') {
+            // GAML: expr of_species species_name
+            this.next();
+            var speciesName = this.next().value;
+            base = { type: 'of_species', base: base, species: speciesName };
+        } else if (this.peek().type === 'KW' && this.peek().value === 'distance_to') {
+            // GAML: expr distance_to other (space syntax, no parens)
+            this.next();
+            var dtTarget = this.parseUnary();
+            base = { type: 'call', name: 'distance_to', args: [base, dtTarget] };
+        } else if (this.peek().type === 'KW' && this.peek().value === 'sort_by') {
+            // GAML: expr sort_by (comparison)
             this.next();
             this.expect('(', '(');
-            var dist = this.parseExpression();
+            var sortKey = this.parseExpression();
             this.expect(')', ')');
-            base = { type: 'call', name: 'neighbors_at', args: [base, dist] };
+            base = { type: 'call', name: 'sort_by', args: [base, sortKey] };
         } else if (this.peek().type === 'ID' && this.peek().type !== '{' &&
                    this.tokens[this.pos + 1] && this.tokens[this.pos + 1].value === '(') {
             // GAML: expr funcName(args) -> funcName(expr, args) — method-call-on-object syntax
@@ -1386,7 +1447,8 @@ GamlCompiler.prototype._genDo = function (stmt) {
     }
     // Generic do: call as method on self
     var target = this._exprToJS(stmt.target);
-    // Strip function call syntax for method call
+    // Strip _a. prefix (agent variable) and function call syntax
+    target = target.replace(/^_a\./, '');
     target = target.replace(/\(.*\)/, '');
     if (stmt.facets && stmt.facets.length > 0) {
         var facetStr = stmt.facets.map(function (f) { return f.key + ': ' + this._exprToJS(f.value); }.bind(this)).join(', ');
@@ -1499,6 +1561,7 @@ GamlCompiler.prototype._exprToJS = function (expr) {
         case 'count_filtered': return this._countFilteredToJS(expr);
         case 'accumulate': return '(function(){var _b=' + this._exprToJS(expr.base) + ';return Array.isArray(_b)?_b:[_b];})()';
         case 'collect_call': return '(' + this._exprToJS(expr.base) + ').map(function(_each){return ' + this._exprToJS(expr.expr) + ';})';
+        case 'of_species': return '(function(){var _c=' + this._exprToJS(expr.base) + ';if(!Array.isArray(_c))return[];return _c.filter(function(a){return a._species===' + JSON.stringify(expr.species) + ';});})()';
         case 'array': return '[' + expr.items.map(this._exprToJS.bind(this)).join(',') + ']';
         case 'point': return '{x:' + expr.coords.map(this._exprToJS.bind(this)).join(',y:') + '}';
         default: return '/*?' + expr.type + '*/';
@@ -1510,6 +1573,7 @@ GamlCompiler.prototype._binaryToJS = function (expr) {
     var r = this._exprToJS(expr.right);
     if (expr.op === '=') return '(' + l + '===' + r + ')';
     if (expr.op === '^') return 'Math.pow(' + l + ',' + r + ')';
+    if (expr.op === 'towards') return 'GamaBuiltins.gama_heading(' + l + '.x||0,' + l + '.y||0,' + r + '.x||0,' + r + '.y||0)';
     return '(' + l + expr.op + r + ')';
 };
 
@@ -1624,7 +1688,7 @@ GamlCompiler.prototype._callToJS = function (expr) {
         case 'length_str': return 'GamaBuiltins.gama_length_str(' + args[0] + ')';
 
         // Spatial
-        case 'distance_to': return '(function(_o){return GamaBuiltins.gama_distance(_a.x,_a.y,_o.x,_o.y);})(' + args[0] + ')';
+        case 'distance_to': return '(function(_o){return GamaBuiltins.gama_distance(_a.x,_a.y,_o.x,_o.y);})(' + (args[1] || args[0]) + ')';
         case 'distance_agents': return 'GamaBuiltins.gama_distance_agents(' + args[0] + ',' + args[1] + ')';
         case 'angle': return 'GamaBuiltins.gama_angle(' + args[0] + ',' + args[1] + ')';
         case 'heading': return 'GamaBuiltins.gama_heading(' + args[0] + ')';
