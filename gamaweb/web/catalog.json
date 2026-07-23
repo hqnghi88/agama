@@ -488,6 +488,14 @@
     "lines": 86
   },
   {
+    "path": "models/Toy Models/Circle/Circle Web.gaml",
+    "name": "Circle Web",
+    "category": "models/Toy Models/Circle",
+    "experiments": "main",
+    "size": 2000,
+    "lines": 70
+  },
+  {
     "path": "models/Toy Models/Clock/models/Clock.gaml",
     "name": "Clock",
     "category": "models/Toy Models/Clock",

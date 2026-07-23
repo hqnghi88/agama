@@ -35,11 +35,36 @@ async function init() {
 
         // Register service worker
         registerServiceWorker();
+
+        // Try connecting to local GAMA server
+        tryServerConnection();
     } catch (e) {
         console.error('Init failed:', e);
         document.getElementById('file-tree').innerHTML =
             '<div style="padding:16px;color:#f44747">Init error: ' + e.message + '</div>';
     }
+}
+
+function tryServerConnection() {
+    if (typeof GamaWebSocket === 'undefined') return;
+    GamaWebSocket.connect(function() {
+        document.getElementById('server-indicator').style.display = '';
+        console.log('Connected to local GAMA server');
+    });
+    // Listen for SimulationOutput (agent data from write statements)
+    GamaWebSocket.on('output', function(msg) {
+        var content = msg.content || '';
+        // Try to parse as JSON array of agent data
+        if (content.startsWith('[')) {
+            try {
+                var agents = JSON.parse(content);
+                renderServerAgents(agents);
+            } catch(e) {
+                // Not JSON - regular output
+                console.log('[GAMA output]', content);
+            }
+        }
+    });
 }
 
 if (document.readyState === 'loading') {
@@ -485,21 +510,39 @@ async function startSimulation() {
     updateControlButtons();
     setStatus('Compiling...', 'running');
 
-    // Create session
+    var source = (state.editor && state.editor.getValue().trim().length > 0)
+        ? state.editor.getValue()
+        : await loadModelSource(state.selectedModel.path);
+
+    console.log('[GAMA] Starting simulation for:', state.selectedModel.path);
+    console.log('[GAMA] GamaWebSocket defined:', typeof GamaWebSocket);
+    console.log('[GAMA] GamaServerSession defined:', typeof GamaServerSession);
+
+    // Try server mode first, fall back to JS-only
+    if (typeof GamaWebSocket !== 'undefined' && typeof GamaServerSession !== 'undefined'
+        && GamaWebSocket.isConnected && GamaWebSocket.isConnected()) {
+        console.log('[GAMA] Using server mode');
+        startServerSimulation(source);
+    } else if (typeof GamaWebSocket !== 'undefined' && typeof GamaServerSession !== 'undefined') {
+        // Not yet connected, try to connect first
+        console.log('[GAMA] Connecting to server...');
+        startServerSimulation(source);
+    } else {
+        console.log('[GAMA] Using local JS mode');
+        startLocalSimulation(source);
+    }
+}
+
+function startLocalSimulation(source) {
     state.session = new GamaSession(document.getElementById('viewport'), function (sim) {
         state.step = sim.cycle;
         document.getElementById('step-counter').textContent = 'Step: ' + sim.cycle;
         document.getElementById('fps').textContent = 'Agents: ' + countAgents(sim);
     });
 
-    // Load and compile the model — prefer editor content over library file
-    var source = (state.editor && state.editor.getValue().trim().length > 0)
-        ? state.editor.getValue()
-        : await loadModelSource(state.selectedModel.path);
     try {
         state.session.loadAndRun(source);
         setStatus('Running', 'running');
-        // Add display tab and switch to it
         if (!state.openTabs.find(t => t.path === '__display__')) {
             state.openTabs.push({ path: '__display__', name: 'Display', modified: false });
         }
@@ -511,6 +554,196 @@ async function startSimulation() {
         updateControlButtons();
         return;
     }
+}
+
+function startServerSimulation(source) {
+    setStatus('Connecting to server...', 'running');
+
+    GamaWebSocket.connect(function() {
+        console.log('[GAMA] Connected, uploading model...');
+        setStatus('Uploading model...', 'running');
+        var tmpPath = '/tmp/gama_model_' + Date.now() + '.gaml';
+        GamaWebSocket.upload(tmpPath, source, function(err) {
+            if (err) {
+                console.error('[GAMA] Upload failed:', err);
+                setStatus('Upload Error: ' + err, 'error');
+                state.running = false;
+                updateControlButtons();
+                return;
+            }
+            console.log('[GAMA] Uploaded, loading...');
+            setStatus('Loading model...', 'running');
+            tryServerLoad(tmpPath, ['main', 'experiment', 'exp', 'test'], 0, source);
+        });
+    });
+}
+
+function tryServerLoad(path, names, idx, source) {
+    if (idx >= names.length) {
+        // Fallback: try to get experiment from describe
+        GamaWebSocket.describe(function(err, desc) {
+            var expName = '';
+            if (desc && desc.experiments && desc.experiments.length > 0) {
+                expName = desc.experiments[0];
+            }
+            if (expName) {
+                GamaWebSocket.load(path, expName, function(err2) {
+                    if (err2) {
+                        setStatus('Load Error: ' + err2, 'error');
+                        state.running = false;
+                        updateControlButtons();
+                        return;
+                    }
+                    onServerModelLoaded(expName);
+                });
+            } else {
+                setStatus('No experiment found', 'error');
+                state.running = false;
+                updateControlButtons();
+            }
+        });
+        return;
+    }
+    GamaWebSocket.load(path, names[idx], function(err) {
+        if (err) {
+            tryServerLoad(path, names, idx + 1, source);
+        } else {
+            onServerModelLoaded(names[idx]);
+        }
+    });
+}
+
+function onServerModelLoaded(expName) {
+    state.serverExperiment = expName;
+    state.serverSpeciesName = 'cell'; // Default
+    setStatus('Running (server)', 'running');
+    document.getElementById('step-counter').textContent = 'Step: 0';
+    document.getElementById('exp-info').textContent = expName;
+
+    if (!state.openTabs.find(t => t.path === '__display__')) {
+        state.openTabs.push({ path: '__display__', name: 'Display', modified: false });
+    }
+    activateTab('__display__');
+
+    // Wait for layout to settle, then detect species and start
+    requestAnimationFrame(function() {
+        GamaWebSocket.evaluate('length(cell)', function(err, content) {
+            if (!err && typeof content === 'number' && content > 0) {
+                state.serverSpeciesName = 'cell';
+            }
+            console.log('Using species:', state.serverSpeciesName, 'count:', content);
+            // One more frame to ensure canvas is sized
+            requestAnimationFrame(function() {
+                serverStepLoop();
+            });
+        });
+    });
+}
+
+function serverStepLoop() {
+    if (!state.running || state.paused) return;
+    GamaWebSocket.step(1, function(err) {
+        if (err) {
+            console.error('Step error:', err);
+            if (state.running) {
+                setStatus('Step Error', 'error');
+                state.running = false;
+                updateControlButtons();
+            }
+            return;
+        }
+        state.step++;
+        document.getElementById('step-counter').textContent = 'Step: ' + state.step;
+
+        // Fetch agent data via expression evaluation
+        serverFetchAndRender(function() {
+            if (state.running && !state.paused) {
+                requestAnimationFrame(serverStepLoop);
+            }
+        });
+    });
+}
+
+function serverFetchAndRender(callback) {
+    var speciesName = state.serverSpeciesName || 'cell';
+
+    // Get locations
+    GamaWebSocket.evaluate(speciesName + ' collect each.location', function(err, content) {
+        if (err || !content) {
+            console.log('[GAMA] Location fetch failed:', err);
+            if (callback) callback();
+            return;
+        }
+        var locations = content;
+
+        // Get colors
+        GamaWebSocket.evaluate(speciesName + ' collect each.mycolor', function(err2, content2) {
+            var agents = [];
+            var locs = Array.isArray(locations) ? locations : [];
+            var cols = (!err2 && content2 && Array.isArray(content2)) ? content2 : [];
+
+            for (var i = 0; i < locs.length; i++) {
+                var loc = locs[i];
+                var col = cols[i];
+                var agent = {
+                    x: loc.x || 0,
+                    y: loc.y || 0,
+                    r: col ? (col.red || 100) : 100,
+                    g: col ? (col.green || 100) : 100,
+                    b: col ? (col.blue || 100) : 100
+                };
+                agents.push(agent);
+            }
+
+            if (agents.length > 0) {
+                renderServerAgents(agents);
+            } else {
+                console.log('[GAMA] No agents to render');
+            }
+            if (callback) callback();
+        });
+    });
+}
+
+function renderServerAgents(agents) {
+    var canvas = document.getElementById('viewport');
+    if (!canvas) return;
+    var container = document.getElementById('viewport-container');
+    if (container && container.classList.contains('hidden')) return;
+    var rect = canvas.parentElement.getBoundingClientRect();
+    if (rect.width < 10 || rect.height < 10) return; // not laid out yet
+    var dpr = window.devicePixelRatio || 1;
+    var w = Math.floor(rect.width * dpr);
+    var h = Math.floor(rect.height * dpr);
+    if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+    }
+    var ctx = canvas.getContext('2d');
+    var ENV = 3000;
+    var sW = rect.width, sH = rect.height;
+    var sScale = Math.min(sW, sH) / ENV;
+    var offX = (sW - ENV * sScale) / 2;
+    var offY = (sH - ENV * sScale) / 2;
+
+    ctx.save();
+    ctx.scale(dpr, dpr);
+    ctx.fillStyle = '#0e0e12';
+    ctx.fillRect(0, 0, sW, sH);
+
+    var radius = Math.max(2, sScale * 20);
+    for (var i = 0; i < agents.length; i++) {
+        var a = agents[i];
+        var sx = offX + a.x * sScale;
+        var sy = offY + (ENV - a.y) * sScale;
+        ctx.fillStyle = 'rgb(' + (a.r || 100) + ',' + (a.g || 100) + ',' + (a.b || 100) + ')';
+        ctx.beginPath();
+        ctx.arc(sx, sy, radius, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.restore();
+
+    document.getElementById('fps').textContent = 'Agents: ' + agents.length;
 }
 
 function countAgents(sim) {
@@ -527,6 +760,11 @@ function stopSimulation() {
     if (state.session) {
         state.session.stop();
         state.session = null;
+    }
+    // Also stop server if running
+    if (state.serverExperiment && typeof GamaWebSocket !== 'undefined') {
+        GamaWebSocket.stop(function() {});
+        state.serverExperiment = null;
     }
     // Remove display tab
     state.openTabs = state.openTabs.filter(t => t.path !== '__display__');
@@ -548,22 +786,42 @@ function stopSimulation() {
 }
 
 function togglePause() {
-    if (!state.running || !state.session) return;
+    if (!state.running) return;
     state.paused = !state.paused;
-    if (state.paused) {
-        state.session.pause();
-    } else {
-        state.session.resume();
+    if (state.serverExperiment) {
+        // Server mode: pause/resume via WebSocket
+        if (state.paused) {
+            GamaWebSocket.pause(function() {});
+        } else {
+            serverStepLoop();
+        }
+    } else if (state.session) {
+        // Local JS mode
+        if (state.paused) {
+            state.session.pause();
+        } else {
+            state.session.resume();
+        }
     }
     updateControlButtons();
     setStatus(state.paused ? 'Paused' : 'Running', state.paused ? 'paused' : 'running');
 }
 
 function stepOnce() {
-    if (!state.running || !state.session) return;
-    state.session.step();
-    state.step = state.session.session.cycle;
-    document.getElementById('step-counter').textContent = 'Step: ' + state.step;
+    if (!state.running) return;
+    if (state.serverExperiment) {
+        GamaWebSocket.step(1, function(err) {
+            if (!err) {
+                state.step++;
+                document.getElementById('step-counter').textContent = 'Step: ' + state.step;
+                serverFetchAndRender(function() {});
+            }
+        });
+    } else if (state.session) {
+        state.session.step();
+        state.step = state.session.session.cycle;
+        document.getElementById('step-counter').textContent = 'Step: ' + state.step;
+    }
 }
 
 function updateControlButtons() {

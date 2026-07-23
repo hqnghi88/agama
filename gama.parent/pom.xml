@@ -171,6 +171,7 @@
 			Runtimes modules
 		-->
 		<module>../gama.headless</module>
+		<module>../gamaweb</module>
 
 		<!--
 			Extra modules

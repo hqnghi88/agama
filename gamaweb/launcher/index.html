@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GAMA - Simulation Platform</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0d1117;
+            color: #c9d1d9;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            max-width: 600px;
+            text-align: center;
+            padding: 40px;
+        }
+        .logo {
+            font-size: 72px;
+            margin-bottom: 20px;
+        }
+        h1 {
+            font-size: 48px;
+            color: #58a6ff;
+            margin-bottom: 16px;
+        }
+        .tagline {
+            font-size: 20px;
+            color: #8b949e;
+            margin-bottom: 40px;
+        }
+        .start-btn {
+            display: inline-block;
+            padding: 20px 60px;
+            font-size: 24px;
+            font-weight: 600;
+            color: #fff;
+            background: linear-gradient(135deg, #238636, #2ea043);
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+        }
+        .start-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(46, 160, 67, 0.4);
+        }
+        .status {
+            margin-top: 24px;
+            font-size: 14px;
+            color: #8b949e;
+        }
+        .status.connected {
+            color: #3fb950;
+        }
+        .features {
+            display: flex;
+            gap: 32px;
+            margin-top: 60px;
+            text-align: left;
+        }
+        .feature {
+            flex: 1;
+        }
+        .feature h3 {
+            color: #58a6ff;
+            margin-bottom: 8px;
+        }
+        .feature p {
+            color: #8b949e;
+            font-size: 14px;
+        }
+        .hidden { display: none; }
+        #loading {
+            margin-top: 20px;
+            color: #58a6ff;
+        }
+        #error {
+            margin-top: 20px;
+            color: #f85149;
+        }
+        .platform-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            background: #21262d;
+            border-radius: 16px;
+            font-size: 12px;
+            color: #8b949e;
+            margin-top: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">🔬</div>
+        <h1>GAMA</h1>
+        <p class="tagline">Agent-Based Modeling & Simulation Platform</p>
+
+        <div id="start-view">
+            <button class="start-btn" onclick="startGama()">
+                Start Using GAMA
+            </button>
+            <p class="status" id="status">Free & Open Source</p>
+            <p class="platform-badge" id="platform-badge"></p>
+        </div>
+
+        <div id="loading" class="hidden">
+            <p>⏳ Setting up GAMA...</p>
+            <p id="loading-status">Downloading components...</p>
+        </div>
+
+        <div id="error" class="hidden">
+            <p id="error-message"></p>
+            <button class="start-btn" style="margin-top: 16px; font-size: 16px; padding: 12px 32px;" onclick="startGama()">
+                Retry
+            </button>
+        </div>
+
+        <div class="features">
+            <div class="feature">
+                <h3>🧬 Agent-Based</h3>
+                <p>Model complex systems with autonomous agents</p>
+            </div>
+            <div class="feature">
+                <h3>🌐 Browser-Based</h3>
+                <p>No installation required, runs in your browser</p>
+            </div>
+            <div class="feature">
+                <h3>📚 303 Models</h3>
+                <p>Includes tutorials, recipes, and research models</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Detect platform
+        const ua = navigator.userAgent;
+        let platform = 'linux';
+        let arch = 'x86_64';
+        let ext = 'sh';
+        let launcherName = 'gama-launch';
+
+        if (ua.includes('Mac') || ua.includes('macOS')) {
+            platform = 'macos';
+            if (ua.includes('arm64') || ua.includes('aarch64')) {
+                arch = 'aarch64';
+            }
+        } else if (ua.includes('Win')) {
+            platform = 'windows';
+            ext = 'bat';
+            launcherName = 'gama-launch.bat';
+        } else if (ua.includes('Linux')) {
+            if (ua.includes('aarch64') || ua.includes('arm64')) {
+                arch = 'aarch64';
+            }
+        }
+
+        document.getElementById('platform-badge').textContent =
+            `Detected: ${platform.charAt(0).toUpperCase() + platform.slice(1)} (${arch})`;
+
+        // Try connecting to existing server
+        async function checkServer() {
+            try {
+                const resp = await fetch('http://localhost:6869/ping', { mode: 'no-cors' });
+                return true;
+            } catch {
+                return false;
+            }
+        }
+
+        async function startGama() {
+            const startView = document.getElementById('start-view');
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+
+            // Check if server is already running
+            if (await checkServer()) {
+                window.location.href = `http://localhost:8000`;
+                return;
+            }
+
+            // Show loading
+            startView.classList.add('hidden');
+            loading.classList.remove('hidden');
+            error.classList.add('hidden');
+
+            // Download launcher
+            document.getElementById('loading-status').textContent = 'Downloading launcher...';
+
+            try {
+                const link = document.createElement('a');
+                link.href = `launcher/${launcherName}`;
+                link.download = launcherName;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+                // Show instructions after download
+                setTimeout(() => {
+                    loading.classList.add('hidden');
+                    startView.classList.remove('hidden');
+                    document.getElementById('status').innerHTML =
+                        `✅ Launcher downloaded! Run <code>${launcherName}</code> to start GAMA`;
+                    document.getElementById('status').classList.add('connected');
+                }, 2000);
+            } catch (e) {
+                loading.classList.add('hidden');
+                error.classList.remove('hidden');
+                document.getElementById('error-message').textContent =
+                    'Download failed. Please try again or download manually.';
+            }
+        }
+
+        // Auto-connect if server is running
+        (async function() {
+            if (await checkServer()) {
+                document.getElementById('status').textContent = '🟢 Server detected — opening GAMA...';
+                document.getElementById('status').classList.add('connected');
+                setTimeout(() => {
+                    window.location.href = `http://localhost:8000`;
+                }, 1000);
+            }
+        })();
+    </script>
+</body>
+</html>

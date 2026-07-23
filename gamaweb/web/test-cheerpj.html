@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GAMA CheerpJ Test</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: 'SF Mono', monospace; background: #0d1117; color: #c9d1d9; padding: 20px; margin: 0; }
+        h2 { color: #58a6ff; margin-top: 0; }
+        h3 { color: #8b949e; font-size: 14px; }
+        #log { white-space: pre-wrap; background: #161b22; padding: 12px; margin: 10px 0; 
+               max-height: 500px; overflow-y: auto; border: 1px solid #30363d; border-radius: 6px;
+               font-size: 13px; line-height: 1.5; }
+        .ok { color: #3fb950; } .err { color: #f85149; } .info { color: #58a6ff; }
+        .warn { color: #d29922; } .dim { color: #484f58; }
+        textarea { width: 100%; height: 100px; background: #161b22; color: #c9d1d9; 
+                   border: 1px solid #30363d; border-radius: 6px; font-family: monospace; 
+                   padding: 10px; font-size: 13px; resize: vertical; }
+        .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+        button { background: #21262d; color: #58a6ff; border: 1px solid #30363d; 
+                 padding: 6px 14px; cursor: pointer; border-radius: 6px; font-size: 13px;
+                 font-family: monospace; }
+        button:hover { background: #30363d; }
+        button:disabled { opacity: 0.4; cursor: not-allowed; }
+        #canvas { border: 1px solid #30363d; border-radius: 6px; background: #000; display: none; }
+    </style>
+</head>
+<body>
+    <h2>GAMA Browser Engine — CheerpJ v4</h2>
+    <div id="log"></div>
+    
+    <div class="btn-row">
+        <button id="btn1" onclick="doInit()">1. Init CheerpJ</button>
+        <button id="btn2" onclick="doCompile()" disabled>2. Compile GAML</button>
+        <button id="btn3" onclick="doRun()" disabled>3. Run (10 steps)</button>
+        <button id="btn4" onclick="doRun50()" disabled>4. Run (50 steps)</button>
+    </div>
+    
+    <h3>Output:</h3>
+    <canvas id="canvas" width="600" height="600"></canvas>
+    <pre id="output" style="background:#161b22;padding:12px;border:1px solid #30363d;border-radius:6px;max-height:300px;overflow:auto;font-size:12px;"></pre>
+
+    <h3>GAML Source:</h3>
+    <textarea id="gamlSource">model circle_model
+global {
+    int number_of_agents <- 50;
+    int width_and_height_of_environment <- 3000;
+    float speed_of_agents <- 2.0;
+    point center <- {width_and_height_of_environment/2, width_and_height_of_environment/2};
+    geometry shape <- square(width_and_height_of_environment);
+    init { create cell number: number_of_agents; }
+}
+species cell skills: [moving] {
+    rgb color <- rgb(100 + rnd(155), 100 + rnd(155), 100 + rnd(155));
+    float heading <- rnd(360.0);
+    reflex go_to_center { do move(speed: speed_of_agents, heading: heading); }
+    aspect default { draw circle(100) color: color; }
+}
+experiment main type: gui {
+    output { display Circle type: 2d { species cell; } }
+}</textarea>
+
+    <script src="https://cjrtnc.leaningtech.com/4.3/loader.js"></script>
+    <script>
+    var logEl = document.getElementById('log');
+    var canvas = document.getElementById('canvas');
+    var ctx = canvas.getContext('2d');
+    var outEl = document.getElementById('output');
+
+    function log(msg, cls) {
+        var ts = new Date().toLocaleTimeString();
+        logEl.innerHTML += '<span class="' + (cls||'') + '">[' + ts + '] ' + msg + '</span>\n';
+        logEl.scrollTop = logEl.scrollHeight;
+    }
+    function enableBtn(n) { document.getElementById('btn' + n).disabled = false; }
+    function disableBtn(n) { document.getElementById('btn' + n).disabled = true; }
+
+    // Build classpath from all JARs in gama-jars/
+    var JAR_NAMES = [
+        'gama-browser-bridge.jar',
+        'gama.annotations_0.0.0.202607220650.jar',
+        'gama.dev_0.0.0.202607220650.jar',
+        'gama.processor_0.0.0.202607220650.jar',
+        'gama.dependencies_0.0.0.202607220650.jar',
+        'gama.api_0.0.0.202607220650.jar',
+        'gaml.compiler_0.0.0.202607220650.jar',
+        'gama.core_0.0.0.202607220650.jar',
+        'gama.workspace_0.0.0.202607220650.jar',
+        'gama.headless_0.0.0.202607220650.jar',
+        'gama.extension.maths_0.0.0.202607220650.jar',
+        'gama.extension.batch_0.0.0.202607220650.jar',
+        'org.eclipse.osgi_3.24.100.v20251215-1416.jar',
+        'org.eclipse.core.runtime_3.34.200.v20251220-0953.jar',
+        'org.eclipse.core.resources_3.23.200.v20251217-0810.jar',
+        'org.eclipse.core.jobs_3.15.700.v20250725-1147.jar',
+        'org.eclipse.core.contenttype_3.9.800.v20251105-1620.jar',
+        'org.eclipse.equinox.common_3.20.300.v20251111-0312.jar',
+        'org.eclipse.equinox.app_1.7.600.v20251211-1038.jar',
+        'org.eclipse.emf.common_2.45.0.v20251210-1145.jar',
+        'org.eclipse.emf.ecore_2.42.0.v20251210-1145.jar',
+        'org.eclipse.emf.ecore.change_2.17.0.v20250910-1205.jar',
+        'org.eclipse.emf.ecore.xmi_2.40.0.v20251210-1145.jar',
+        'org.eclipse.xtext_2.42.0.v20260223-0608.jar',
+        'org.eclipse.xtext.xbase.lib_2.42.0.v20260223-0608.jar',
+        'com.google.guava_33.5.0.jre.jar',
+        'com.google.inject_7.0.0.jar',
+        'org.antlr.runtime_3.2.0.v20230929-1400.jar',
+    ];
+    var CLASSPATH = JAR_NAMES.map(function(j) { return '/app/gama-jars/' + j; }).join(':');
+
+    async function withTimeout(promise, ms) {
+        return Promise.race([promise, new Promise(function(_,re) { setTimeout(function(){re(new Error('Timeout '+ms+'ms'))},ms); })]);
+    }
+
+    async function readFile(path) {
+        var blob = await cjFileBlob(path);
+        return await blob.text();
+    }
+
+    async function doInit() {
+        log('═══ Init CheerpJ 4.3 ═══', 'info');
+        disableBtn(1);
+        try {
+            await cheerpjInit();
+            log('CheerpJ initialized', 'ok');
+            enableBtn(2);
+        } catch(e) {
+            log('FATAL: ' + e.message, 'err');
+            enableBtn(1);
+        }
+    }
+
+    async function doCompile() {
+        log('\n═══ Compile GAML ═══', 'info');
+        disableBtn(2);
+        var gaml = document.getElementById('gamlSource').value;
+        log('GAML length: ' + gaml.length + ' chars', 'dim');
+        
+        try {
+            log('Running GamaBrowserBridge compile...', 'info');
+            var t0 = Date.now();
+            var exitCode = await withTimeout(
+                cheerpjRunMain('gama.browser.GamaBrowserBridge', CLASSPATH, 'compile', gaml),
+                120000
+            );
+            log('Exit code: ' + exitCode + ' (' + (Date.now()-t0) + 'ms)', exitCode === 0 ? 'ok' : 'err');
+            
+            if (exitCode === 0) {
+                var json = await readFile('/files/gama_output.json');
+                var result = JSON.parse(json);
+                log('Result: ' + JSON.stringify(result).substring(0, 300), result.success ? 'ok' : 'err');
+                if (result.success) enableBtn(3);
+            }
+        } catch(e) {
+            log('ERROR: ' + e.message, 'err');
+        }
+    }
+
+    async function doRun() {
+        await doRunN(10);
+    }
+    async function doRun50() {
+        await doRunN(50);
+    }
+
+    async function doRunN(n) {
+        log('\n═══ Run ' + n + ' steps ═══', 'info');
+        disableBtn(3); disableBtn(4);
+        var gaml = document.getElementById('gamlSource').value;
+        
+        try {
+            log('Running GamaBrowserBridge run (' + n + ' steps)...', 'info');
+            var t0 = Date.now();
+            var exitCode = await withTimeout(
+                cheerpjRunMain('gama.browser.GamaBrowserBridge', CLASSPATH, 'run', gaml, String(n)),
+                120000
+            );
+            log('Exit code: ' + exitCode + ' (' + (Date.now()-t0) + 'ms)', exitCode === 0 ? 'ok' : 'err');
+            
+            if (exitCode === 0) {
+                var json = await readFile('/files/gama_output.json');
+                var result = JSON.parse(json);
+                log('Result: ' + result.success + ' | steps: ' + (result.steps ? result.steps.length : 0), result.success ? 'ok' : 'err');
+                
+                if (result.success && result.steps) {
+                    outEl.textContent = JSON.stringify(result.steps[0], null, 2);
+                    renderSteps(result.steps);
+                }
+            }
+        } catch(e) {
+            log('ERROR: ' + e.message, 'err');
+        }
+        enableBtn(3); enableBtn(4);
+    }
+
+    function renderSteps(steps) {
+        canvas.style.display = 'block';
+        var W = canvas.width, H = canvas.height;
+        var ENV = 3000;
+        var scale = W / ENV;
+        
+        function drawStep(stepIdx) {
+            if (stepIdx >= steps.length) return;
+            var step = steps[stepIdx];
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, W, H);
+            
+            if (step.s) {
+                for (var si = 0; si < step.s.length; si++) {
+                    var sp = step.s[si];
+                    if (!sp.a) continue;
+                    for (var ai = 0; ai < sp.a.length; ai++) {
+                        var a = sp.a[ai];
+                        if (a.x === undefined || a.y === undefined) continue;
+                        var sx = (a.x + ENV/2) * scale;
+                        var sy = (ENV/2 - a.y) * scale;
+                        ctx.fillStyle = a.c || '#58a6ff';
+                        ctx.beginPath();
+                        ctx.arc(sx, sy, 3, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+            }
+            
+            ctx.fillStyle = '#8b949e';
+            ctx.font = '12px monospace';
+            ctx.fillText('Step ' + step.n + '/' + steps.length, 10, 20);
+            
+            if (stepIdx + 1 < steps.length) {
+                requestAnimationFrame(function() { drawStep(stepIdx + 1); });
+            }
+        }
+        drawStep(0);
+    }
+    </script>
+</body>
+</html>

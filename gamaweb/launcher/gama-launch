@@ -1,0 +1,291 @@
+#!/bin/bash
+# GAMA Launcher - automatically downloads and starts GAMA server
+# Uses Eclipse equinox launcher (the correct way to run GAMA headless)
+set -e
+
+GAMA_HOME="$HOME/.gama"
+GAMA_PRODUCT="$GAMA_HOME/product"
+GAMA_WEB="$GAMA_HOME/web"
+GAMA_JRE="$GAMA_HOME/jre"
+GAMA_WORKSPACE="$GAMA_HOME/workspace"
+SERVER_PORT=6868
+WEB_PORT=8000
+GAMA_VERSION="1.0.0"
+DOWNLOAD_BASE="https://github.com/gama-platform/gama/releases/download/${GAMA_VERSION}"
+
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
+log() { echo -e "${GREEN}[GAMA]${NC} $1"; }
+warn() { echo -e "${YELLOW}[GAMA]${NC} $1"; }
+err() { echo -e "${RED}[GAMA]${NC} $1"; }
+
+detect_platform() {
+    OS=$(uname -s)
+    ARCH=$(uname -m)
+    case "$OS" in
+        Darwin)
+            PLATFORM="macos"
+            if [ "$ARCH" = "arm64" ]; then
+                ARCH_NAME="aarch64"
+            else
+                ARCH_NAME="x86_64"
+            fi
+            ;;
+        Linux)
+            PLATFORM="linux"
+            if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+                ARCH_NAME="aarch64"
+            else
+                ARCH_NAME="x86_64"
+            fi
+            ;;
+        *)
+            err "Unsupported platform: $OS"
+            exit 1
+            ;;
+    esac
+    log "Platform: $PLATFORM ($ARCH_NAME)"
+}
+
+find_java() {
+    if command -v java &>/dev/null; then
+        JAVA_CMD="java"
+        JAVA_VER=$(java -version 2>&1 | head -1)
+        log "Found system Java: $JAVA_VER"
+        return 0
+    fi
+    if [ -d "$GAMA_JRE" ]; then
+        JAVA_CMD=$(find "$GAMA_JRE" -name "java" -type f 2>/dev/null | head -1)
+        if [ -n "$JAVA_CMD" ] && [ -x "$JAVA_CMD" ]; then
+            log "Using bundled JRE"
+            return 0
+        fi
+    fi
+    return 1
+}
+
+download_jre() {
+    if find_java; then return 0; fi
+    log "Downloading JRE..."
+    mkdir -p "$GAMA_JRE"
+    local jre_url
+    if [ "$PLATFORM" = "macos" ]; then
+        if [ "$ARCH_NAME" = "aarch64" ]; then
+            jre_url="https://github.com/adoptium/temurin25-binaries/releases/latest/download/OpenJDK25U-jre_aarch64_mac_hotspot.tar.gz"
+        else
+            jre_url="https://github.com/adoptium/temurin25-binaries/releases/latest/download/OpenJDK25U-jre_x64_mac_hotspot.tar.gz"
+        fi
+    else
+        if [ "$ARCH_NAME" = "aarch64" ]; then
+            jre_url="https://github.com/adoptium/temurin25-binaries/releases/latest/download/OpenJDK25U-jre_aarch64_linux_hotspot.tar.gz"
+        else
+            jre_url="https://github.com/adoptium/temurin25-binaries/releases/latest/download/OpenJDK25U-jre_x64_linux_hotspot.tar.gz"
+        fi
+    fi
+    curl -L -o /tmp/gama-jre.tar.gz "$jre_url"
+    tar -xzf /tmp/gama-jre.tar.gz -C "$GAMA_JRE" --strip-components=1
+    rm -f /tmp/gama-jre.tar.gz
+    JAVA_CMD=$(find "$GAMA_JRE" -name "java" -type f | head -1)
+    chmod +x "$JAVA_CMD" 2>/dev/null || true
+    log "JRE installed"
+}
+
+download_gama() {
+    if [ -d "$GAMA_PRODUCT" ] && [ -d "$GAMA_PRODUCT/plugins" ]; then
+        log "GAMA engine already installed"
+        return 0
+    fi
+
+    log "Downloading GAMA engine (this may take a moment)..."
+    mkdir -p "$GAMA_HOME"
+
+    local archive_url="${DOWNLOAD_BASE}/gama-headless-${PLATFORM}-${ARCH_NAME}.tar.gz"
+    local temp_archive="/tmp/gama-headless.tar.gz"
+
+    if ! curl -L -f -o "$temp_archive" "$archive_url" 2>/dev/null; then
+        # Fallback: copy from local build
+        local local_build="$HOME/git/agama/gama.product/target/products/gama.headless.product/linux/gtk/aarch64"
+        if [ -d "$local_build" ]; then
+            log "Using local build..."
+            cp -r "$local_build" "$GAMA_PRODUCT"
+            return 0
+        fi
+        err "Failed to download GAMA. Please check your internet connection."
+        exit 1
+    fi
+
+    tar -xzf "$temp_archive" -C "$GAMA_HOME"
+    # Rename if needed (depends on archive structure)
+    if [ -d "$GAMA_HOME/gama.headless.product" ]; then
+        mv "$GAMA_HOME/gama.headless.product" "$GAMA_PRODUCT"
+    fi
+    rm -f "$temp_archive"
+    log "GAMA engine ready"
+}
+
+setup_web() {
+    if [ -d "$GAMA_WEB" ] && [ -f "$GAMA_WEB/index.html" ]; then
+        return 0
+    fi
+    log "Setting up web interface..."
+    mkdir -p "$GAMA_WEB"
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+    WEB_SOURCE="$SCRIPT_DIR/../web"
+    if [ -d "$WEB_SOURCE" ]; then
+        cp -r "$WEB_SOURCE"/* "$GAMA_WEB/"
+    else
+        curl -L -o /tmp/gama-web.tar.gz "${DOWNLOAD_BASE}/gama-web-${GAMA_VERSION}.tar.gz"
+        tar -xzf /tmp/gama-web.tar.gz -C "$GAMA_WEB"
+        rm -f /tmp/gama-web.tar.gz
+    fi
+    log "Web interface ready"
+}
+
+check_server() {
+    if nc -z localhost "$SERVER_PORT" 2>/dev/null; then
+        return 0
+    fi
+    return 1
+}
+
+start_server() {
+    if check_server; then
+        log "Server already running on port $SERVER_PORT"
+        return 0
+    fi
+
+    log "Starting GAMA server..."
+    mkdir -p "$GAMA_HOME/logs" "$GAMA_WORKSPACE"
+
+    # Find the equinox launcher JAR
+    local launcher_jar=$(find "$GAMA_PRODUCT/plugins" -name "org.eclipse.equinox.launcher_*.jar" | head -1)
+    if [ -z "$launcher_jar" ]; then
+        err "Cannot find Eclipse equinox launcher in $GAMA_PRODUCT/plugins/"
+        exit 1
+    fi
+
+    # Find the .ini file for JVM arguments
+    local gama_ini=""
+    if [ "$PLATFORM" = "macos" ]; then
+        gama_ini="$GAMA_PRODUCT/Eclipse/Gama.ini"
+    else
+        gama_ini="$GAMA_PRODUCT/Gama.ini"
+    fi
+
+    # Read JVM args from .ini (skip first line, get -server onwards)
+    local ini_args=""
+    if [ -f "$gama_ini" ]; then
+        ini_args=$(grep -A100 -- '--add-exports\|--add-opens\|-server\|-Dosgi' "$gama_ini" 2>/dev/null | tr '\n' ' ')
+    fi
+
+    # Start the GAMA headless server using equinox launcher
+    nohup "$JAVA_CMD" \
+        -cp "$launcher_jar" \
+        -Xms512m -Xmx4g \
+        $ini_args \
+        org.eclipse.equinox.launcher.Main \
+        -configuration "$GAMA_PRODUCT/configuration" \
+        -application gama.headless.product \
+        -data "$GAMA_WORKSPACE" \
+        -socket $SERVER_PORT \
+        > "$GAMA_HOME/logs/server.log" 2>&1 &
+
+    echo $! > "$GAMA_HOME/server.pid"
+    log "Server starting (PID: $(cat "$GAMA_HOME/server.pid"))..."
+
+    # Wait for server to be ready
+    for i in $(seq 1 60); do
+        if check_server; then
+            log "Server ready on port $SERVER_PORT"
+            return 0
+        fi
+        sleep 1
+    done
+
+    warn "Server may still be starting. Check $GAMA_HOME/logs/server.log"
+}
+
+start_web_server() {
+    if curl -s "http://localhost:${WEB_PORT}" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    log "Starting web server on port $WEB_PORT..."
+
+    if command -v python3 &>/dev/null; then
+        cd "$GAMA_WEB"
+        nohup python3 -c "
+import http.server, socketserver, os, sys
+os.chdir('$GAMA_WEB')
+class Handler(http.server.SimpleHTTPRequestHandler):
+    extensions_map = {'.js': 'application/javascript', '.mjs': 'application/javascript', '.json': 'application/json', '.wasm': 'application/wasm', '.css': 'text/css', '.html': 'text/html'}
+    def end_headers(self):
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Cache-Control', 'no-cache')
+        super().end_headers()
+    def log_message(self, format, *args):
+        pass
+socketserver.TCPServer.allow_reuse_address = True
+with socketserver.TCPServer(('', $WEB_PORT), Handler) as httpd:
+    httpd.serve_forever()
+" > "$GAMA_HOME/logs/web.log" 2>&1 &
+    else
+        err "Python 3 not found. Please install Python 3."
+        return 1
+    fi
+
+    echo $! > "$GAMA_HOME/web.pid"
+    log "Web server ready on port $WEB_PORT"
+}
+
+open_browser() {
+    local url="http://localhost:${WEB_PORT}"
+    log "Opening browser..."
+    case "$PLATFORM" in
+        macos) open "$url" ;;
+        linux)
+            if command -v xdg-open &>/dev/null; then
+                xdg-open "$url"
+            elif command -v firefox &>/dev/null; then
+                firefox "$url" &
+            elif command -v google-chrome &>/dev/null; then
+                google-chrome "$url" &
+            fi
+            ;;
+    esac
+}
+
+cleanup() {
+    log "Shutting down..."
+    if [ -f "$GAMA_HOME/server.pid" ]; then
+        kill $(cat "$GAMA_HOME/server.pid") 2>/dev/null || true
+        rm -f "$GAMA_HOME/server.pid"
+    fi
+    if [ -f "$GAMA_HOME/web.pid" ]; then
+        kill $(cat "$GAMA_HOME/web.pid") 2>/dev/null || true
+        rm -f "$GAMA_HOME/web.pid"
+    fi
+}
+
+main() {
+    echo ""
+    echo "  ╔══════════════════════════════════════╗"
+    echo "  ║     GAMA - Simulation Platform       ║"
+    echo "  ╚══════════════════════════════════════╝"
+    echo ""
+    detect_platform
+    find_java || download_jre
+    download_gama
+    setup_web
+    start_server
+    start_web_server
+    trap cleanup EXIT INT TERM
+    open_browser
+    log "GAMA is running!"
+    log "  Server:  ws://localhost:$SERVER_PORT"
+    log "  Web UI:  http://localhost:$WEB_PORT"
+    log ""
+    log "Press Ctrl+C to stop"
+    wait
+}
+
+main "$@"

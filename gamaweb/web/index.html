@@ -3,8 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>GAMA Web - Browser-based Simulation</title>
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css?v=26">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
 </head>
@@ -106,6 +109,7 @@
         </div>
 
         <footer id="statusbar">
+            <span id="server-indicator" style="display:none;color:#2ea043">● Server</span>
             <span id="fps">FPS: 0</span>
             <span id="mouse-coords">Model: (0, 0)</span>
             <span id="file-info"></span>
@@ -115,11 +119,24 @@
     <!-- CodeMirror (global CodeMirror) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
-    <!-- GAMA Web — Clean architecture (4 modules) -->
-    <script src="js/gama-runtime.js"></script>
-    <script src="js/gama-compiler.js"></script>
-    <script src="js/gama-renderer.js"></script>
-    <script src="js/gama-session.js"></script>
-    <script src="js/gama-app.js"></script>
+    <!-- GAMA Web — v26 -->
+    <script src="js/gama-runtime.js?v=26"></script>
+    <script src="js/gama-compiler.js?v=26"></script>
+    <script src="js/gama-renderer.js?v=26"></script>
+    <script src="js/gama-session.js?v=26"></script>
+    <script src="js/gama-websocket.js?v=26"></script>
+    <script src="js/gama-server-session.js?v=26"></script>
+    <script src="js/gama-app.js?v=26"></script>
+    <script>
+    // Force reload when service worker updates
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.addEventListener('message', (event) => {
+            if (event.data && event.data.type === 'SW_UPDATED') {
+                console.log('[App] SW updated to', event.data.version, '- reloading');
+                window.location.reload();
+            }
+        });
+    }
+    </script>
 </body>
 </html>

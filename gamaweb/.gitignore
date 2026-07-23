@@ -20,3 +20,6 @@ build/
 
 # Library source (copied from gama.library)
 web/library/
+
+# GAMA JARs (large, copied from build output)
+web/gama-jars/

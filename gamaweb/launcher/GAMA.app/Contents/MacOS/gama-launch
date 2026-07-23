@@ -1,0 +1,332 @@
+#!/bin/bash
+# GAMA Launcher - automatically downloads and starts GAMA server
+# User just runs this script, everything else is automatic
+set -e
+
+GAMA_HOME="$HOME/.gama"
+GAMA_JARS="$GAMA_HOME/jars"
+GAMA_WEB="$GAMA_HOME/web"
+GAMA_JRE="$GAMA_HOME/jre"
+SERVER_PORT=6868
+WEB_PORT=8000
+GAMA_VERSION="1.0.0"
+DOWNLOAD_BASE="https://github.com/gama-platform/gama/releases/download/${GAMA_VERSION}"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+log() { echo -e "${GREEN}[GAMA]${NC} $1"; }
+warn() { echo -e "${YELLOW}[GAMA]${NC} $1"; }
+err() { echo -e "${RED}[GAMA]${NC} $1"; }
+
+# Detect platform
+detect_platform() {
+    OS=$(uname -s)
+    ARCH=$(uname -m)
+    case "$OS" in
+        Darwin)
+            PLATFORM="macos"
+            if [ "$ARCH" = "arm64" ]; then
+                ARCH_NAME="aarch64"
+                JRE_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.4%2B7/OpenJDK21U-jre_aarch64_mac_hotspot_21.0.4_7.tar.gz"
+            else
+                ARCH_NAME="x86_64"
+                JRE_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.4%2B7/OpenJDK21U-jre_x64_mac_hotspot_21.0.4_7.tar.gz"
+            fi
+            ;;
+        Linux)
+            PLATFORM="linux"
+            if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+                ARCH_NAME="aarch64"
+                JRE_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.4%2B7/OpenJDK21U-jre_aarch64_linux_hotspot_21.0.4_7.tar.gz"
+            else
+                ARCH_NAME="x86_64"
+                JRE_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.4%2B7/OpenJDK21U-jre_x64_linux_hotspot_21.0.4_7.tar.gz"
+            fi
+            ;;
+        MINGW*|MSYS*|CYGWIN*)
+            PLATFORM="windows"
+            ARCH_NAME="x86_64"
+            JRE_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.4%2B7/OpenJDK21U-jre_x64_windows_hotspot_21.0.4_7.zip"
+            ;;
+        *)
+            err "Unsupported platform: $OS"
+            exit 1
+            ;;
+    esac
+    log "Platform: $PLATFORM ($ARCH_NAME)"
+}
+
+# Check if Java is available
+find_java() {
+    # Try system Java first
+    if command -v java &>/dev/null; then
+        JAVA_VER=$(java -version 2>&1 | head -1 | awk -F '"' '{print $2}')
+        log "Found system Java: $JAVA_VER"
+        JAVA_CMD="java"
+        return 0
+    fi
+
+    # Try bundled JRE
+    if [ -d "$GAMA_JRE" ]; then
+        if [ "$PLATFORM" = "macos" ]; then
+            JAVA_CMD=$(find "$GAMA_JRE" -name "java" -type f | head -1)
+        else
+            JAVA_CMD=$(find "$GAMA_JRE" -name "java" -type f | head -1)
+        fi
+        if [ -n "$JAVA_CMD" ] && [ -x "$JAVA_CMD" ]; then
+            log "Using bundled JRE"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
+# Download JRE
+download_jre() {
+    if find_java; then return 0; fi
+
+    log "Downloading JRE..."
+    mkdir -p "$GAMA_JRE"
+
+    if [ "$PLATFORM" = "windows" ]; then
+        TEMP_ZIP="/tmp/gama-jre.zip"
+        curl -L -o "$TEMP_ZIP" "$JRE_URL"
+        unzip -q -o "$TEMP_ZIP" -d "$GAMA_JRE"
+        rm -f "$TEMP_ZIP"
+        JAVA_CMD=$(find "$GAMA_JRE" -name "java.exe" -type f | head -1)
+    else
+        TEMP_TAR="/tmp/gama-jre.tar.gz"
+        curl -L -o "$TEMP_TAR" "$JRE_URL"
+        tar -xzf "$TEMP_TAR" -C "$GAMA_JRE" --strip-components=1
+        rm -f "$TEMP_TAR"
+        JAVA_CMD=$(find "$GAMA_JRE" -name "java" -type f | head -1)
+        chmod +x "$JAVA_CMD" 2>/dev/null || true
+    fi
+
+    if [ -z "$JAVA_CMD" ]; then
+        err "Failed to install JRE"
+        exit 1
+    fi
+    log "JRE installed"
+}
+
+# Download GAMA JARs
+download_gama() {
+    if [ -d "$GAMA_JARS" ] && [ "$(ls -A "$GAMA_JARS" 2>/dev/null)" ]; then
+        log "GAMA JARs already downloaded"
+        return 0
+    fi
+
+    log "Downloading GAMA engine (this may take a moment)..."
+    mkdir -p "$GAMA_JARS"
+
+    # Download the headless product archive
+    ARCHIVE_URL="${DOWNLOAD_BASE}/gama-headless-${PLATFORM}-${ARCH_NAME}.tar.gz"
+    TEMP_ARCHIVE="/tmp/gama-headless.tar.gz"
+
+    if ! curl -L -f -o "$TEMP_ARCHIVE" "$ARCHIVE_URL" 2>/dev/null; then
+        # Fallback: try to copy from local build
+        LOCAL_BUILD="$HOME/git/agama/gama.product/target/products/gama.headless.product/linux/gtk/aarch64"
+        if [ -d "$LOCAL_BUILD" ]; then
+            log "Using local build..."
+            cp -r "$LOCAL_BUILD/plugins/"*.jar "$GAMA_JARS/" 2>/dev/null || true
+            cp -r "$LOCAL_BUILD/plugins/"*.jnilib "$GAMA_JARS/" 2>/dev/null || true
+            cp -r "$LOCAL_BUILD/plugins/"*.so "$GAMA_JARS/" 2>/dev/null || true
+            rm -f "$TEMP_ARCHIVE"
+            return 0
+        fi
+
+        err "Failed to download GAMA. Please check your internet connection."
+        exit 1
+    fi
+
+    tar -xzf "$TEMP_ARCHIVE" -C "$GAMA_JARS" --strip-components=3
+    rm -f "$TEMP_ARCHIVE"
+    log "GAMA engine ready"
+}
+
+# Copy web UI files
+setup_web() {
+    if [ -d "$GAMA_WEB" ] && [ -f "$GAMA_WEB/index.html" ]; then
+        return 0
+    fi
+
+    log "Setting up web interface..."
+    mkdir -p "$GAMA_WEB"
+
+    # Try to copy from local build
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+    WEB_SOURCE="$SCRIPT_DIR/../web"
+    if [ -d "$WEB_SOURCE" ]; then
+        cp -r "$WEB_SOURCE"/* "$GAMA_WEB/"
+    else
+        # Download from release
+        curl -L -o /tmp/gama-web.tar.gz "${DOWNLOAD_BASE}/gama-web-${GAMA_VERSION}.tar.gz"
+        tar -xzf /tmp/gama-web.tar.gz -C "$GAMA_WEB"
+        rm -f /tmp/gama-web.tar.gz
+    fi
+    log "Web interface ready"
+}
+
+# Check if server is already running
+check_server() {
+    if curl -s "http://localhost:${SERVER_PORT}" >/dev/null 2>&1; then
+        return 0
+    fi
+    # Try WebSocket port
+    if nc -z localhost "$SERVER_PORT" 2>/dev/null; then
+        return 0
+    fi
+    return 1
+}
+
+# Start the GAMA server
+start_server() {
+    if check_server; then
+        log "Server already running on port $SERVER_PORT"
+        return 0
+    fi
+
+    log "Starting GAMA server..."
+    mkdir -p "$GAMA_HOME/logs"
+
+    # Build classpath from all JARs
+    CLASSPATH=""
+    for jar in "$GAMA_JARS"/*.jar; do
+        if [ -n "$CLASSPATH" ]; then
+            CLASSPATH="$CLASSPATH:$jar"
+        else
+            CLASSPATH="$jar"
+        fi
+    done
+
+    # Start the server in background
+    nohup "$JAVA_CMD" \
+        -cp "$CLASSPATH" \
+        -Xmx4g \
+        -Dgama.server.port=$SERVER_PORT \
+        gama.browser.GamaServerLauncher \
+        "$SERVER_PORT" \
+        > "$GAMA_HOME/logs/server.log" 2>&1 &
+
+    echo $! > "$GAMA_HOME/server.pid"
+    log "Server starting (PID: $(cat "$GAMA_HOME/server.pid"))..."
+
+    # Wait for server to be ready
+    for i in $(seq 1 30); do
+        if check_server; then
+            log "Server ready on port $SERVER_PORT"
+            return 0
+        fi
+        sleep 1
+    done
+
+    warn "Server may still be starting. Check $GAMA_HOME/logs/server.log"
+}
+
+# Start HTTP server for web UI
+start_web_server() {
+    if curl -s "http://localhost:${WEB_PORT}" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    log "Starting web server on port $WEB_PORT..."
+
+    # Try Python 3 first
+    if command -v python3 &>/dev/null; then
+        cd "$GAMA_WEB"
+        nohup python3 -c "
+import http.server, socketserver, os
+os.chdir('$GAMA_WEB')
+class Handler(http.server.SimpleHTTPRequestHandler):
+    def end_headers(self):
+        self.send_header('Access-Control-Allow-Origin', '*')
+        super().end_headers()
+    def log_message(self, format, *args):
+        pass
+with socketserver.TCPServer(('', $WEB_PORT), Handler) as httpd:
+    httpd.serve_forever()
+" > "$GAMA_HOME/logs/web.log" 2>&1 &
+    elif command -v python &>/dev/null; then
+        cd "$GAMA_WEB"
+        nohup python -m SimpleHTTPServer "$WEB_PORT" > "$GAMA_HOME/logs/web.log" 2>&1 &
+    else
+        err "Python not found. Please install Python 3."
+        return 1
+    fi
+
+    echo $! > "$GAMA_HOME/web.pid"
+    log "Web server ready on port $WEB_PORT"
+}
+
+# Open browser
+open_browser() {
+    local url="http://localhost:${WEB_PORT}"
+    log "Opening browser..."
+    case "$PLATFORM" in
+        macos)
+            open "$url"
+            ;;
+        linux)
+            if command -v xdg-open &>/dev/null; then
+                xdg-open "$url"
+            elif command -v firefox &>/dev/null; then
+                firefox "$url" &
+            elif command -v google-chrome &>/dev/null; then
+                google-chrome "$url" &
+            fi
+            ;;
+        windows)
+            start "$url"
+            ;;
+    esac
+}
+
+# Cleanup on exit
+cleanup() {
+    log "Shutting down..."
+    if [ -f "$GAMA_HOME/server.pid" ]; then
+        kill $(cat "$GAMA_HOME/server.pid") 2>/dev/null || true
+        rm -f "$GAMA_HOME/server.pid"
+    fi
+    if [ -f "$GAMA_HOME/web.pid" ]; then
+        kill $(cat "$GAMA_HOME/web.pid") 2>/dev/null || true
+        rm -f "$GAMA_HOME/web.pid"
+    fi
+}
+
+# Main
+main() {
+    echo ""
+    echo "  ╔══════════════════════════════════════╗"
+    echo "  ║     GAMA - Simulation Platform       ║"
+    echo "  ╚══════════════════════════════════════╝"
+    echo ""
+
+    detect_platform
+    download_jre
+    download_gama
+    setup_web
+    start_server
+    start_web_server
+
+    trap cleanup EXIT INT TERM
+
+    open_browser
+
+    log "GAMA is running!"
+    log "  Server:  http://localhost:$SERVER_PORT"
+    log "  Web UI:  http://localhost:$WEB_PORT"
+    log ""
+    log "Press Ctrl+C to stop"
+
+    # Keep script running
+    wait
+}
+
+main "$@"
