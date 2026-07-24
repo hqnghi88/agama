@@ -125,7 +125,7 @@ public class ImageLayer extends AbstractLayer {
 	private IImageProvider getImageFromProvider(final IScope scope, final Object input) throws GamaRuntimeFileException, GamaRuntimeException {
 		if (input == cachedImageProvider) return cachedImageProvider;
 		if (!(input instanceof IImageProvider result))
-			throw GamaRuntimeException.error("Not a provider of images: " + providerExpression.serializeToGaml(false), scope);
+			return null;
 		try {
 			result.getImage(scope, !getData().getRefresh());
 		} catch (final GamaRuntimeFileException ex) {

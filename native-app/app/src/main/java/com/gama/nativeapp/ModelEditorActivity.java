@@ -246,8 +246,6 @@ public class ModelEditorActivity extends AppCompatActivity {
 
                 if (fromLibrary && jarPath != null) {
                     content = readFromJar(jarPath);
-                } else if (fromLibrary) {
-                    content = readFromJar(jarPath);
                 } else {
                     File internalFile = new File(getFilesDir(), "models/" + modelName + ".gaml");
                     if (internalFile.exists()) {
@@ -414,7 +412,11 @@ public class ModelEditorActivity extends AppCompatActivity {
         }
     }
 
+    private static final int MAX_HIGHLIGHT_LENGTH = 50000;
+
     private void highlightSyntax(Editable text) {
+        if (text.length() > MAX_HIGHLIGHT_LENGTH) return;
+
         ForegroundColorSpan[] spans = text.getSpans(0, text.length(), ForegroundColorSpan.class);
         for (ForegroundColorSpan span : spans) text.removeSpan(span);
         StyleSpan[] styleSpans = text.getSpans(0, text.length(), StyleSpan.class);
@@ -537,9 +539,9 @@ public class ModelEditorActivity extends AppCompatActivity {
         for (int i = 0; i < text.length(); i++) {
             if (text.charAt(i) == '\n') lines++;
         }
-        StringBuilder sb = new StringBuilder();
+        StringBuilder sb = new StringBuilder(lines * 4);
         for (int i = 1; i <= lines; i++) {
-            sb.append(i).append("\n");
+            sb.append(i).append('\n');
         }
         lineNumbers.setText(sb.toString());
     }

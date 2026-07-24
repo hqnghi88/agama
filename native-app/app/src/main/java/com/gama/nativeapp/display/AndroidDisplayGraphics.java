@@ -55,7 +55,7 @@ public class AndroidDisplayGraphics extends AbstractDisplayGraphics {
     private int drawnShapesCount = 0;
 
     public int getDrawnShapesCount() { return drawnShapesCount; }
-    public void resetDrawnShapesCount() { drawnShapesCount = 0; layerCount = 0; }
+    public void resetDrawnShapesCount() { drawnShapesCount = 0; layerCount = 0; shapeDrawCount = 0; }
 
     public AndroidDisplayGraphics() {
         fillPaint.setStyle(Paint.Style.FILL);
@@ -63,6 +63,32 @@ public class AndroidDisplayGraphics extends AbstractDisplayGraphics {
         strokePaint.setStrokeWidth(1f);
         textPaint.setTypeface(android.graphics.Typeface.create("Helvetica", android.graphics.Typeface.BOLD));
         textPaint.setTextSize(24f);
+    }
+
+    @Override
+    public double getxRatioBetweenPixelsAndModelUnits() {
+        if (data == null) return 1.0;
+        double envW = data.getEnvWidth();
+        if (envW <= 0) return 1.0;
+        return super.getxRatioBetweenPixelsAndModelUnits();
+    }
+
+    @Override
+    public double getyRatioBetweenPixelsAndModelUnits() {
+        if (data == null) return 1.0;
+        double envH = data.getEnvHeight();
+        if (envH <= 0) return 1.0;
+        return super.getyRatioBetweenPixelsAndModelUnits();
+    }
+
+    @Override
+    public double getXOffsetInPixels() {
+        return 0;
+    }
+
+    @Override
+    public double getYOffsetInPixels() {
+        return 0;
     }
 
     public void setCanvas(Canvas c) { this.canvas = c; }

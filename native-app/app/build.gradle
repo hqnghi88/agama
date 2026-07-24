@@ -120,6 +120,7 @@ tasks.register('patchGamaJars') {
         // Patch GamaPopulation: replace lambda with anonymous class to fix D8 IncompatibleClassChangeError
         // Also patch GamlAgent: fix microPopulations caching
         // Also patch GamlModelBuilder: catch validation NPEs and skip hasErrors() check
+        // Also patch AbstractAgent/ExperimentAgent/DefaultExperimentController: add diagnostic logging
         def gamaCoreSrc = file("${projectDir}/../../gama.core/src")
         def gamlCompilerSrc = file("${projectDir}/../../gaml.compiler/src")
         def gamaDepsJars = fileTree("${projectDir}/../../gama.dependencies/target/lib").matching { include '**/*.jar'; exclude '*source*' }
@@ -132,7 +133,14 @@ tasks.register('patchGamaJars') {
                 '-d', "$buildDir/tmp/gama_pop_patch",
                 "${gamaCoreSrc}/gama/core/metamodel/population/GamaPopulation.java",
                 "${gamaCoreSrc}/gama/core/metamodel/agent/GamlAgent.java",
-                "${gamlCompilerSrc}/gaml/compiler/gaml/validation/GamlModelBuilder.java"
+                "${gamaCoreSrc}/gama/core/metamodel/agent/AbstractAgent.java",
+                "${gamaCoreSrc}/gama/core/kernel/experiment/ExperimentAgent.java",
+                "${gamaCoreSrc}/gama/core/kernel/experiment/DefaultExperimentController.java",
+                "${gamlCompilerSrc}/gaml/compiler/gaml/validation/GamlModelBuilder.java",
+                "${gamaCoreSrc}/gama/core/outputs/AbstractOutputManager.java",
+                "${gamaCoreSrc}/gama/core/outputs/LayeredDisplayOutput.java",
+                "${gamaCoreSrc}/gama/core/outputs/layers/ImageLayer.java",
+                "${gamaCoreSrc}/gama/core/kernel/simulation/SimulationPopulation.java"
         }
         exec {
             commandLine 'jar', 'uf', "${libsDir}/gama.core_0.0.0.202605140230.jar",
@@ -141,7 +149,27 @@ tasks.register('patchGamaJars') {
                 '-C', "$buildDir/tmp/gama_pop_patch",
                 'gama/core/metamodel/population/GamaPopulation$1.class',
                 '-C', "$buildDir/tmp/gama_pop_patch",
-                'gama/core/metamodel/agent/GamlAgent.class'
+                'gama/core/metamodel/agent/GamlAgent.class',
+                '-C', "$buildDir/tmp/gama_pop_patch",
+                'gama/core/metamodel/agent/AbstractAgent.class',
+                '-C', "$buildDir/tmp/gama_pop_patch",
+                'gama/core/kernel/experiment/ExperimentAgent.class',
+                '-C', "$buildDir/tmp/gama_pop_patch",
+                'gama/core/kernel/experiment/ExperimentAgent$1.class',
+                '-C', "$buildDir/tmp/gama_pop_patch",
+                'gama/core/kernel/experiment/ExperimentAgent$ExperimentAgentScope.class',
+                '-C', "$buildDir/tmp/gama_pop_patch",
+                'gama/core/kernel/experiment/DefaultExperimentController.class',
+                '-C', "$buildDir/tmp/gama_pop_patch",
+                'gama/core/kernel/experiment/DefaultExperimentController$1.class',
+                '-C', "$buildDir/tmp/gama_pop_patch",
+                'gama/core/outputs/AbstractOutputManager.class',
+                '-C', "$buildDir/tmp/gama_pop_patch",
+                'gama/core/outputs/LayeredDisplayOutput.class',
+                '-C', "$buildDir/tmp/gama_pop_patch",
+                'gama/core/outputs/layers/ImageLayer.class',
+                '-C', "$buildDir/tmp/gama_pop_patch",
+                'gama/core/kernel/simulation/SimulationPopulation.class'
         }
         exec {
             commandLine 'jar', 'uf', "${libsDir}/gaml.compiler_0.0.0.202605140230.jar",

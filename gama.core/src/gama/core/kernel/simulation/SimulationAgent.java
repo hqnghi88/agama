@@ -392,9 +392,17 @@ public class SimulationAgent extends GamlAgent implements ITopLevelAgent {
 
 	@Override
 	protected boolean preStep(final IScope scope) {
+		System.out.println("[SIM-PRE] SimulationAgent.preStep() cycle=" + ownClock.getCycle());
 		ownClock.beginCycle();
 		executer.executeBeginActions();
 		return super.preStep(scope);
+	}
+
+	@Override
+	protected boolean doStep(final IScope scope) {
+		boolean result = super.doStep(scope);
+		System.out.println("[SIM-DO] SimulationAgent.doStep() result=" + result);
+		return result;
 	}
 
 	@Override
@@ -402,6 +410,7 @@ public class SimulationAgent extends GamlAgent implements ITopLevelAgent {
 		super.postStep(scope);
 		executer.executeEndActions();
 		executer.executeOneShotActions();
+		System.out.println("[SIM-POST] outputs=" + (outputs == null ? "NULL" : outputs.size()) + " clock=" + ownClock.getCycle());
 		if (outputs != null) { outputs.step(this.getScope()); }
 		ownClock.step();
 		GAMA.getBufferingController().flushSaveFilesInCycle(this);

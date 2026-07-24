@@ -237,12 +237,23 @@ public abstract class AbstractAgent implements IAgent {
 	 * Method called repetitively by the simulation engine. Should not be redefined except in rare cases (like special
 	 * forms of experiments, which need to define their own sequence)
 	 */
+	private static int agentStepCount = 0;
 	@Override
 	public boolean step(final IScope scope) throws GamaRuntimeException {
 		boolean result = false;
 		try {
-			result = preStep(scope) && doStep(scope);
+			boolean pre = preStep(scope);
+			boolean doS = false;
+			if (pre) {
+				doS = doStep(scope);
+			}
+			result = pre && doS;
+			agentStepCount++;
 			return result;
+		} catch (RuntimeException e) {
+			agentStepCount++;
+			e.printStackTrace(System.out);
+			throw e;
 		} finally {
 			if (result) { postStep(scope); }
 		}

@@ -336,19 +336,32 @@ public class GamaPopulation<T extends IAgent> extends GamaList<T> implements IPo
 	 */
 	@Override
 	public boolean step(final IScope scope) throws GamaRuntimeException {
-		if (species != null && "people".equals(species.getName())) {
-			System.out.println("[POP-DIAG] GamaPopulation.step() called for people, size=" + size() + " cycle=" + scope.getClock().getCycle());
+		String speciesName = species != null ? species.getName() : "null";
+		try {
+			boolean freqSkip = false;
+			final IExpression frequencyExp = species.getFrequency();
+			if (frequencyExp != null) {
+				final int frequency = Cast.asInt(scope, frequencyExp.value(scope));
+				final int step = scope.getClock().getCycle();
+				if (frequency == 0 || step % frequency != 0) freqSkip = true;
+			}
+			if (!freqSkip) {
+				if (mirrorManagement != null) { mirrorManagement.executeOn(scope); }
+				getSpecies().getArchitecture().preStep(scope, this);
+			}
+			boolean result = stepAgents(scope);
+			if ("people".equals(speciesName) || speciesName.contains("circle") || speciesName.contains("Circle")) {
+				System.out.println("[POP-DIAG] step() species=" + speciesName
+					+ " size=" + size() + " freqSkip=" + freqSkip
+					+ " result=" + result
+					+ " clock=" + (scope.getClock() != null ? scope.getClock().getCycle() : "null"));
+			}
+			return result;
+		} catch (Throwable t) {
+			System.out.println("[POP-DIAG] step() EXCEPTION species=" + speciesName + " : " + t.getClass().getSimpleName() + ": " + t.getMessage());
+			t.printStackTrace(System.out);
+			return false;
 		}
-		final IExpression frequencyExp = species.getFrequency();
-		if (frequencyExp != null) {
-			final int frequency = Cast.asInt(scope, frequencyExp.value(scope));
-			final int step = scope.getClock().getCycle();
-			if (frequency == 0 || step % frequency != 0) return true;
-		}
-		if (mirrorManagement != null) { mirrorManagement.executeOn(scope); }
-		getSpecies().getArchitecture().preStep(scope, this);
-		return stepAgents(scope);
-
 	}
 
 	/**

@@ -10,7 +10,6 @@ import android.text.method.ScrollingMovementMethod;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
-import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
@@ -58,6 +57,19 @@ public class ExperimentActivity extends Activity {
     private Object currentExpPlan;
     private Object currentController;
     private Runnable statePollRunnable;
+
+    // Cached reflection for state polling (avoid lookup every second)
+    private java.lang.reflect.Field pausedField;
+    private java.lang.reflect.Field aliveField;
+    private java.lang.reflect.Field scopeField;
+    private java.lang.reflect.Field execThreadField;
+    private java.lang.reflect.Field lockField;
+    private java.lang.reflect.Method getClockMethod;
+    private java.lang.reflect.Method getCycleMethod;
+    private java.lang.reflect.Method getAttributeMethod;
+    private java.lang.reflect.Method releaseLockMethod;
+    private Class<?> absControllerClass;
+    private Class<?> controllerClass;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -418,16 +430,12 @@ public class ExperimentActivity extends Activity {
             statusText.setText(isPaused ? "Paused" : "Running");
         });
         try {
-            Class<?> absControllerClass = Class.forName("gama.core.kernel.experiment.DefaultExperimentController").getSuperclass();
-            java.lang.reflect.Field pausedField = absControllerClass.getDeclaredField("paused");
-            pausedField.setAccessible(true);
-            pausedField.setBoolean(currentController, isPaused);
-
-            java.lang.reflect.Field lockField = absControllerClass.getDeclaredField("lock");
-            lockField.setAccessible(true);
-            Object lock = lockField.get(currentController);
-            if (!isPaused) {
-                lock.getClass().getMethod("release").invoke(lock);
+            if (pausedField != null) {
+                pausedField.setBoolean(currentController, isPaused);
+            }
+            if (lockField != null && releaseLockMethod != null && !isPaused) {
+                Object lock = lockField.get(currentController);
+                if (lock != null) releaseLockMethod.invoke(lock);
             }
             log("Play/pause toggled: paused=" + isPaused);
         } catch (Exception e) {
@@ -439,16 +447,11 @@ public class ExperimentActivity extends Activity {
     private void stepSimulation() {
         if (!isRunning || !isPaused || currentController == null) return;
         try {
-            Class<?> absControllerClass = Class.forName("gama.core.kernel.experiment.DefaultExperimentController").getSuperclass();
-            java.lang.reflect.Field pausedField = absControllerClass.getDeclaredField("paused");
-            pausedField.setAccessible(true);
-
-            java.lang.reflect.Field lockField = absControllerClass.getDeclaredField("lock");
-            lockField.setAccessible(true);
-            Object lock = lockField.get(currentController);
-
-            pausedField.setBoolean(currentController, false);
-            lock.getClass().getMethod("release").invoke(lock);
+            if (pausedField != null) pausedField.setBoolean(currentController, false);
+            if (lockField != null && releaseLockMethod != null) {
+                Object lock = lockField.get(currentController);
+                if (lock != null) releaseLockMethod.invoke(lock);
+            }
             log("Manual step executed");
         } catch (Exception e) {
             Log.w(TAG, "Could not step", e);
@@ -479,26 +482,45 @@ public class ExperimentActivity extends Activity {
     }
 
     private void handleDisplayAction(String icon) {
-        if (displayContainer.getChildCount() == 0) return;
-        View child = displayContainer.getChildAt(0);
+        View target = getActiveDisplayView();
+        if (target == null) return;
         try {
             switch (icon) {
                 case "+":
-                    child.getClass().getMethod("zoomIn").invoke(child);
+                    target.getClass().getMethod("zoomIn").invoke(target);
                     break;
                 case "\u2212":
-                    child.getClass().getMethod("zoomOut").invoke(child);
+                    target.getClass().getMethod("zoomOut").invoke(target);
                     break;
                 case "\u2195":
-                    child.getClass().getMethod("zoomFit").invoke(child);
+                    target.getClass().getMethod("zoomFit").invoke(target);
                     break;
                 case "\u2318":
-                    child.getClass().getMethod("toggleLock").invoke(child);
+                    target.getClass().getMethod("toggleLock").invoke(target);
                     break;
             }
         } catch (Exception e) {
             Log.w(TAG, "Display action failed", e);
         }
+    }
+
+    private View getActiveDisplayView() {
+        if (activeDisplayName == null) return null;
+        try {
+            Class<?> guiHandlerClass = Class.forName("com.gama.nativeapp.gui.AndroidGuiHandler");
+            Object guiHandler = guiHandlerClass.getMethod("getInstance").invoke(null);
+            @SuppressWarnings("unchecked")
+            java.util.Map<String, Object> surfaces =
+                (java.util.Map<String, Object>) guiHandlerClass.getMethod("getDisplaySurfaces").invoke(guiHandler);
+            if (surfaces != null) {
+                Object surf = surfaces.get(activeDisplayName);
+                if (surf instanceof View) return (View) surf;
+            }
+        } catch (Exception e) { /* fallback */ }
+        if (displayContainer.getChildCount() > 0) {
+            return displayContainer.getChildAt(0);
+        }
+        return null;
     }
 
     private void compileModelFromAsset(String assetPath) {
@@ -870,6 +892,19 @@ public class ExperimentActivity extends Activity {
         currentExpPlan = expPlan;
         isRunning = true;
         isPaused = false;
+        activeDisplayName = null;
+        displayTabBar.removeAllViews();
+        displayTabScroll.setVisibility(View.GONE);
+        displayContainer.removeAllViews();
+
+        try {
+            Class<?> guiHandlerClass = Class.forName("com.gama.nativeapp.gui.AndroidGuiHandler");
+            Object guiHandler = guiHandlerClass.getMethod("getInstance").invoke(null);
+            guiHandlerClass.getMethod("clearDisplayState", android.app.Activity.class)
+                .invoke(guiHandler, this);
+        } catch (Exception e) {
+            Log.w(TAG, "Could not clear display state", e);
+        }
 
         handler.post(() -> {
             statusText.setText("Running");
@@ -903,6 +938,9 @@ public class ExperimentActivity extends Activity {
                 java.util.List controllers = (java.util.List) controllersField.get(null);
                 controllers.add(controller);
                 log("[3] Controller registered (size=" + controllers.size() + ")");
+
+                // Set up stdout redirect BEFORE processStart to capture early execution logs
+                setupStdoutRedirect();
 
                 log("[4] Starting experiment controller via processStart...");
                 Class<?> ctrlInterface = Class.forName("gama.core.kernel.experiment.IExperimentController");
@@ -942,171 +980,80 @@ public class ExperimentActivity extends Activity {
         }).start();
     }
 
-    private void startStatePolling(Object controller) {
-        final Class<?> controllerClass;
-        final Class<?> absControllerClass;
+    private void setupStdoutRedirect() {
         try {
-            controllerClass = Class.forName("gama.core.kernel.experiment.DefaultExperimentController");
-            absControllerClass = controllerClass.getSuperclass();
-        } catch (ClassNotFoundException e) {
-            log("Cannot find controller class");
-            return;
+            final PrintStream origErr = System.err;
+            final PrintStream origOut = System.out;
+            System.setErr(new PrintStream(new java.io.OutputStream() {
+                @Override public void write(int b) { origErr.write(b); }
+                @Override public void write(byte[] b, int off, int len) {
+                    origErr.write(b, off, len);
+                    String s = new String(b, off, len).trim();
+                    if (!s.isEmpty()) Log.e(TAG, "[STDERR] " + s);
+                }
+            }, true));
+            System.setOut(new PrintStream(new java.io.OutputStream() {
+                @Override public void write(int b) { origOut.write(b); }
+                @Override public void write(byte[] b, int off, int len) {
+                    origOut.write(b, off, len);
+                    String s = new String(b, off, len).trim();
+                    if (!s.isEmpty()) Log.i(TAG, "[STDOUT] " + s);
+                }
+            }, true));
+            Log.i(TAG, "Stdout/Stderr redirect set up");
+        } catch (Exception e) {
+            Log.w(TAG, "Could not redirect streams", e);
         }
+    }
+
+    private void startStatePolling(Object controller) {
+        cacheReflectionFields(controller);
 
         final long startTime = System.currentTimeMillis();
         final int[] pollCount = {0};
         final int[] lastCycle = {-1};
-
-                // Redirect System.err/System.out to logcat
-            try {
-                final PrintStream origErr = System.err;
-                final PrintStream origOut = System.out;
-                PrintStream teeErr = new PrintStream(new java.io.OutputStream() {
-                    @Override public void write(int b) { origErr.write(b); }
-                    @Override public void write(byte[] b, int off, int len) {
-                        origErr.write(b, off, len);
-                        String s = new String(b, off, len).trim();
-                        if (!s.isEmpty()) Log.e(TAG, "[STDERR] " + s);
-                    }
-                }, true);
-                PrintStream teeOut = new PrintStream(new java.io.OutputStream() {
-                    @Override public void write(int b) { origOut.write(b); }
-                    @Override public void write(byte[] b, int off, int len) {
-                        origOut.write(b, off, len);
-                        String s = new String(b, off, len).trim();
-                        if (!s.isEmpty()) Log.i(TAG, "[STDOUT] " + s);
-                    }
-                }, true);
-                System.setErr(teeErr);
-                System.setOut(teeOut);
-            } catch (Exception e) {
-                Log.w(TAG, "Could not redirect streams", e);
-            }
 
         statePollRunnable = () -> {
             if (!isRunning) return;
             pollCount[0]++;
 
             try {
-                long elapsed = System.currentTimeMillis() - startTime;
-                long seconds = elapsed / 1000;
-                long min = seconds / 60;
-                long sec = seconds % 60;
+                boolean paused = pausedField != null && pausedField.getBoolean(controller);
+                boolean alive = aliveField != null && aliveField.getBoolean(controller);
 
-                java.lang.reflect.Field pausedField = absControllerClass.getDeclaredField("paused");
-                pausedField.setAccessible(true);
-                boolean paused = pausedField.getBoolean(controller);
-
-                java.lang.reflect.Field aliveField = absControllerClass.getDeclaredField("experimentAlive");
-                aliveField.setAccessible(true);
-                boolean alive = aliveField.getBoolean(controller);
-
-                java.lang.reflect.Field execField = controllerClass.getDeclaredField("executionThread");
-                execField.setAccessible(true);
-                Thread execThread = (Thread) execField.get(controller);
-                String execState = execThread.getState().name();
-                boolean execAlive = execThread.isAlive();
-
-                // Get cycle count via controller.scope.getClock().getCycle()
-                final int[] cycleCount = {-1};
+                int cycleCount = -1;
                 try {
-                    java.lang.reflect.Field scopeField = absControllerClass.getDeclaredField("scope");
-                    scopeField.setAccessible(true);
-                    Object scope = scopeField.get(controller);
-                    if (scope != null) {
-                        Object clock = scope.getClass().getMethod("getClock").invoke(scope);
-                        if (clock != null) {
-                            cycleCount[0] = (int) clock.getClass().getMethod("getCycle").invoke(clock);
+                    if (scopeField != null && getClockMethod != null && getCycleMethod != null) {
+                        Object scope = scopeField.get(controller);
+                        if (scope != null) {
+                            Object clock = getClockMethod.invoke(scope);
+                            if (clock != null) {
+                                cycleCount = (int) getCycleMethod.invoke(clock);
+                            }
                         }
                     }
-                } catch (Exception e) {
-                    // clock not available yet
+                } catch (Exception e) { /* clock not available */ }
+
+                long elapsed = System.currentTimeMillis() - startTime;
+                long min = (elapsed / 1000) / 60;
+                long sec = (elapsed / 1000) % 60;
+
+                if (cycleCount > lastCycle[0] && cycleCount >= 0) {
+                    lastCycle[0] = cycleCount;
                 }
-
-                StringBuilder sb = new StringBuilder();
-                sb.append("[Poll #").append(pollCount[0]).append("] ");
-                sb.append("paused=").append(paused).append(" ");
-                sb.append("alive=").append(alive).append(" ");
-                sb.append("exec=").append(execState);
-                sb.append(" cycle=").append(cycleCount[0]);
-                if (!execAlive) sb.append(" DEAD!");
-
-                // Detect cycle changes
-                if (cycleCount[0] > lastCycle[0] && cycleCount[0] >= 0) {
-                    sb.append(" [CYCLE ADVANCED!]");
-                    lastCycle[0] = cycleCount[0];
-                }
-
-                Log.i(TAG, sb.toString());
-                if (pollCount[0] % 30 == 0) {
-                    log(sb.toString());
-                }
-
+                final int finalCycle = cycleCount;
                 handler.post(() -> {
-                    String cycleStr = cycleCount[0] >= 0 ? String.valueOf(cycleCount[0]) : "?";
+                    String cycleStr = finalCycle >= 0 ? String.valueOf(finalCycle) : "?";
                     cycleText.setText(
                         "Simulation 0: " + cycleStr + " cycles [" +
                         String.format("%02d:%02d:%02d", 0, min, sec) + "]" +
                         (paused ? " [PAUSED]" : ""));
 
-                    try {
-                        Class<?> guiHandlerClass = Class.forName("com.gama.nativeapp.gui.AndroidGuiHandler");
-                        java.lang.reflect.Method getInstanceMethod = guiHandlerClass.getMethod("getInstance");
-                        Object guiHandler = getInstanceMethod.invoke(null);
-                        java.lang.reflect.Method getOutputsMethod = guiHandlerClass.getMethod("getDisplayOutputs");
-                        @SuppressWarnings("unchecked")
-                        java.util.Map<String, Object> outputsMap = (java.util.Map<String, Object>) getOutputsMethod.invoke(guiHandler);
-                        if (outputsMap == null || outputsMap.isEmpty()) return;
-
-                        Class<?> iscopeClass = Class.forName("gama.core.runtime.IScope");
-                        Class<?> gamaClass = Class.forName("gama.core.runtime.GAMA");
-                        java.lang.reflect.Field controllersField = gamaClass.getDeclaredField("controllers");
-                        controllersField.setAccessible(true);
-                        java.util.List controllers = (java.util.List) controllersField.get(null);
-                        if (controllers == null || controllers.isEmpty()) return;
-
-                        Object ctrl = controllers.get(controllers.size() - 1);
-                        java.lang.reflect.Field scopeField = ctrl.getClass().getSuperclass().getDeclaredField("scope");
-                        scopeField.setAccessible(true);
-                        Object ctrlScope = scopeField.get(ctrl);
-                        if (ctrlScope == null) return;
-
-                        java.lang.reflect.Method copyForGraphics = ctrlScope.getClass().getMethod("copyForGraphics", String.class);
-
-                        for (Object ldoObj : outputsMap.values()) {
-                            try {
-                                Object gfxScope = copyForGraphics.invoke(ctrlScope, "display map");
-
-                                java.lang.reflect.Method setScope = ldoObj.getClass().getMethod("setScope", iscopeClass);
-                                setScope.invoke(ldoObj, gfxScope);
-
-                                java.lang.reflect.Method step = ldoObj.getClass().getMethod("step", iscopeClass);
-                                step.invoke(ldoObj, gfxScope);
-
-                                java.lang.reflect.Method update = ldoObj.getClass().getMethod("update");
-                                update.invoke(ldoObj);
-
-                                java.lang.reflect.Method getSurface = ldoObj.getClass().getMethod("getSurface");
-                                Object surfObj = getSurface.invoke(ldoObj);
-                                if (surfObj != null) {
-                                    android.view.View surfView = (android.view.View) surfObj;
-                                    surfView.post(() -> surfView.invalidate());
-                                }
-                            } catch (Exception de) {
-                                if (pollCount[0] % 60 == 0) Log.w(TAG, "[DISPLAY] step error for " + ldoObj + ": " + de.getMessage());
-                            }
-                        }
-
-                        if (pollCount[0] % 30 == 0) {
-                            Log.i(TAG, "[DISPLAY] stepped " + outputsMap.size() + " display(s), cycle=" + cycleCount[0]);
-                        }
-                    } catch (Exception e) {
-                        if (pollCount[0] % 60 == 0) Log.w(TAG, "[DISPLAY] error: " + e.getMessage());
-                    }
+                    updateDisplays(pollCount[0]);
                 });
 
             } catch (Exception e) {
-                Log.w(TAG, "Poll error", e);
+                if (pollCount[0] % 60 == 0) Log.w(TAG, "Poll error: " + e.getMessage());
             }
 
             if (isRunning && pollCount[0] < 600) {
@@ -1114,6 +1061,58 @@ public class ExperimentActivity extends Activity {
             }
         };
         handler.postDelayed(statePollRunnable, 1000);
+    }
+
+    private void cacheReflectionFields(Object controller) {
+        try {
+            controllerClass = controller.getClass();
+            absControllerClass = controllerClass.getSuperclass();
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to get controller class", e);
+            return;
+        }
+        try { pausedField = absControllerClass.getDeclaredField("paused"); pausedField.setAccessible(true); } catch (Exception e) {}
+        try { aliveField = absControllerClass.getDeclaredField("experimentAlive"); aliveField.setAccessible(true); } catch (Exception e) {}
+        try { scopeField = absControllerClass.getDeclaredField("scope"); scopeField.setAccessible(true); } catch (Exception e) {}
+        try { execThreadField = controllerClass.getDeclaredField("executionThread"); execThreadField.setAccessible(true); } catch (Exception e) {}
+        try { lockField = absControllerClass.getDeclaredField("lock"); lockField.setAccessible(true); } catch (Exception e) {}
+        try { getClockMethod = Class.forName("gama.core.runtime.IScope").getMethod("getClock"); } catch (Exception e) {}
+        try { getCycleMethod = Class.forName("gama.core.kernel.simulation.SimulationClock").getMethod("getCycle"); } catch (Exception e) {}
+        try {
+            Object lockObj = lockField != null ? lockField.get(controller) : null;
+            if (lockObj != null) releaseLockMethod = lockObj.getClass().getMethod("release");
+        } catch (Exception e) {}
+    }
+
+    // Cached display surface references
+    private volatile java.util.Map<String, Object> cachedDisplayOutputs;
+    private volatile boolean displayOutputsCached = false;
+
+    private void updateDisplays(int pollCount) {
+        try {
+            if (!displayOutputsCached) {
+                Class<?> guiHandlerClass = Class.forName("com.gama.nativeapp.gui.AndroidGuiHandler");
+                Object guiHandler = guiHandlerClass.getMethod("getInstance").invoke(null);
+                @SuppressWarnings("unchecked")
+                java.util.Map<String, Object> outputsMap =
+                    (java.util.Map<String, Object>) guiHandlerClass.getMethod("getDisplayOutputs").invoke(guiHandler);
+                cachedDisplayOutputs = outputsMap;
+                displayOutputsCached = true;
+            }
+            java.util.Map<String, Object> outputsMap = cachedDisplayOutputs;
+            if (outputsMap == null || outputsMap.isEmpty()) return;
+
+            for (Object ldoObj : outputsMap.values()) {
+                try {
+                    Object surfObj = ldoObj.getClass().getMethod("getSurface").invoke(ldoObj);
+                    if (surfObj instanceof android.view.View surfView) {
+                        surfView.post(surfView::invalidate);
+                    }
+                } catch (Exception de) { /* skip */ }
+            }
+        } catch (Exception e) {
+            displayOutputsCached = false;
+        }
     }
 
     private static void setGuiActivity(Activity activity) {
@@ -1157,6 +1156,12 @@ public class ExperimentActivity extends Activity {
         if (statePollRunnable != null) {
             handler.removeCallbacks(statePollRunnable);
         }
+        try {
+            Class<?> guiHandlerClass = Class.forName("com.gama.nativeapp.gui.AndroidGuiHandler");
+            Object guiHandler = guiHandlerClass.getMethod("getInstance").invoke(null);
+            guiHandlerClass.getMethod("clearDisplayState", android.app.Activity.class)
+                .invoke(guiHandler, this);
+        } catch (Exception e) { /* best effort */ }
         setGuiActivity(null);
         if (currentController != null) stopSimulation();
     }

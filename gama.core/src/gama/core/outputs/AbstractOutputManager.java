@@ -457,7 +457,6 @@ public abstract class AbstractOutputManager extends Symbol implements IOutputMan
 	    if (initialStep(scope, output)) {
 		try {
 		    output.open();
-		    // DEBUG.OUT("Updating the output");
 		    output.update();
 		} catch (final RuntimeException e) {
 		    e.printStackTrace();
@@ -490,12 +489,30 @@ public abstract class AbstractOutputManager extends Symbol implements IOutputMan
 
     @Override
     public boolean step(final IScope scope) {
+	int[] stepCount = {0};
 	outputs.forEach((name, each) -> {
+	    stepCount[0]++;
 	    if (each instanceof LayeredDisplayOutput ldo) {
 		ldo.linkScopeWithGraphics();
 	    }
-	    if (each.isRefreshable() && each.getScope().step(each).passed()) {
+	    boolean refreshable = each.isRefreshable();
+	    boolean stepOk = false;
+	    if (refreshable) {
+		try {
+		    var result = each.getScope().step(each);
+		    stepOk = result != null && result.passed();
+		} catch (Exception e) {
+		    DEBUG.LOG("[OUTPUT-STEP] Exception stepping " + each.getName() + ": " + e.getMessage());
+		}
+	    }
+	    if (stepOk) {
 		each.update();
+	    } else if (refreshable && each instanceof LayeredDisplayOutput ldo2) {
+		// Fallback: ensure display surface is at least invalidated
+		try {
+		    var surf = ldo2.getSurface();
+		    if (surf != null) surf.updateDisplay(false, null);
+		} catch (Exception e) {}
 	    }
 	});
 

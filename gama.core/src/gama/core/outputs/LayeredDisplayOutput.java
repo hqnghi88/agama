@@ -435,7 +435,7 @@ public class LayeredDisplayOutput extends AbstractOutput {
 	@Override
 	public void update() throws GamaRuntimeException {
 
-		if (surface == null) return;
+		//if (surface == null) { DEBUG.LOG("[DISPLAY-UPDATE] " + getName() + " surface is null, skipping"); return; }
 		// DEBUG.OUT("Entering update of the output");
 		getData().update(getScope(), description.getFacets());
 
@@ -469,7 +469,7 @@ public class LayeredDisplayOutput extends AbstractOutput {
 		if (scope.getExperiment().isHeadless()) {
 			// If in headless mode, we need to get the 'image' surface
 			getData().setDisplayType(IKeyword.IMAGE);
-		} else if (getData().is3D()) return;
+		} /* else if (getData().is3D()) return; */
 		surface = scope.getGui().createDisplaySurfaceFor(this);
 	}
 
@@ -561,7 +561,7 @@ public class LayeredDisplayOutput extends AbstractOutput {
 		final boolean wasPaused = isPaused();
 		super.setPaused(paused);
 		if (surface == null) return;
-		if (getData().is3D()) { ((IDisplaySurface.OpenGL) surface).setPaused(paused); }
+		if (getData().is3D() && surface instanceof IDisplaySurface.OpenGL ogl) { ogl.setPaused(paused); }
 		if (wasPaused && !paused) { surface.updateDisplay(false, null); }
 	}
 

@@ -158,7 +158,7 @@ public class ExperimentAgent extends GamlAgent implements IExperimentAgent {
 	public static final String MINIMUM_CYCLE_DURATION = "minimum_cycle_duration";
 
 	/** The Constant MAXIMUM_CYCLE_DURATION. */
-	private static final String MAXIMUM_CYCLE_DURATION = "maximum_cycle_duration";
+	public static final String MAXIMUM_CYCLE_DURATION = "maximum_cycle_duration";
 
 	/** The stop condition. */
 	final IExpression stopCondition;
@@ -386,9 +386,15 @@ public class ExperimentAgent extends GamlAgent implements IExperimentAgent {
 	 */
 	@Override
 	protected boolean preStep(final IScope scope) {
-		ownClock.beginCycle();
-		executer.executeBeginActions();
-		return super.preStep(scope);
+		try {
+			ownClock.beginCycle();
+			executer.executeBeginActions();
+			boolean result = super.preStep(scope);
+			return result;
+		} catch (Throwable t) {
+			t.printStackTrace(System.out);
+			return false;
+		}
 	}
 
 	/**
@@ -399,16 +405,46 @@ public class ExperimentAgent extends GamlAgent implements IExperimentAgent {
 	 */
 	@Override
 	protected void postStep(final IScope scope) {
-		// super.postStep(scope);
-		executer.executeEndActions();
-		executer.executeOneShotActions();
-		// Save simulation state in the history
-		tryToRecordSimulations();
-		final IOutputManager outputs = getOutputManager();
-		if (outputs != null) { outputs.step(scope); }
-		ownClock.step();
-		informStatus();
-		GAMA.updateExperimentState(getSpecies());
+		try {
+			// super.postStep(scope);
+			executer.executeEndActions();
+			executer.executeOneShotActions();
+			// Save simulation state in the history
+			tryToRecordSimulations();
+			final IOutputManager outputs = getOutputManager();
+			if (outputs != null) { outputs.step(scope); }
+			// Step simulation outputs (display layers need updating)
+			final SimulationPopulation sp = getSimulationPopulation();
+			if (sp != null) {
+				int simCount = 0;
+				for (SimulationAgent sim : sp) {
+					simCount++;
+					if (sim != null && !sim.dead()) {
+						final IOutputManager simOutputs = sim.getOutputManager();
+						if (simOutputs != null) {
+							boolean res = simOutputs.step(sim.getScope());
+							System.out.println("[EXP-POST] stepped sim outputs res=" + res + " clock=" + sim.getClock().getCycle());
+						} else {
+							System.out.println("[EXP-POST] simOutputs is null for sim #" + simCount);
+						}
+					} else {
+						System.out.println("[EXP-POST] sim dead or null: sim#" + simCount + " dead=" + (sim == null ? "null" : sim.dead()));
+					}
+				}
+				if (simCount == 0) {
+					System.out.println("[EXP-POST] SimulationPopulation is EMPTY, size=" + sp.size());
+				}
+			} else {
+				System.out.println("[EXP-POST] SimulationPopulation is null");
+			}
+			ownClock.step();
+			informStatus();
+			GAMA.updateExperimentState(getSpecies());
+			System.out.println("[EXP-POST] postStep OK clock=" + ownClock.getCycle());
+		} catch (Throwable t) {
+			System.out.println("[EXP-POST] postStep EXCEPTION: " + t.getClass().getSimpleName() + ": " + t.getMessage());
+			t.printStackTrace(System.out);
+		}
 	}
 
 	/**

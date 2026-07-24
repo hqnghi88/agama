@@ -211,17 +211,26 @@ public class DefaultExperimentController extends AbstractExperimentController {
 			if (scope == null) { System.out.println("[GAMA-CTRL] step(): scope is null"); return; }
 			IScope savedScope = scope;
 			stepCount++;
-			if (stepCount <= 3 || stepCount % 100 == 0) {
-				System.out.println("[GAMA-CTRL] step() #" + stepCount + " agent=" + (agent == null ? "null" : agent.getClass().getSimpleName()));
+			if (stepCount <= 10 || stepCount % 50 == 0) {
+				boolean scopeOk = savedScope != null && !savedScope.interrupted();
+				boolean agentOk = agent != null && !agent.dead();
+				System.out.println("[GAMA-CTRL] step() #" + stepCount
+					+ " agent=" + (agent == null ? "null" : agent.getClass().getSimpleName())
+					+ " scopeOk=" + scopeOk + " agentOk=" + agentOk
+					+ " paused=" + paused);
 			}
-			if (!savedScope.step(agent).passed()) {
-				System.out.println("[GAMA-CTRL] step() #" + stepCount + " FAILED — setting paused=true");
+			gama.core.runtime.ExecutionResult result = savedScope.step(agent);
+			boolean passed = result.passed();
+			if (!passed) {
+				System.out.println("[GAMA-CTRL] step() #" + stepCount + " FAILED result=" + result + " — setting paused=true");
 				savedScope.setDisposeStatus();
 				paused = true;
+			} else if (stepCount <= 10 || stepCount % 50 == 0) {
+				System.out.println("[GAMA-CTRL] step() #" + stepCount + " PASSED");
 			}
 		} catch (RuntimeException e) {
-			System.out.println("[GAMA-CTRL] step() #" + stepCount + " EXCEPTION: " + e);
-			e.printStackTrace();
+			System.out.println("[GAMA-CTRL] step() #" + stepCount + " EXCEPTION: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+			e.printStackTrace(System.out);
 		} finally {
 			previouslock.release();
 		}
