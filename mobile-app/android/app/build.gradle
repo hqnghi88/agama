@@ -23,7 +23,7 @@ android {
         applicationId "com.simulation.mobile"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 13
+        versionCode 14
         versionName "0.1.0"
     }
 
@@ -35,7 +35,7 @@ android {
             keyPassword 'android'
         }
         release {
-            storeFile file('release.keystore')
+            storeFile file(System.getProperty("user.home") + '/Documents/gama-signing/release.keystore')
             storePassword 'gama2026'
             keyAlias 'gama-release'
             keyPassword 'gama2026'

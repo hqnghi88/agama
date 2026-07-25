@@ -27,8 +27,8 @@ const StatusIndicator: React.FC<StatusIndicatorProps> = ({
   return (
     <View style={styles.container}>
       <View style={{width: dotSize, height: dotSize, borderRadius: dotSize / 2, backgroundColor: color, marginRight: s(8)}} />
-      <Text style={{color: '#94a3b8', fontSize: s(13), fontFamily: 'monospace'}}>{label}</Text>
-      {value !== undefined && <Text style={{color: '#e2e8f0', fontSize: s(13), fontFamily: 'monospace', marginLeft: 'auto'}}>{value}</Text>}
+      <Text style={{color: '#94a3b8', fontSize: s(16), fontFamily: 'monospace'}}>{label}</Text>
+      {value !== undefined && <Text style={{color: '#e2e8f0', fontSize: s(16), fontFamily: 'monospace', marginLeft: 'auto'}}>{value}</Text>}
     </View>
   );
 };

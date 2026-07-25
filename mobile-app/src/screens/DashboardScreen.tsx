@@ -119,7 +119,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({onOpenVnc}) => {
       <Text style={{color: '#64748b', fontSize: s(14), fontFamily: 'monospace', marginBottom: s(20)}}>Simulation Backend</Text>
 
       <View style={styles.card}>
-        <Text style={{color: '#e2e8f0', fontSize: s(14), fontWeight: '700', fontFamily: 'monospace', marginBottom: s(8)}}>System Status</Text>
+        <Text style={{color: '#e2e8f0', fontSize: s(16), fontWeight: '700', fontFamily: 'monospace', marginBottom: s(8)}}>System Status</Text>
         <StatusIndicator
           label="Backend"
           status={backendColor}
@@ -138,7 +138,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({onOpenVnc}) => {
             style={{backgroundColor: '#334155', borderRadius: s(8), padding: s(10), alignItems: 'center', marginTop: s(8)}}
             onPress={handleRestartBackend}
             disabled={restarting}>
-            <Text style={{color: '#f8fafc', fontSize: s(11), fontWeight: '700', fontFamily: 'monospace', letterSpacing: 1}}>
+            <Text style={{color: '#f8fafc', fontSize: s(14), fontWeight: '700', fontFamily: 'monospace', letterSpacing: 1}}>
               {restarting ? 'RESTARTING...' : 'RESTART BACKEND'}
             </Text>
           </TouchableOpacity>

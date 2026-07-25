@@ -13,7 +13,7 @@ interface NativeVncViewProps {
 }
 
 const NativeVncView = requireNativeComponent<NativeVncViewProps>('VncView');
-const MAX_RETRIES = 40;
+const MAX_RETRIES = 100;
 const RETRY_INTERVAL = 3000;
 
 const VncScreen: React.FC<VncScreenProps> = ({onBack}) => {
@@ -106,13 +106,13 @@ const VncScreen: React.FC<VncScreenProps> = ({onBack}) => {
           <View style={styles.center}>
             {vncState === 'connecting' && (
               <>
-                <Text style={{color: '#3b82f6', fontSize: s(13), fontFamily: 'monospace', fontWeight: '700', marginBottom: s(20)}}>
+                <Text style={{color: '#3b82f6', fontSize: s(20), fontFamily: 'monospace', fontWeight: '700', marginBottom: s(20)}}>
                   GAMA Mobile
                 </Text>
                 {setupLog.length > 0 && (
                   <View style={{width: '85%', maxHeight: s(200), backgroundColor: '#0c0f1a', borderRadius: s(8), padding: s(10), marginBottom: s(16), borderWidth: 1, borderColor: '#1e293b'}}>
                     {setupLog.map((line, i) => (
-                      <Text key={i} style={{color: line.includes('error') || line.includes('fail') ? '#ef4444' : line.includes('complete') || line.includes('ready') ? '#22c55e' : '#94a3b8', fontSize: s(10), fontFamily: 'monospace', lineHeight: s(16)}}>
+                      <Text key={i} style={{color: line.includes('error') || line.includes('fail') ? '#ef4444' : line.includes('complete') || line.includes('ready') ? '#22c55e' : '#94a3b8', fontSize: s(13), fontFamily: 'monospace', lineHeight: s(20)}}>
                         {line}
                       </Text>
                     ))}
@@ -139,11 +139,11 @@ const VncScreen: React.FC<VncScreenProps> = ({onBack}) => {
                   />
                 </View>
                 {lastLog ? (
-                  <Text style={{color: '#64748b', fontSize: s(10), fontFamily: 'monospace', marginTop: s(12), textAlign: 'center', paddingHorizontal: s(20)}}>
+                  <Text style={{color: '#64748b', fontSize: s(14), fontFamily: 'monospace', marginTop: s(12), textAlign: 'center', paddingHorizontal: s(20)}}>
                     {lastLog}
                   </Text>
                 ) : (
-                  <Text style={{color: '#64748b', fontSize: s(10), fontFamily: 'monospace', marginTop: s(12)}}>
+                  <Text style={{color: '#64748b', fontSize: s(14), fontFamily: 'monospace', marginTop: s(12)}}>
                     Initializing...
                   </Text>
                 )}
@@ -151,16 +151,16 @@ const VncScreen: React.FC<VncScreenProps> = ({onBack}) => {
             )}
             {(vncState === 'timeout' || vncState === 'error') && (
               <>
-                <Text style={{color: '#ef4444', fontSize: s(14), fontFamily: 'monospace', fontWeight: '600', marginBottom: s(8)}}>
+                <Text style={{color: '#ef4444', fontSize: s(20), fontFamily: 'monospace', fontWeight: '600', marginBottom: s(8)}}>
                   {vncState === 'timeout' ? 'Startup timed out' : 'Connection failed'}
                 </Text>
-                <Text style={{color: '#475569', fontSize: s(11), fontFamily: 'monospace', marginBottom: s(20), textAlign: 'center', paddingHorizontal: s(24)}}>
+                <Text style={{color: '#475569', fontSize: s(14), fontFamily: 'monospace', marginBottom: s(20), textAlign: 'center', paddingHorizontal: s(24)}}>
                   Backend may not have started correctly.
                 </Text>
                 <TouchableOpacity
                   style={{backgroundColor: '#334155', borderRadius: s(8), paddingHorizontal: s(20), paddingVertical: s(10)}}
                   onPress={onBack}>
-                  <Text style={{color: '#f8fafc', fontSize: s(12), fontWeight: '700', fontFamily: 'monospace', letterSpacing: 1}}>RETRY</Text>
+                  <Text style={{color: '#f8fafc', fontSize: s(16), fontWeight: '700', fontFamily: 'monospace', letterSpacing: 1}}>RETRY</Text>
                 </TouchableOpacity>
               </>
             )}
