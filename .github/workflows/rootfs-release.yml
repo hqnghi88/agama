@@ -1,0 +1,38 @@
+name: Rootfs Release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-rootfs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU for ARM64 emulation
+        uses: docker/setup-qemu-action@v3
+
+      - name: Download GAMA aarch64 product
+        run: |
+          mkdir -p gama.product/target/products/gama.ui.application.product/linux/gtk
+          curl -L -o /tmp/gama-product.tar.gz \
+            "https://github.com/hqnghi88/agama/releases/download/gama-product-2026.08.1/gama.application-linux.gtk.aarch64.tar.gz"
+          tar xzf /tmp/gama-product.tar.gz -C gama.product/target/products/gama.ui.application.product/linux/gtk/
+          ls gama.product/target/products/gama.ui.application.product/linux/gtk/aarch64/plugins/*.jar | wc -l
+
+      - name: Build rootfs
+        run: |
+          chmod +x mobile-app/scripts/build-rootfs.sh
+          ./mobile-app/scripts/build-rootfs.sh
+          ls -lh mobile-app/android/app/src/main/res/raw/rootfs_tar_gz
+
+      - name: Upload rootfs to GitHub release
+        run: |
+          gh release upload rootfs \
+            "mobile-app/android/app/src/main/res/raw/rootfs_tar_gz" \
+            --repo "${{ github.repository }}" --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}

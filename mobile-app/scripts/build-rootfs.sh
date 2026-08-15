@@ -34,7 +34,7 @@ fi
 # ─── Check for GAMA product source ────────────────────────────────────
 # Resolve GAMA product location: prefer unpacked directory, then archive
 GAMA_SOURCE_DIR="$(cd "${MOBILE_ROOT}/../gama.product/target/products/gama.ui.application.product/linux/gtk/aarch64" 2>/dev/null && pwd)"
-GAMA_SOURCE_ARCHIVE="$(ls -t "${MOBILE_ROOT}/../gama.product/target/products/gama.application-linux.gtk.aarch64.tar.gz" 2>/dev/null | head -1)"
+GAMA_SOURCE_ARCHIVE="$(ls -t "${MOBILE_ROOT}/../gama.product/target/products/gama.application-linux.gtk.aarch64.tar.gz" 2>/dev/null | head -1 || true)"
 if [ -n "${GAMA_SOURCE_DIR}" ] && [ -d "${GAMA_SOURCE_DIR}/plugins" ]; then
     PLUGIN_COUNT=$(ls "${GAMA_SOURCE_DIR}/plugins/"*.jar 2>/dev/null | wc -l)
     echo "[rootfs] GAMA product directory found at ${GAMA_SOURCE_DIR}: ${PLUGIN_COUNT} plugins"
@@ -87,10 +87,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     x11-utils \
     xfonts-base \
     # Software OpenGL via Mesa llvmpipe (inside PRoot: no GPU access)
-    # libgl1-mesa-glx provides libGL.so.1 + Mesa GLX implementation
+    # libgl1 + libglx-mesa0 provide libGL.so.1 + Mesa GLX implementation
     # libosmesa6 provides OSMesa — JOGL fallback (no X server needed)
     libgl1-mesa-dri \
-    libgl1-mesa-glx \
+    libgl1 \
+    libglx-mesa0 \
     libosmesa6 \
     libglu1-mesa \
     mesa-utils \
@@ -166,7 +167,7 @@ fi
 
 # ─── Copy GAMA product (if available) ─────────────────────────────────
 GAMA_SOURCE_DIR="$(cd "${MOBILE_ROOT}/../gama.product/target/products/gama.ui.application.product/linux/gtk/aarch64" 2>/dev/null && pwd)"
-GAMA_SOURCE_ARCHIVE="$(ls -t "${MOBILE_ROOT}/../gama.product/target/products/gama.application-linux.gtk.aarch64.tar.gz" 2>/dev/null | head -1)"
+GAMA_SOURCE_ARCHIVE="$(ls -t "${MOBILE_ROOT}/../gama.product/target/products/gama.application-linux.gtk.aarch64.tar.gz" 2>/dev/null | head -1 || true)"
 
 if [ "${HAS_GAMA:-false}" = true ]; then
     echo "[rootfs] Re-copying GAMA product from source (Docker export overwrote the staged files)..."
