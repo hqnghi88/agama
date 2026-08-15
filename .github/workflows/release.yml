@@ -16,7 +16,7 @@ jobs:
       - name: Download GAMA release
         run: |
           curl -L -o GAMA_Linux.zip \
-            "https://github.com/gama-platform/gama/releases/download/2026.07.0/GAMA_2026.07.0_Linux_with_JDK_09.07.26_0b8cf07.zip"
+            "https://github.com/gama-platform/gama/releases/download/2026.08.1/GAMA_2026.08.1_Linux_with_JDK_12.08.26_67f76ee.zip"
 
       - name: Set Release Tag
         id: set_tag

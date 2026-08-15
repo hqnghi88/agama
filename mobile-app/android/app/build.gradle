@@ -35,7 +35,15 @@ android {
             keyPassword 'android'
         }
         release {
-            storeFile file(System.getProperty("user.home") + '/Documents/gama-signing/release.keystore')
+            def keystoreCandidates = [
+                System.getProperty("user.home") + '/Documents/gama-signing/release.keystore',
+                System.getProperty("user.home") + '/Documents/Documents - m5pro/gama-signing/release.keystore'
+            ]
+            def keystorePath = keystoreCandidates.find { new File(it).exists() }
+            if (keystorePath == null) {
+                throw new GradleException("release.keystore not found in: " + keystoreCandidates)
+            }
+            storeFile file(keystorePath)
             storePassword 'gama2026'
             keyAlias 'gama-release'
             keyPassword 'gama2026'
@@ -65,6 +73,34 @@ android {
     packagingOptions {
         jniLibs {
             useLegacyPackaging = true
+        }
+    }
+}
+
+// ─── Google Play 16KB page size fix (AGP < 8.5) ───────────────────────
+// Patches ELF PT_LOAD p_align from 4KB to 16KB on merged native libs so
+// Play's checker passes. Bundled libs (RN 0.74.5) ship 4KB-aligned.
+tasks.whenTaskAdded { task ->
+    if (task.name.startsWith('merge') && task.name.endsWith('NativeLibs')) {
+        task.doLast {
+            def raw = task.name.substring('merge'.length(), task.name.length() - 'NativeLibs'.length())
+            def variant = raw.substring(0, 1).toLowerCase() + raw.substring(1)
+
+            def mergedDir = new File(buildDir, "intermediates/merged_native_libs/${variant}/${task.name}/out/lib")
+            if (!mergedDir.exists()) {
+                mergedDir = new File(buildDir, "intermediates/merged_native_libs/${variant}/out/lib")
+            }
+
+            if (mergedDir.exists()) {
+                println "16KB ELF patch: scanning ${mergedDir}"
+                exec {
+                    commandLine 'python3',
+                        "${rootProject.projectDir}/../scripts/patch_elf_16kb.py",
+                        mergedDir.absolutePath
+                }
+            } else {
+                println "16KB ELF patch: directory not found, skipping"
+            }
         }
     }
 }
