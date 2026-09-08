@@ -33,9 +33,9 @@ android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
 The APK bundles everything needed at runtime:
-- Rootfs archive (`res/raw/rootfs_tar_gz`) — Debian Bookworm ARM64 with Java 25 Temurin JRE + Python bridge
 - PRoot binaries (`jniLibs/arm64-v8a/`) — Termux proot with seccomp mode
 - React Native JS bundle (compiled at build time)
+- Rootfs (Debian Bookworm ARM64 + Java 25 Temurin JRE + GAMA) is delivered at RUNTIME, NOT embedded (too large for Play): first launch downloads `rootfs_tar_gz` from GitHub releases (`https://github.com/hqnghi88/agama/releases/download/rootfs/rootfs_tar_gz`) via `PRootManager.downloadOrExtractRootfs` and extracts it. Store builds must NOT include `res/raw/rootfs_tar_gz` (re-added by `build-rootfs.sh`; delete it before a publish build, or the APK/AAB exceed Google Play's size limit).
 
 ## What the APK Does at Runtime
 
@@ -56,7 +56,8 @@ The APK bundles everything needed at runtime:
 
 | Path | Purpose |
 |------|---------|
-| `android/app/src/main/res/raw/rootfs_tar_gz` | Pre-built ARM64 rootfs (97 MB, tracked in git) |
+| `scripts/github-release-rootfs.sh` | Uploads the rootfs archive to GitHub Releases for first-run download |
+| `android/app/src/main/res/raw/rootfs_tar_gz` | Runtime-delivered rootfs (downloaded, not embedded; see above) |
 | `android/app/src/main/jniLibs/arm64-v8a/libproot.so` | PRoot binary for Android |
 | `proot-setup/startup.sh` | Entrypoint run inside PRoot at boot |
 | `proot-setup/bridge-server.py` | HTTP-to-GAMA-WebSocket bridge |

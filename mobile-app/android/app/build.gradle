@@ -23,8 +23,8 @@ android {
         applicationId "com.simulation.mobile"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 15
-        versionName "0.2.0"
+        versionCode 16
+        versionName "0.2.1"
     }
 
     signingConfigs {
@@ -37,7 +37,8 @@ android {
         release {
             def keystoreCandidates = [
                 System.getProperty("user.home") + '/Documents/gama-signing/release.keystore',
-                System.getProperty("user.home") + '/Documents/Documents - m5pro/gama-signing/release.keystore'
+                System.getProperty("user.home") + '/Documents/Documents - m5pro/gama-signing/release.keystore',
+                System.getProperty("user.home") + '/Documents/playstore signing/release.keystore'
             ]
             def keystorePath = keystoreCandidates.find { new File(it).exists() }
             if (keystorePath != null) {
