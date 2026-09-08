@@ -587,15 +587,32 @@ class PRootManager(private val context: Context) {
         |
         |# JOGL resolves native libs from GAMA_HOME/natives/<os>-<arch>, but the
         |# aarch64 natives jars only materialize in the OSGi cache at first run.
-        |# Extract the .so files so the 3D display can initialize (software GL).
+        |# Extract the .so files (flattened) so the 3D display can initialize
+        |# (software GL). unzip is not guaranteed inside the guest, so use python3.
         |extract_jogl_natives() {
         |  local dst=/opt/gama/natives/linux-aarch64
-        |  [ -f "${'$'}dst/libgluegen_rt.so" ] && return 0
+        |  [ -f "${'$'}dst/libgluegen_rt.so" ] && [ -f "${'$'}dst/libjogl_desktop.so" ] && return 0
         |  mkdir -p "${'$'}dst"
         |  for j in ${'$'}(find /opt/gama/configuration/org.eclipse.osgi -name '*-natives-linux-aarch64*.jar' 2>/dev/null); do
-        |    unzip -o -q "${'$'}j" '*.so' -d "${'$'}dst" 2>/dev/null
+        |    python3 - "${'$'}j" "${'$'}dst" <<'PY'
+        |import sys, zipfile, os
+        |jar, dst = sys.argv[1], sys.argv[2]
+        |with zipfile.ZipFile(jar) as z:
+        |    for n in z.namelist():
+        |        if n.endswith('.so') and '/' in n:
+        |            out = os.path.join(dst, os.path.basename(n))
+        |            with z.open(n) as src, open(out, 'wb') as f:
+        |                f.write(src.read())
+        |            os.chmod(out, 0o755)
+        |            sys.stderr.write(f"[natives] {out}\n")
+        |PY
         |  done
         |  chmod 755 "${'$'}dst"/*.so 2>/dev/null
+        |  if [ -f "${'$'}dst/libgluegen_rt.so" ]; then
+        |    echo "[startup] JOGL natives ready in ${'$'}dst"
+        |  else
+        |    echo "[startup] WARN: JOGL natives still missing in ${'$'}dst"
+        |  fi
         |  return 0
         |}
         |extract_jogl_natives

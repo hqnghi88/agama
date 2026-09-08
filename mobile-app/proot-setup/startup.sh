@@ -177,12 +177,31 @@ JOGL_ARGS="-Djogamp.gluegen.UseTempJarCache=false \
 # files so the 3D display can initialize under software GL (llvmpipe).
 extract_jogl_natives() {
   local dst=/opt/gama/natives/linux-aarch64
-  [ -f "$dst/libgluegen_rt.so" ] && return 0
+  [ -f "$dst/libgluegen_rt.so" ] && [ -f "$dst/libjogl_desktop.so" ] && return 0
   mkdir -p "$dst"
+  # Flatten the .so files out of the OSGi natives jars (they live under
+  # natives/linux-aarch64/ inside the jar). unzip is not guaranteed inside the
+  # guest, so use python3 (shipped with the rootfs) via zipfile.
   for j in $(find /opt/gama/configuration/org.eclipse.osgi -name '*-natives-linux-aarch64*.jar' 2>/dev/null); do
-    unzip -o -q "$j" '*.so' -d "$dst" 2>/dev/null
+    python3 - "$j" "$dst" <<'PY'
+import sys, zipfile, os
+jar, dst = sys.argv[1], sys.argv[2]
+with zipfile.ZipFile(jar) as z:
+    for n in z.namelist():
+        if n.endswith('.so') and '/' in n:
+            out = os.path.join(dst, os.path.basename(n))
+            with z.open(n) as src, open(out, 'wb') as f:
+                f.write(src.read())
+            os.chmod(out, 0o755)
+            sys.stderr.write(f"[natives] {out}\n")
+PY
   done
   chmod 755 "$dst"/*.so 2>/dev/null
+  if [ -f "$dst/libgluegen_rt.so" ]; then
+    echo "[startup] JOGL natives ready in $dst"
+  else
+    echo "[startup] WARN: JOGL natives still missing in $dst"
+  fi
   return 0
 }
 extract_jogl_natives
