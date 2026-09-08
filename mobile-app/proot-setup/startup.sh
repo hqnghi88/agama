@@ -29,6 +29,14 @@ export MESA_GLSL_VERSION_OVERRIDE=330
 export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe
 mkdir -p /opt/gama/logs /tmp /data /workspace 2>/dev/null
 
+# Bridge server (REST API on 8081) for the RN app; the in-app proxy forwards
+# 8080 -> 8081. Unset the X-related LD_PRELOAD so Python's loader stays clean.
+( unset LD_PRELOAD
+  nohup env BACKEND_PORT=8081 python3 /opt/gama/bridge-server.py \
+      >/opt/gama/logs/bridge.log 2>&1 &
+  echo "[startup] Bridge server starting on 8081 (pid $!)"
+)
+
 # LD_PRELOAD shim for X servers and GAMA (hard link fix under PRoot)
 if [ -f /opt/gama/override_link.so ]; then
   export LD_PRELOAD=/opt/gama/override_link.so

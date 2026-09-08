@@ -23,7 +23,7 @@ android {
         applicationId "com.simulation.mobile"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 17
+        versionCode 18
         versionName "0.2.1"
     }
 

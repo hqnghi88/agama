@@ -52,10 +52,10 @@ class PRootManager(private val context: Context) {
                         outputHolder.set(extractProcess.inputStream.bufferedReader().readText())
                     } catch (_: Exception) {}
                 }.apply { name = "tar-reader"; start() }
-                val finished = extractProcess.waitFor(5, TimeUnit.MINUTES)
+                val finished = waitForExtraction(extractProcess, rootfsDir, onProgress)
 
                 if (!finished) {
-                    Log.e(TAG, "Rootfs extraction timed out after 5 min — destroying")
+                    Log.e(TAG, "Rootfs extraction timed out after 20 min — destroying")
                     extractProcess.destroyForcibly()
                     rootfsDir.deleteRecursively()
                     readerThread.join(1000)
@@ -159,6 +159,32 @@ class PRootManager(private val context: Context) {
                 Log.w(TAG, "$label exited with code $code")
             }
         }
+    }
+
+    private fun waitForExtraction(
+        process: Process,
+        rootfsDir: File,
+        onProgress: ((String) -> Unit)? = null
+    ): Boolean {
+        val deadline = System.currentTimeMillis() + 20 * 60 * 1000L
+        var lastUpdate = 0L
+        while (process.isAlive) {
+            if (System.currentTimeMillis() >= deadline) {
+                return false
+            }
+            val now = System.currentTimeMillis()
+            if (now - lastUpdate >= 15_000) {
+                lastUpdate = now
+                val mb = rootfsDir.walkBottomUp()
+                    .mapNotNull { it.length().takeIf { l -> l > 0 } }
+                    .sum() / (1024 * 1024)
+                val msg = "extracting rootfs (this may take several minutes) … $mb MB"
+                Log.i(TAG, msg)
+                onProgress?.invoke(msg)
+            }
+            Thread.sleep(5_000)
+        }
+        return true
     }
 
     private fun makeExecutableBySuffix(rootfsDir: File, suffix: String) {
@@ -416,6 +442,14 @@ class PRootManager(private val context: Context) {
         |# Tell Mesa DRI loader where to find drivers and that /dev/dri may be missing
         |export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe
         |mkdir -p /opt/gama/logs /tmp /data /workspace 2>/dev/null
+        |
+        |# Bridge server (REST API on 8081) for the RN app; the in-app proxy forwards
+        |# 8080 -> 8081. Unset the X-related LD_PRELOAD so Python's loader stays clean.
+        |( unset LD_PRELOAD
+        |  nohup env BACKEND_PORT=8081 python3 /opt/gama/bridge-server.py \
+        |      >/opt/gama/logs/bridge.log 2>&1 &
+        |  echo "[startup] Bridge server starting on 8081 (pid $!)"
+        |)
         |
         |# LD_PRELOAD shim for X servers and GAMA (hard link fix under PRoot)
         |if [ -f /opt/gama/override_link.so ]; then

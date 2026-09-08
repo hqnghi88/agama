@@ -16,6 +16,8 @@ import android.view.inputmethod.BaseInputConnection
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
+import android.os.Handler
+import android.os.Looper
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.ReactContext
 import com.facebook.react.modules.core.DeviceEventManagerModule
@@ -199,6 +201,36 @@ class VncView @JvmOverloads constructor(
         Log.i(TAG, "Starting VNC client")
         currentInstance = this
         emitState("connecting")
+        if (SimulationService.backendStatus == "running") {
+            startClient()
+        } else {
+            Log.i(TAG, "Backend status '${SimulationService.backendStatus}' — deferring VNC connect")
+            scheduleDeferredStart()
+        }
+    }
+
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var autoRetries = 0
+
+    private val deferredStartRunnable = Runnable {
+        if (rfbClient != null) return@Runnable
+        if (SimulationService.backendStatus == "running") {
+            startClient()
+        } else {
+            scheduleDeferredStart()
+        }
+    }
+
+    private fun scheduleDeferredStart() {
+        mainHandler.removeCallbacks(deferredStartRunnable)
+        mainHandler.postDelayed(deferredStartRunnable, 3000)
+    }
+
+    private fun startClient() {
+        if (rfbClient != null) return
+        Log.i(TAG, "Starting VNC client (backend running)")
+        mainHandler.removeCallbacks(deferredStartRunnable)
+        autoRetries = 0
         rfbClient = VncRfbClient()
         rfbClient?.start(
             onFrame = { bitmap ->
@@ -208,8 +240,21 @@ class VncView @JvmOverloads constructor(
             onStateChange = { state ->
                 Log.i(TAG, "State: $state")
                 when (state) {
-                    VncRfbClient.VncState.CONNECTED -> emitState("connected")
-                    VncRfbClient.VncState.ERROR -> emitState("error")
+                    VncRfbClient.VncState.CONNECTED -> {
+                        autoRetries = 0
+                        emitState("connected")
+                    }
+                    VncRfbClient.VncState.ERROR -> {
+                        if (SimulationService.backendStatus == "running" && autoRetries < 200) {
+                            autoRetries += 1
+                            Log.i(TAG, "VNC error; auto-retrying in 3s ($autoRetries)")
+                            rfbClient = null
+                            scheduleDeferredStart()
+                            emitState("connecting")
+                        } else {
+                            emitState("error")
+                        }
+                    }
                     VncRfbClient.VncState.DISCONNECTED -> {
                         if (rfbClient != null) {
                             emitState("connecting")
@@ -225,6 +270,7 @@ class VncView @JvmOverloads constructor(
     fun stop() {
         Log.i(TAG, "Stopping VNC view")
         currentInstance = null
+        mainHandler.removeCallbacks(deferredStartRunnable)
         rfbClient?.stop()
         rfbClient = null
     }

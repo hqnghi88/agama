@@ -19,7 +19,7 @@ class VncRfbClient(
     companion object {
         const val TAG = "VncRfbClient"
         private const val RETRY_DELAY_MS = 3000L
-        private const val MAX_RETRIES = 120
+        private const val MAX_RETRIES = 300
         private const val FRAME_INTERVAL_MS = 50L
     }
 
@@ -252,6 +252,8 @@ class VncRfbClient(
     }
 
     private fun readRawRect(x: Int, y: Int, w: Int, h: Int) {
+        val target = bitmap ?: return
+        if (w <= 0 || h <= 0) return
         val pixels = IntArray(w * h)
         val rowBytes = w * 4
         val buf = ByteArray(rowBytes * h)
@@ -267,10 +269,17 @@ class VncRfbClient(
                 pixels[iy * w + ix] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
             }
         }
-        bitmap?.setPixels(pixels, 0, w,
-            x.coerceAtLeast(0), y.coerceAtLeast(0),
-            w.coerceAtMost(fbWidth - x.coerceAtLeast(0)),
-            h.coerceAtMost(fbHeight - y.coerceAtLeast(0)))
+
+        val clipX = x.coerceIn(0, target.width - 1)
+        val clipY = y.coerceIn(0, target.height - 1)
+        val clipW = minOf(w, target.width - clipX)
+        val clipH = minOf(h, target.height - clipY)
+        if (clipW <= 0 || clipH <= 0) return
+        try {
+            target.setPixels(pixels, 0, w, clipX, clipY, clipW, clipH)
+        } catch (e: Exception) {
+            Log.w(TAG, "setPixels failed (resize race)", e)
+        }
     }
 
     private fun skipRect(w: Int, h: Int) {

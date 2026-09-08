@@ -25,6 +25,8 @@ class SimulationService : Service() {
         const val ACTION_STATUS = "com.simulation.mobile.STATUS"
         const val CHANNEL_ID = "simulation_service"
         const val NOTIFICATION_ID = 1001
+        const val BACKEND_PORT = 8080
+        const val BRIDGE_PORT = 8081
 
         @Volatile
         var backendStatus: String = "stopped"
@@ -59,6 +61,7 @@ class SimulationService : Service() {
     }
 
     private var prootManager: PRootManager? = null
+    private var fallbackServer: FallbackHealthServer? = null
     private var vncProxyServer: VncProxyServer? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private val isRunning = AtomicBoolean(false)
@@ -101,6 +104,13 @@ class SimulationService : Service() {
             try {
                 backendStatus = "initializing"
                 updateNotification("Initializing...")
+
+                fallbackServer = FallbackHealthServer(BACKEND_PORT, BRIDGE_PORT)
+                if (fallbackServer?.start() == true) {
+                    Log.i(TAG, "Fallback health server started on port $BACKEND_PORT (proxy to $BRIDGE_PORT)")
+                } else {
+                    Log.w(TAG, "Fallback health server failed to start")
+                }
 
                 val rootfsDir = File(filesDir, "rootfs")
                 val workspaceDir = File(filesDir, "workspace")
@@ -176,6 +186,8 @@ class SimulationService : Service() {
         Log.d(TAG, "Stopping backend")
         backendStatus = "stopping"
         updateNotification("Stopping...")
+        fallbackServer?.stop()
+        fallbackServer = null
         vncProxyServer?.stop()
         vncProxyServer = null
         vncHttpPort = -1
