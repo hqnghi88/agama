@@ -330,9 +330,19 @@ class PRootManager(private val context: Context) {
             optDir.mkdirs()
 
             val script = File(optDir, "startup.sh")
-            val vncW = 960
-            val vncH = 540
-            script.writeText(generateStartupScript(vncW, vncH))
+            // Prefer a NEW-flow rootfs /startup.sh (synced from proot-setup/startup.sh by
+            // build-rootfs.sh when the rootfs is rebuilt). The prebuilt archive in git bakes
+            // the OLD tightvnc/fluxbox flow, so only trust it if it has the x11vnc -noshm
+            // marker; otherwise fall back to the inline generated script below.
+            val baked = File(rootfsDir, "startup.sh")
+            if (baked.exists() && baked.readText().contains("x11vnc -noshm")) {
+                baked.copyTo(script, overwrite = true)
+                Log.i(TAG, "Startup script copied from rootfs /startup.sh")
+            } else {
+                val vncW = 960
+                val vncH = 540
+                script.writeText(generateStartupScript(vncW, vncH))
+            }
             script.setExecutable(true)
 
             Log.i(TAG, "Startup script written to ${script.absolutePath}")
@@ -426,8 +436,11 @@ class PRootManager(private val context: Context) {
         |  echo "nameserver 8.8.4.4" >> /etc/resolv.conf 2>/dev/null || true
         |fi
         |
-        |# X server + VNC: try Xvnc first (tightvncserver), fallback Xvfb+x11vnc
-        |# Xvnc is preferred: it's a combined X+VNC server, no lock file / XKB issues
+        |# X server + VNC: Xvfb (patched, preplaced keymap) + x11vnc -noshm.
+        |# Single-instance guard: kill any stale Xvfb/x11vnc left by a previous boot
+        |# (keep-alive relaunch loops can otherwise pile up servers).
+        |pkill -f 'Xvfb :0' 2>/dev/null || true
+        |pkill -x x11vnc 2>/dev/null || true
         |rm -f /tmp/.X0-lock /tmp/.X11-unix/X0 2>/dev/null || true
         |mkdir -p /tmp/.X11-unix 2>/dev/null || true
         |
@@ -438,77 +451,67 @@ class PRootManager(private val context: Context) {
         |
         |X_SERVER_LOG=/opt/gama/logs/xserver.log
         |
-        |# Prefer Xvfb over Xvnc: Xvfb supports full GLX for Mesa/llvmpipe.
-        |# tightvnc's Xvnc has no GLX — OpenGL apps (JOGL) won't work with it.
-        |if command -v Xvfb &>/dev/null; then
+        |# Pre-place compiled keymap so the server's in-process xkbcomp is a no-op
+        |# (server loads /var/lib/xkb/server-<display>.xkm and unlinks it, so re-do every boot)
+        |mkdir -p /usr/share/X11/xkb/keymap /usr/share/X11/xkb/compiled /var/lib/xkb/compiled /var/lib/xkb /tmp/compiled 2>/dev/null
+        |if [ ! -s /opt/gama/default.xkm ]; then
+        |  cat > /tmp/kb.xkb <<'END'
+        |xkb_keymap {
+        |  xkb_keycodes { include "evdev+aliases(qwerty)" };
+        |  xkb_types    { include "complete" };
+        |  xkb_compat   { include "complete" };
+        |  xkb_symbols  { include "pc+us+inet(evdev)" };
+        |};
+        |END
+        |  xkbcomp -w 2 -I/usr/share/X11/xkb -R/usr/share/X11/xkb -xkm -o /usr/share/X11/xkb/compiled/xfree86 /tmp/kb.xkb >>${'$'}X_SERVER_LOG 2>&1
+        |  cp /usr/share/X11/xkb/compiled/xfree86 /opt/gama/default.xkm 2>/dev/null
+        |fi
+        |cp /opt/gama/default.xkm /var/lib/xkb/server-0.xkm 2>/dev/null
+        |cp /opt/gama/default.xkm /var/lib/xkb/compiled/server-0.xkm 2>/dev/null
+        |cp /opt/gama/default.xkm /tmp/compiled/server-0.xkm 2>/dev/null
+        |chmod 666 /var/lib/xkb/server-0.xkm 2>/dev/null
+        |echo "[startup] preplaced /var/lib/xkb/server-0.xkm: ${'$'}(ls -la /var/lib/xkb/server-0.xkm 2>&1)" >>${'$'}X_SERVER_LOG
+        |
+        |# Xvfb is the sole X server: its in-process xkbcomp is bypassed by the
+        |# pre-placed /var/lib/xkb/server-0.xkm + NOP'd checks in the binary, and
+        |# override_link.so shims the hard-link failure it hits under PRoot.
+        |start_xfb() {
         |  echo "[startup] Starting Xvfb on display ${'$'}DISPLAY..."
+        |  : > ${'$'}X_SERVER_LOG
+        |  LD_PRELOAD=/opt/gama/override_link.so \
         |  XKB_CONFIG_ROOT=/usr/share/X11/xkb \
         |  Xvfb ${'$'}DISPLAY -screen 0 ${'$'}{VNC_WIDTH}x${'$'}{VNC_HEIGHT}x24 -pixdepths 8 16 24 32 \
         |    -noreset +extension GLX +extension RENDER +extension COMPOSITE \
-        |    -xkbdir /usr/share/X11/xkb \
-        |    &>${'$'}X_SERVER_LOG 2>&1 &
+        |    &>>${'$'}X_SERVER_LOG 2>&1 &
         |  XVFB_PID=${'$'}!
-        |  sleep 4
+        |  for i in ${'$'}(seq 1 30); do
+        |    kill -0 ${'$'}XVFB_PID 2>/dev/null || break
+        |    sleep 1
+        |  done
         |  if kill -0 ${'$'}XVFB_PID 2>/dev/null; then
         |    echo "[startup] Xvfb running (PID ${'$'}XVFB_PID)"
-        |    echo "[startup] Starting x11vnc on port ${'$'}VNC_PORT..."
-        |    x11vnc -display ${'$'}DISPLAY -forever -nopw -quiet -rfbport ${'$'}VNC_PORT &>/opt/gama/logs/x11vnc.log 2>&1 &
         |    X_SERVER_RUNNING=true
         |  else
         |    echo "[startup] Xvfb failed, tail of log:"
-        |    tail -10 ${'$'}X_SERVER_LOG 2>/dev/null || true
-        |    # Retry with -kb (no XKB) in case xkb-data is broken under PRoot
-        |    echo "[startup] Retrying Xvfb with -kb (no XKB)..."
-        |    Xvfb ${'$'}DISPLAY -screen 0 ${'$'}{VNC_WIDTH}x${'$'}{VNC_HEIGHT}x24 -pixdepths 8 16 24 32 \
-        |      -noreset +extension GLX +extension RENDER +extension COMPOSITE \
-        |      -kb \
-        |      &>${'$'}X_SERVER_LOG 2>&1 &
-        |    XVFB_PID=${'$'}!
-        |    sleep 4
-        |    if kill -0 ${'$'}XVFB_PID 2>/dev/null; then
-        |      echo "[startup] Xvfb running (PID ${'$'}XVFB_PID, no XKB)"
-        |      echo "[startup] Starting x11vnc on port ${'$'}VNC_PORT..."
-        |      x11vnc -display ${'$'}DISPLAY -forever -nopw -quiet -rfbport ${'$'}VNC_PORT &>/opt/gama/logs/x11vnc.log 2>&1 &
-        |      X_SERVER_RUNNING=true
-        |    else
-        |      echo "[startup] Xvfb still fails, tail:"
-        |      tail -10 ${'$'}X_SERVER_LOG 2>/dev/null || true
-        |    fi
+        |    tail -20 ${'$'}X_SERVER_LOG 2>/dev/null || true
         |  fi
-        |fi
+        |}
         |
-        |if [ "${'$'}X_SERVER_RUNNING" = false ]; then
-        |  # Fallback: Xvnc from tightvncserver (no GLX, basic VNC only)
-        |  XVNC_BIN=""
-        |  if command -v Xvnc &>/dev/null; then
-        |    XVNC_BIN=Xvnc
-        |  elif [ -f /usr/bin/Xtightvnc ]; then
-        |    XVNC_BIN=/usr/bin/Xtightvnc
-        |  fi
-        |  if [ -z "${'$'}XVNC_BIN" ]; then
-        |    echo "[startup] Xvnc not found, installing tightvncserver..."
-        |    apt-get install -y -qq tightvncserver 2>/dev/null
-        |    if command -v Xvnc &>/dev/null; then
-        |      XVNC_BIN=Xvnc
-        |    elif [ -f /usr/bin/Xtightvnc ]; then
-        |      XVNC_BIN=/usr/bin/Xtightvnc
-        |    fi
-        |  fi
-        |  if [ -n "${'$'}XVNC_BIN" ]; then
-        |    echo "[startup] Starting Xvnc (${'$'}XVNC_BIN) on display ${'$'}DISPLAY port ${'$'}VNC_PORT..."
-        |    ${'$'}XVNC_BIN ${'$'}DISPLAY -geometry ${'$'}{VNC_WIDTH}x${'$'}{VNC_HEIGHT} -depth 24 -rfbport ${'$'}VNC_PORT \
-        |      -localhost -desktop GAMA \
-        |      &>${'$'}X_SERVER_LOG 2>&1 &
-        |    XVNC_PID=${'$'}!
-        |    sleep 4
-        |    if kill -0 ${'$'}XVNC_PID 2>/dev/null; then
-        |      echo "[startup] Xvnc running (PID ${'$'}XVNC_PID)"
-        |      X_SERVER_RUNNING=true
-        |    else
-        |      echo "[startup] Xvnc died, tail of log:"
-        |      tail -20 ${'$'}X_SERVER_LOG 2>/dev/null || true
-        |    fi
-        |  fi
+        |start_xfb
+        |
+        |if [ "${'$'}X_SERVER_RUNNING" = true ]; then
+        |  echo "[startup] Starting x11vnc on port ${'$'}VNC_PORT (with relaunch loop)..."
+        |  (
+        |    while [ -d /tmp/.X11-unix ]; do
+        |      if ! pgrep -x x11vnc >/dev/null 2>&1; then
+        |        echo "[x11vnc] launching ${'$'}(date +%H:%M:%S)" >>/opt/gama/logs/x11vnc.log
+        |        x11vnc -display ${'$'}DISPLAY -forever -shared -nopw -noxdamage \
+        |          -noshm -localhost -rfbport ${'$'}VNC_PORT >/opt/gama/logs/x11vnc.err 2>&1
+        |        echo "[x11vnc] exited rc=${'$'}? ${'$'}(date +%H:%M:%S)" >>/opt/gama/logs/x11vnc.log
+        |      fi
+        |      sleep 5
+        |    done
+        |  ) &
         |fi
         |
         |# Wait for VNC port (up to 60s)
@@ -540,11 +543,28 @@ class PRootManager(private val context: Context) {
         |
         |# From c.sh: cd gama && ./Gama
         |GAMA_HOME=/opt/gama
-        |# JOGL common args to force software rendering / avoid GLX issues
+        |# JOGL common args to force software rendering / avoid GLX issues.
+        |# NOTE: -Dnativewindow.ws.name=x11 must NOT be set: NEWT then resolves the
+        |# x11.DisplayDriver class from the gama.ui.display.opengl bundle loader,
+        |# which fails (ClassNotFoundException) and breaks the 3D display.
         |JOGL_ARGS="-Djogamp.gluegen.UseTempJarCache=false \
         |  -Djogamp.opengl.GLContext.nativeGL2=1 \
-        |  -Dnativewindow.ws.name=x11 \
         |  -Djava.awt.headless=false"
+        |
+        |# JOGL resolves native libs from GAMA_HOME/natives/<os>-<arch>, but the
+        |# aarch64 natives jars only materialize in the OSGi cache at first run.
+        |# Extract the .so files so the 3D display can initialize (software GL).
+        |extract_jogl_natives() {
+        |  local dst=/opt/gama/natives/linux-aarch64
+        |  [ -f "${'$'}dst/libgluegen_rt.so" ] && return 0
+        |  mkdir -p "${'$'}dst"
+        |  for j in ${'$'}(find /opt/gama/configuration/org.eclipse.osgi -name '*-natives-linux-aarch64*.jar' 2>/dev/null); do
+        |    unzip -o -q "${'$'}j" '*.so' -d "${'$'}dst" 2>/dev/null
+        |  done
+        |  chmod 755 "${'$'}dst"/*.so 2>/dev/null
+        |  return 0
+        |}
+        |extract_jogl_natives
         |
         |# Helper: launch GAMA with LD_PRELOAD for hard link fix
         |run_gama() {
@@ -593,7 +613,15 @@ class PRootManager(private val context: Context) {
             return destFile
         }
 
-        // Try downloading from GitHub Releases
+        // Preferred: bundled APK raw resource (authoritative for this build)
+        onProgress?.invoke("extracting rootfs from app bundle")
+        val bundled = extractRawResource(ROOTFS_ARCHIVE, destDir)
+        if (bundled != null && bundled.length() > 10_000_000) {
+            Log.i(TAG, "Rootfs archive extracted from bundle: ${bundled.length()} bytes")
+            return bundled
+        }
+
+        // Fallback: try downloading from GitHub Releases
         onProgress?.invoke("downloading rootfs from GitHub")
         Log.i(TAG, "Downloading rootfs from $ROOTFS_URL")
         try {

@@ -100,8 +100,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Python for bridge server
     python3 \
     python3-pip \
-    # VNC fallback when Xvfb hard-link locking fails under PRoot
-    tightvncserver \
+    # TigerVNC Xvnc: combined X+VNC server WITH GLX (software GL via Mesa llvmpipe).
+    # TightVNC's Xvnc has no GLX — OpenGL apps (JOGL) won't render 3D.
+    # x11-xkb-utils + xkb-data needed for X server core keyboard setup.
+    tigervnc-standalone-server \
+    x11-xkb-utils \
+    xkb-data \
     # System utilities
     ca-certificates \
     curl \
@@ -241,6 +245,28 @@ fi
 
 # Remove AppleDouble metadata files from macOS
 find "${OUTPUT_DIR}" -name '._*' -delete 2>/dev/null || true
+
+# ─── Patch Xvfb/Xtigervnc for PRoot (XKB + keymap workaround) ─────────
+# Required for the X server to come up inside PRoot on Android:
+#   * NOP a failing in-process keymap branch,
+#   * stop it spawning xkbcomp (keymap is pre-placed by startup.sh).
+# Idempotent and digest-verified; skips unknown binaries.
+if [ -f "${SCRIPT_DIR}/patch-xvfb.py" ]; then
+    echo "[rootfs] Patching Xvfb/Xtigervnc for PRoot..."
+    python3 "${SCRIPT_DIR}/patch-xvfb.py" \
+        "${OUTPUT_DIR}/usr/bin/Xvfb" \
+        "${OUTPUT_DIR}/usr/bin/Xtigervnc"
+fi
+
+# ─── Patch Mesa libGLX swap-interval crash (JOGL 3D under llvmpipe) ────
+# JOGL's setSwapInterval -> glXQueryDrawable derefs a NULL drawable callback
+# for swrast, aborting the JVM; this NOPs the three entry points. Idempotent
+# and digest-verified; skips unknown binaries.
+if [ -f "${SCRIPT_DIR}/patch-mesa-glx.py" ]; then
+    echo "[rootfs] Patching libGLX_mesa for PRoot..."
+    python3 "${SCRIPT_DIR}/patch-mesa-glx.py" \
+        "${OUTPUT_DIR}/usr/lib/aarch64-linux-gnu/libGLX_mesa.so.0.0.0"
+fi
 
 # ─── Set permissions ──────────────────────────────────────────────────
 echo "[rootfs] Setting permissions..."

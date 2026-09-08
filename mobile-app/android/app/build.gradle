@@ -40,13 +40,14 @@ android {
                 System.getProperty("user.home") + '/Documents/Documents - m5pro/gama-signing/release.keystore'
             ]
             def keystorePath = keystoreCandidates.find { new File(it).exists() }
-            if (keystorePath == null) {
-                throw new GradleException("release.keystore not found in: " + keystoreCandidates)
+            if (keystorePath != null) {
+                storeFile file(keystorePath)
+                storePassword 'gama2026'
+                keyAlias 'gama-release'
+                keyPassword 'gama2026'
+            } else {
+                logger.warn("release.keystore not found in: " + keystoreCandidates + " — release signing unavailable")
             }
-            storeFile file(keystorePath)
-            storePassword 'gama2026'
-            keyAlias 'gama-release'
-            keyPassword 'gama2026'
         }
     }
 
