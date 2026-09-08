@@ -1,5 +1,5 @@
 import React, {useState, useEffect, useRef, useCallback} from 'react';
-import {View, Text, StyleSheet, DeviceEventEmitter, requireNativeComponent, BackHandler, TouchableOpacity, NativeModules, Animated, Easing} from 'react-native';
+import {View, Text, StyleSheet, DeviceEventEmitter, requireNativeComponent, BackHandler, TouchableOpacity, NativeModules, ScrollView} from 'react-native';
 import {useResponsive} from '../hooks/useResponsive';
 
 interface VncScreenProps {
@@ -24,18 +24,13 @@ const VncScreen: React.FC<VncScreenProps> = ({onBack}) => {
   const progressRef = useRef<any>(null);
   const retryCount = useRef(0);
   const {s} = useResponsive();
-  const shimmer = useRef(new Animated.Value(0)).current;
+  const logScrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
-    Animated.loop(
-      Animated.timing(shimmer, {
-        toValue: 1,
-        duration: 1500,
-        easing: Easing.linear,
-        useNativeDriver: false,
-      }),
-    ).start();
-  }, [shimmer]);
+    if (logScrollRef.current && setupLog.length > 0) {
+      logScrollRef.current.scrollToEnd({animated: false});
+    }
+  }, [setupLog]);
 
   const toggleKeyboard = useCallback(() => {
     NativeModules.SimulationModule.toggleKeyboard();
@@ -98,6 +93,19 @@ const VncScreen: React.FC<VncScreenProps> = ({onBack}) => {
 
   const lastLog = setupLog[setupLog.length - 1] || '';
 
+  const clean = (line: string) =>
+    line.replace(/\u001b\[[0-9;]*m/g, '').replace(/\r/g, '').trim();
+
+  const lineColor = (line: string) => {
+    const l = line.toLowerCase();
+    if (l.includes('error') || l.includes('fail') || l.includes('exception')) return '#f87171';
+    if (l.includes('complete') || l.includes('ready') || l.includes('started') || l.includes('ok')) return '#4ade80';
+    if (l.includes('extract') || l.includes('download') || l.includes('boot') || l.includes('start')) return '#7dd3fc';
+    return '#c9d7e8';
+  };
+
+  const cs = consoleStyles(s);
+
   return (
     <View style={styles.container}>
       <NativeVncView style={styles.vncView} />
@@ -105,49 +113,32 @@ const VncScreen: React.FC<VncScreenProps> = ({onBack}) => {
         <View style={StyleSheet.absoluteFill}>
           <View style={styles.center}>
             {vncState === 'connecting' && (
-              <>
-                <Text style={{color: '#3b82f6', fontSize: s(20), fontFamily: 'monospace', fontWeight: '700', marginBottom: s(20)}}>
-                  GAMA Mobile
-                </Text>
-                {setupLog.length > 0 && (
-                  <View style={{width: '85%', maxHeight: s(200), backgroundColor: '#0c0f1a', borderRadius: s(8), padding: s(10), marginBottom: s(16), borderWidth: 1, borderColor: '#1e293b'}}>
-                    {setupLog.map((line, i) => (
-                      <Text key={i} style={{color: line.includes('error') || line.includes('fail') ? '#ef4444' : line.includes('complete') || line.includes('ready') ? '#22c55e' : '#94a3b8', fontSize: s(13), fontFamily: 'monospace', lineHeight: s(20)}}>
-                        {line}
-                      </Text>
-                    ))}
-                  </View>
-                )}
-                <View style={{width: s(200), height: s(4), backgroundColor: '#1e293b', borderRadius: s(2), overflow: 'hidden'}}>
-                  <Animated.View
-                    style={{
-                      width: s(200),
-                      height: s(4),
-                      backgroundColor: '#3b82f6',
-                      borderRadius: s(2),
-                      opacity: shimmer.interpolate({
-                        inputRange: [0, 0.5, 1],
-                        outputRange: [0.3, 1, 0.3],
-                      }),
-                      transform: [{
-                        translateX: shimmer.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [-s(100), s(100)],
-                        }),
-                      }],
-                    }}
-                  />
+              <View style={cs.consoleWrap}>
+                <View style={cs.consoleHeader}>
+                  <Text style={cs.consoleTitle}>GAMA Mobile</Text>
+                  <Text style={cs.consoleHeaderStatus}>boot console</Text>
                 </View>
-                {lastLog ? (
-                  <Text style={{color: '#64748b', fontSize: s(14), fontFamily: 'monospace', marginTop: s(12), textAlign: 'center', paddingHorizontal: s(20)}}>
-                    {lastLog}
+                <ScrollView
+                  ref={logScrollRef}
+                  style={cs.consoleBody}
+                  contentContainerStyle={cs.consoleContent}
+                  showsVerticalScrollIndicator={false}>
+                  {setupLog.length === 0 ? (
+                    <Text style={[cs.consoleLine, {color: '#4a6d8c'}]}>&gt; waiting for backend…</Text>
+                  ) : (
+                    setupLog.map((line, i) => (
+                      <Text key={i} style={[cs.consoleLine, {color: lineColor(line)}]}>
+                        {clean(line)}
+                      </Text>
+                    ))
+                  )}
+                </ScrollView>
+                <View style={cs.consoleFooter}>
+                  <Text style={cs.consolePrompt}>
+                    {clean(lastLog) ? `▌ ${clean(lastLog)}` : '▌ initializing…'}
                   </Text>
-                ) : (
-                  <Text style={{color: '#64748b', fontSize: s(14), fontFamily: 'monospace', marginTop: s(12)}}>
-                    Initializing...
-                  </Text>
-                )}
-              </>
+                </View>
+              </View>
             )}
             {(vncState === 'timeout' || vncState === 'error') && (
               <>
@@ -216,6 +207,139 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  consoleWrap: {
+    flex: 1,
+    alignSelf: 'stretch',
+    marginTop: 48,
+    marginHorizontal: 20,
+    marginBottom: 24,
+    backgroundColor: '#060a12',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#1b2a3a',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 6},
+    shadowOpacity: 0.45,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  consoleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    backgroundColor: '#0b1220',
+    borderBottomWidth: 1,
+    borderBottomColor: '#16233a',
+  },
+  consoleTitle: {
+    color: '#7dd3fc',
+    fontFamily: 'monospace',
+    fontWeight: '700',
+    fontSize: 26,
+    letterSpacing: 1,
+  },
+  consoleHeaderStatus: {
+    color: '#3d6b8f',
+    fontFamily: 'monospace',
+    fontSize: 18,
+  },
+  consoleBody: {
+    flex: 1,
+  },
+  consoleContent: {
+    paddingHorizontal: 22,
+    paddingVertical: 18,
+  },
+  consoleLine: {
+    color: '#c9d7e8',
+    fontFamily: 'monospace',
+    fontSize: 36,
+    lineHeight: 44,
+  },
+  consoleFooter: {
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    backgroundColor: '#0b1220',
+    borderTopWidth: 1,
+    borderTopColor: '#16233a',
+  },
+  consolePrompt: {
+    color: '#22d3ee',
+    fontFamily: 'monospace',
+    fontSize: 32,
+    lineHeight: 40,
+  },
+});
+
+const consoleStyles = (s: (n: number) => number) => ({
+  consoleWrap: {
+    flex: 1,
+    alignSelf: 'stretch' as const,
+    marginTop: s(48),
+    marginHorizontal: s(20),
+    marginBottom: s(24),
+    backgroundColor: '#060a12',
+    borderRadius: s(12),
+    borderWidth: 1,
+    borderColor: '#1b2a3a',
+    overflow: 'hidden' as const,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 6},
+    shadowOpacity: 0.45,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  consoleHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    paddingHorizontal: s(20),
+    paddingVertical: s(14),
+    backgroundColor: '#0b1220',
+    borderBottomWidth: 1,
+    borderBottomColor: '#16233a',
+  },
+  consoleTitle: {
+    color: '#7dd3fc',
+    fontFamily: 'monospace',
+    fontWeight: '700' as const,
+    fontSize: s(26),
+    letterSpacing: 1,
+  },
+  consoleHeaderStatus: {
+    color: '#3d6b8f',
+    fontFamily: 'monospace',
+    fontSize: s(18),
+  },
+  consoleBody: {
+    flex: 1,
+  },
+  consoleContent: {
+    paddingHorizontal: s(22),
+    paddingVertical: s(18),
+  },
+  consoleLine: {
+    color: '#c9d7e8',
+    fontFamily: 'monospace',
+    fontSize: s(36),
+    lineHeight: s(44),
+  },
+  consoleFooter: {
+    paddingHorizontal: s(20),
+    paddingVertical: s(14),
+    backgroundColor: '#0b1220',
+    borderTopWidth: 1,
+    borderTopColor: '#16233a',
+  },
+  consolePrompt: {
+    color: '#22d3ee',
+    fontFamily: 'monospace',
+    fontSize: s(32),
+    lineHeight: s(40),
   },
 });
 
