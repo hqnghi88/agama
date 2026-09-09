@@ -179,25 +179,33 @@ extract_jogl_natives() {
   local dst=/opt/gama/natives/linux-aarch64
   [ -f "$dst/libgluegen_rt.so" ] && [ -f "$dst/libjogl_desktop.so" ] && return 0
   mkdir -p "$dst"
-  # Flatten the .so files out of the OSGi natives jars (they live under
-  # natives/linux-aarch64/ inside the jar). unzip is not guaranteed inside the
-  # guest, so use python3 (shipped with the rootfs) via zipfile.
-  for j in $(find /opt/gama/configuration/org.eclipse.osgi -name '*-natives-linux-aarch64*.jar' 2>/dev/null); do
-    python3 - "$j" "$dst" <<'PY'
-import sys, zipfile, os
-jar, dst = sys.argv[1], sys.argv[2]
-with zipfile.ZipFile(jar) as z:
-    for n in z.namelist():
-        if n.endswith('.so') and '/' in n:
-            out = os.path.join(dst, os.path.basename(n))
-            with z.open(n) as src, open(out, 'wb') as f:
-                f.write(src.read())
-            os.chmod(out, 0o755)
-            sys.stderr.write(f"[natives] {out}\n")
+  # The JOGL natives jars are EMBEDDED inside the shipped OpenGL plugin jar
+  # (present from the very first boot, unlike the OSGi cache which only
+  # materializes after GAMA has run). Read them straight out of the plugin and
+  # flatten their natives/linux-aarch64/*.so into $dst. unzip is not guaranteed
+  # inside the guest, so use python3 (shipped with the rootfs).
+  local plugin
+  plugin=$(ls /opt/gama/plugins/gama.ui.display.opengl_*.jar 2>/dev/null | head -1)
+  if [ -n "$plugin" ]; then
+    python3 - "$plugin" "$dst" <<'PY'
+import sys, zipfile, os, io
+plugin, dst = sys.argv[1], sys.argv[2]
+with zipfile.ZipFile(plugin) as pz:
+    nested = [n for n in pz.namelist()
+              if n.startswith('lib/') and n.endswith('-natives-linux-aarch64.jar')]
+    for nj in nested:
+        nz = zipfile.ZipFile(io.BytesIO(pz.read(nj)))
+        for n in nz.namelist():
+            if n.endswith('.so') and '/' in n:
+                out = os.path.join(dst, os.path.basename(n))
+                with nz.open(n) as src, open(out, 'wb') as f:
+                    f.write(src.read())
+                os.chmod(out, 0o755)
+                sys.stderr.write(f"[natives] {out}\n")
 PY
-  done
+  fi
   chmod 755 "$dst"/*.so 2>/dev/null
-  if [ -f "$dst/libgluegen_rt.so" ]; then
+  if [ -f "$dst/libgluegen_rt.so" ] && [ -f "$dst/libjogl_desktop.so" ]; then
     echo "[startup] JOGL natives ready in $dst"
   else
     echo "[startup] WARN: JOGL natives still missing in $dst"
