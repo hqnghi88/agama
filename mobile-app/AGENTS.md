@@ -9,7 +9,7 @@
 ```
 
 This is the only command you need. It handles everything:
-- Checks prerequisites (JDK 21, Node.js, npm, Docker, Android SDK)
+- Checks prerequisites (JDK 25, Node.js, npm, Docker, Android SDK)
 - Creates `android/local.properties` if missing
 - Runs `npm install` (reproducible via `package-lock.json`)
 - Uses the pre-built rootfs from git (or rebuilds it via Docker)
@@ -19,7 +19,7 @@ This is the only command you need. It handles everything:
 
 | Tool | Version | Notes |
 |------|---------|-------|
-| JDK | ≥ 21 | Eclipse Temurin recommended (used in CI) |
+| JDK | 25 | Eclipse Temurin. **Never use JDK 21** for builds |
 | Node.js | ≥ 18 | LTS version |
 | npm | ≥ 9 | Ships with Node.js |
 | Docker | latest | Only needed to rebuild rootfs (optional) |
@@ -64,6 +64,7 @@ The APK bundles everything needed at runtime:
 | `proot-setup/java-env.sh` | Java environment (Java 25 Temurin) |
 | `proot-setup/gama-launcher.sh` | GAMA headless product launcher |
 | `scripts/build.sh` | One-command build orchestrator |
+| `scripts/patch-rn-gradle-plugin.sh` | Patches node_modules RN gradle plugin for Gradle 9 + JDK 25 (re-run after npm install) |
 | `scripts/build-rootfs.sh` | Docker-based rootfs builder |
 
 ## Advanced: Rebuild Rootfs from Scratch
@@ -83,7 +84,7 @@ This uses Docker with QEMU to build an ARM64 Debian Bookworm rootfs with:
 
 ## Common Issues
 
-- **JDK version**: If `javac --version` shows < 21, set `JAVA_HOME` to a JDK 21+ installation
-- **Android SDK**: If `ANDROID_HOME` is not set, the script tries `~/Library/Android/sdk` (macOS default)
+- **JDK version**: Builds use JDK 25 (Temurin) and Gradle 9.1.0 + AGP 8.13.2. **Never use JDK 21** — Kotlin 1.9.x/2.0.x compilers crash on JDK 25's version string, and Gradle 8.6's embedded Kotlin is too old to run at all; if `javac --version` shows < 25, set `JAVA_HOME` to the Temurin 25 installation. If `npm install` runs again, re-apply `scripts/patch-rn-gradle-plugin.sh` (it patches the RN gradle plugin for Gradle 9 + JDK 25; `build.sh` does this automatically after npm install)
+- **Android SDK**: If `ANDROID_HOME` is not set, the script uses `/Users/hqnghi/.cache/gama-android-tools/android-sdk` (`local.properties` points there too)
 - **Docker on macOS**: Ensure Docker Desktop is running with QEMU support enabled
 - **ADB device not found**: Enable USB debugging, accept RSA fingerprint

@@ -222,11 +222,13 @@ run_gama() {
     DISPLAY=:0 ./Gama -vmargs \
       -Dosgi.locking=none \
       -Dorg.eclipse.core.resources.disable.workspace.locking=true \
+      --add-modules=jdk.incubator.vector \
       $JOGL_ARGS &>/opt/gama/logs/gama.log 2>&1
   else
     DISPLAY=:0 ./Gama -vmargs \
       -Dosgi.locking=none \
       -Dorg.eclipse.core.resources.disable.workspace.locking=true \
+      --add-modules=jdk.incubator.vector \
       $JOGL_ARGS &>/opt/gama/logs/gama.log 2>&1
   fi
 }

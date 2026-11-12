@@ -21,7 +21,8 @@ header(){ echo -e "\n${CYAN}══ $1 ══${NC}"; }
 # These match the current working device setup (Java 25 Temurin, ARM64)
 JAVA_25_VERSION="jdk-25.0.3+9"
 JAVA_25_URL="https://github.com/adoptium/temurin25-binaries/releases/download/${JAVA_25_VERSION}/OpenJDK25U-jre_aarch64_linux_hotspot_${JAVA_25_VERSION}.tar.gz"
-BUILD_JDK_VERSION="21"  # JDK version needed to compile the Android app
+BUILD_JDK_VERSION="25"  # JDK version needed to compile the Android app (NEVER use JDK 21)
+ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-/Users/hqnghi/.cache/gama-android-tools/android-sdk}"
 ROOTFS_ARCHIVE="${MOBILE_ROOT}/android/app/src/main/res/raw/rootfs_tar_gz"
 
 # ─── Check Prerequisites ──────────────────────────────────────────────
@@ -34,7 +35,7 @@ check_prereqs() {
   echo "  ====================================="
   echo ""
 
-  # JDK 21 for Android build
+  # JDK 25 for Android build (JDK 21 is NOT supported/used for this build)
   if command -v javac &>/dev/null; then
     javac_version=$(javac -version 2>&1 | grep -o '[0-9]\+' | head -1)
     if [ "$javac_version" -ge "$BUILD_JDK_VERSION" ] 2>/dev/null; then
@@ -72,7 +73,7 @@ check_prereqs() {
   fi
 
   # Android SDK
-  ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
+  ANDROID_HOME="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$HOME/Library/Android/sdk}}"
   if [ -d "$ANDROID_HOME" ]; then
     pass "Android SDK at ${ANDROID_HOME}"
   else
@@ -104,11 +105,16 @@ install_js_deps() {
   cd "$MOBILE_ROOT"
   if [ -d "node_modules" ] && [ -f "node_modules/.package-lock.json" ]; then
     pass "node_modules already installed"
-    return
+  else
+    info "Running npm install..."
+    npm install --legacy-peer-deps
+    pass "npm install complete"
   fi
-  info "Running npm install..."
-  npm install --legacy-peer-deps
-  pass "npm install complete"
+  # The RN gradle plugin shipped by npm is incompatible with the
+  # JDK 25 / Gradle 9.1 build — apply the compat patch.
+  if [ -f "${SCRIPT_DIR}/patch-rn-gradle-plugin.sh" ]; then
+    "${SCRIPT_DIR}/patch-rn-gradle-plugin.sh"
+  fi
 }
 
 # ─── Build Rootfs (optional — git already has a pre-built archive) ────
@@ -144,8 +150,8 @@ build_apk() {
   rm -f "app/build/generated/assets/react/debug/index.android.bundle"
 
   info "Running assembleDebug..."
-  JAVA_HOME="${JAVA_HOME:-/Library/Java/JavaVirtualMachines/jdk-${BUILD_JDK_VERSION}.jdk/Contents/Home}" \
-  ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}" \
+  JAVA_HOME="${JAVA_HOME:-/Library/Java/JavaVirtualMachines/temurin-25.jdk/Contents/Home}" \
+  ANDROID_HOME="${ANDROID_HOME:-/Users/hqnghi/.cache/gama-android-tools/android-sdk}" \
   ./gradlew assembleDebug
 
   local apk="app/build/outputs/apk/debug/app-debug.apk"

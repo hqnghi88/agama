@@ -95,7 +95,8 @@ tasks.whenTaskAdded { task ->
 
             if (mergedDir.exists()) {
                 println "16KB ELF patch: scanning ${mergedDir}"
-                exec {
+                def execOps = services.get(org.gradle.process.ExecOperations)
+                execOps.exec {
                     commandLine 'python3',
                         "${rootProject.projectDir}/../scripts/patch_elf_16kb.py",
                         mergedDir.absolutePath

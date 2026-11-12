@@ -362,7 +362,18 @@ class PRootManager(private val context: Context) {
             // marker; otherwise fall back to the inline generated script below.
             val baked = File(rootfsDir, "startup.sh")
             if (baked.exists() && baked.readText().contains("x11vnc -noshm")) {
-                baked.copyTo(script, overwrite = true)
+                val bakedText = baked.readText()
+                // Older baked rootfs archives shipped a launch line without the Vector API
+                // module. GAMA's engine uses jdk.incubator.vector, which exists in the guest's
+                // JDK 25 but is NOT in the default module graph — inject it at write time so
+                // GAMA doesn't crash with NoClassDefFoundError while loading gama.core.
+                val text = if (bakedText.contains("--add-modules=jdk.incubator.vector")) bakedText
+                else bakedText.replace(
+                    "-Dorg.eclipse.core.resources.disable.workspace.locking=true \\\n",
+                    "-Dorg.eclipse.core.resources.disable.workspace.locking=true \\\n" +
+                        "      --add-modules=jdk.incubator.vector \\\n"
+                )
+                script.writeText(text)
                 Log.i(TAG, "Startup script copied from rootfs /startup.sh")
             } else {
                 val vncW = 960
@@ -631,11 +642,13 @@ class PRootManager(private val context: Context) {
         |    DISPLAY=:0 ./Gama -vmargs \
         |      -Dosgi.locking=none \
         |      -Dorg.eclipse.core.resources.disable.workspace.locking=true \
+        |      --add-modules=jdk.incubator.vector \
         |      ${'$'}JOGL_ARGS &>/opt/gama/logs/gama.log 2>&1
         |  else
         |    DISPLAY=:0 ./Gama -vmargs \
         |      -Dosgi.locking=none \
         |      -Dorg.eclipse.core.resources.disable.workspace.locking=true \
+        |      --add-modules=jdk.incubator.vector \
         |      ${'$'}JOGL_ARGS &>/opt/gama/logs/gama.log 2>&1
         |  fi
         |}
