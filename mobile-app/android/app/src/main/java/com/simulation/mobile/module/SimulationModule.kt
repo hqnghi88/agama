@@ -85,6 +85,22 @@ class SimulationModule(reactContext: ReactApplicationContext) :
         }
     }
 
+    @ReactMethod
+    fun setPointerMode(mode: String) {
+        VncView.currentInstance?.let { view ->
+            Log.i(TAG, "Setting pointer mode: $mode")
+            view.setPointerMode(mode)
+        }
+    }
+
+    @ReactMethod
+    fun sendEscape() {
+        VncView.currentInstance?.let { view ->
+            Log.i(TAG, "Sending Escape key to VncView")
+            view.sendEscape()
+        }
+    }
+
     @Suppress("UNUSED_PARAMETER")
     @ReactMethod
     fun addListener(eventName: String) {}

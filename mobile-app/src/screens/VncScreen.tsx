@@ -19,9 +19,11 @@ const RETRY_INTERVAL = 3000;
 const VncScreen: React.FC<VncScreenProps> = ({onBack}) => {
   const [vncState, setVncState] = useState<VncState>('connecting');
   const [setupLog, setSetupLog] = useState<string[]>([]);
+  const [pointerMode, setPointerMode] = useState<'left' | 'right' | 'scroll'>('left');
   const connectedRef = useRef(false);
   const listenerRef = useRef<any>(null);
   const progressRef = useRef<any>(null);
+  const modeListenerRef = useRef<any>(null);
   const retryCount = useRef(0);
   const {s} = useResponsive();
   const logScrollRef = useRef<ScrollView>(null);
@@ -34,6 +36,22 @@ const VncScreen: React.FC<VncScreenProps> = ({onBack}) => {
 
   const toggleKeyboard = useCallback(() => {
     NativeModules.SimulationModule.toggleKeyboard();
+  }, []);
+
+  const toggleRightClick = useCallback(() => {
+    const next = pointerMode === 'right' ? 'left' : 'right';
+    setPointerMode(next);
+    NativeModules.SimulationModule.setPointerMode(next);
+  }, [pointerMode]);
+
+  const toggleScrollMode = useCallback(() => {
+    const next = pointerMode === 'scroll' ? 'left' : 'scroll';
+    setPointerMode(next);
+    NativeModules.SimulationModule.setPointerMode(next);
+  }, [pointerMode]);
+
+  const sendEscape = useCallback(() => {
+    NativeModules.SimulationModule.sendEscape();
   }, []);
 
   useEffect(() => {
@@ -64,6 +82,12 @@ const VncScreen: React.FC<VncScreenProps> = ({onBack}) => {
       }
     });
 
+    modeListenerRef.current = DeviceEventEmitter.addListener('VncPointerModeChange', (event: {mode: 'left' | 'right' | 'scroll'}) => {
+      if (event?.mode) {
+        setPointerMode(event.mode);
+      }
+    });
+
     const retryInterval = setInterval(() => {
       if (vncState === 'connecting') {
         retryCount.current += 1;
@@ -76,6 +100,7 @@ const VncScreen: React.FC<VncScreenProps> = ({onBack}) => {
     return () => {
       if (listenerRef.current) listenerRef.current.remove();
       if (progressRef.current) progressRef.current.remove();
+      if (modeListenerRef.current) modeListenerRef.current.remove();
       clearInterval(retryInterval);
     };
   }, [vncState]);
@@ -159,30 +184,80 @@ const VncScreen: React.FC<VncScreenProps> = ({onBack}) => {
         </View>
       )}
       {vncState === 'connected' && (
-        <TouchableOpacity
+        <View
           style={{
             position: 'absolute',
             bottom: btnOffset,
             right: btnOffset,
-            width: btnSize,
-            height: btnSize,
-            borderRadius: btnSize / 2,
-            backgroundColor: 'rgba(30, 41, 59, 0.85)',
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: s(8),
+            paddingHorizontal: s(10),
+            paddingVertical: s(8),
+            borderRadius: s(28),
+            backgroundColor: 'rgba(15, 23, 42, 0.88)',
             borderWidth: 1,
             borderColor: 'rgba(148, 163, 184, 0.3)',
             elevation: 8,
             zIndex: 9999,
-            shadowColor: '#000',
-            shadowOffset: {width: 0, height: 4},
-            shadowOpacity: 0.3,
-            shadowRadius: 6,
-          }}
-          onPress={toggleKeyboard}
-          activeOpacity={0.6}>
-          <View style={styles.kbdInner}>
-            <Text style={{color: '#e2e8f0', fontSize: s(22)}}>⌨</Text>
-          </View>
-        </TouchableOpacity>
+          }}>
+          <TouchableOpacity
+            onPress={toggleRightClick}
+            activeOpacity={0.7}
+            style={{
+              height: btnSize * 0.78,
+              paddingHorizontal: s(14),
+              borderRadius: s(20),
+              backgroundColor: pointerMode === 'right' ? '#0284c7' : 'rgba(51, 65, 85, 0.75)',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+            <Text style={{color: '#f8fafc', fontSize: s(14), fontWeight: '700'}}>
+              {pointerMode === 'right' ? 'R-Click ●' : 'R-Click'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={toggleScrollMode}
+            activeOpacity={0.7}
+            style={{
+              height: btnSize * 0.78,
+              paddingHorizontal: s(14),
+              borderRadius: s(20),
+              backgroundColor: pointerMode === 'scroll' ? '#0284c7' : 'rgba(51, 65, 85, 0.75)',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+            <Text style={{color: '#f8fafc', fontSize: s(14), fontWeight: '700'}}>
+              {pointerMode === 'scroll' ? 'Scroll ●' : 'Scroll'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={sendEscape}
+            activeOpacity={0.7}
+            style={{
+              height: btnSize * 0.78,
+              paddingHorizontal: s(12),
+              borderRadius: s(20),
+              backgroundColor: 'rgba(51, 65, 85, 0.75)',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+            <Text style={{color: '#e2e8f0', fontSize: s(14), fontWeight: '700'}}>Esc</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={toggleKeyboard}
+            activeOpacity={0.7}
+            style={{
+              width: btnSize * 0.78,
+              height: btnSize * 0.78,
+              borderRadius: (btnSize * 0.78) / 2,
+              backgroundColor: 'rgba(51, 65, 85, 0.75)',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+            <Text style={{color: '#e2e8f0', fontSize: s(20)}}>⌨</Text>
+          </TouchableOpacity>
+        </View>
       )}
     </View>
   );

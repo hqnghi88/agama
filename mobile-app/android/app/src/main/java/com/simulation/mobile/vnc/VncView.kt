@@ -32,6 +32,11 @@ class VncView @JvmOverloads constructor(
     companion object {
         const val TAG = "VncView"
         private const val LEFT_BUTTON = 1
+        private const val RIGHT_BUTTON = 4
+        private const val WHEEL_UP = 8
+        private const val WHEEL_DOWN = 16
+        private const val KEYSYM_ESCAPE = 0xFF1B
+        private const val SCROLL_STEP_PX = 24f
         @Volatile
         var currentInstance: VncView? = null
     }
@@ -41,6 +46,9 @@ class VncView @JvmOverloads constructor(
     private val paint = Paint(Paint.FILTER_BITMAP_FLAG)
     private var destRect = RectF()
     private var pointerButtonMask = 0
+    private var pointerMode = "left"
+    private var lastScrollY = 0f
+    private var scrollAccum = 0f
     private var keyboardShowing = false
 
     private val keysymMap = mapOf(
@@ -93,19 +101,45 @@ class VncView @JvmOverloads constructor(
         isClickable = true
     }
 
+    private fun updateDestRect(bitmap: Bitmap) {
+        val vw = width.toFloat()
+        val vh = height.toFloat()
+        val fbw = bitmap.width.toFloat()
+        val fbh = bitmap.height.toFloat()
+        if (vw <= 0f || vh <= 0f || fbw <= 0f || fbh <= 0f) return
+        val scale = minOf(vw / fbw, vh / fbh)
+        val drawW = fbw * scale
+        val drawH = fbh * scale
+        val left = (vw - drawW) / 2f
+        val top = (vh - drawH) / 2f
+        destRect.set(left, top, left + drawW, top + drawH)
+    }
+
     private fun viewToFb(viewX: Float, viewY: Float): Pair<Int, Int> {
         val bitmap = frameBitmap ?: return Pair(0, 0)
-        val vw = width.toFloat(); val vh = height.toFloat()
-        val fbw = bitmap.width.toFloat(); val fbh = bitmap.height.toFloat()
-        if (vw <= 0 || vh <= 0 || fbw <= 0 || fbh <= 0) return Pair(0, 0)
-        val fx = ((viewX / vw) * fbw).toInt().coerceIn(0, fbw.toInt() - 1)
-        val fy = ((viewY / vh) * fbh).toInt().coerceIn(0, fbh.toInt() - 1)
+        if (destRect.width() <= 0f || destRect.height() <= 0f) {
+            updateDestRect(bitmap)
+        }
+        val dw = destRect.width()
+        val dh = destRect.height()
+        val fbw = bitmap.width
+        val fbh = bitmap.height
+        if (dw <= 0f || dh <= 0f || fbw <= 0 || fbh <= 0) return Pair(0, 0)
+        val clampedX = viewX.coerceIn(destRect.left, destRect.right)
+        val clampedY = viewY.coerceIn(destRect.top, destRect.bottom)
+        val fx = (((clampedX - destRect.left) / dw) * fbw).toInt().coerceIn(0, fbw - 1)
+        val fy = (((clampedY - destRect.top) / dh) * fbh).toInt().coerceIn(0, fbh - 1)
         return Pair(fx, fy)
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         Log.i(TAG, "View size: ${w}x${h}")
+    }
+
+    private fun sendWheelPulse(client: VncRfbClient, fx: Int, fy: Int, wheelMask: Int) {
+        client.sendPointerEvent(fx, fy, wheelMask)
+        client.sendPointerEvent(fx, fy, 0)
     }
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
@@ -118,10 +152,41 @@ class VncView @JvmOverloads constructor(
         parent?.requestDisallowInterceptTouchEvent(true)
         val (fx, fy) = viewToFb(event.x, event.y)
 
+        if (pointerMode == "scroll") {
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    requestFocus()
+                    lastScrollY = event.y
+                    scrollAccum = 0f
+                    client.sendPointerEvent(fx, fy, 0)
+                    return true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    scrollAccum += (event.y - lastScrollY)
+                    lastScrollY = event.y
+                    while (scrollAccum <= -SCROLL_STEP_PX) {
+                        sendWheelPulse(client, fx, fy, WHEEL_DOWN)
+                        scrollAccum += SCROLL_STEP_PX
+                    }
+                    while (scrollAccum >= SCROLL_STEP_PX) {
+                        sendWheelPulse(client, fx, fy, WHEEL_UP)
+                        scrollAccum -= SCROLL_STEP_PX
+                    }
+                    return true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    scrollAccum = 0f
+                    return true
+                }
+            }
+            return super.dispatchTouchEvent(event)
+        }
+
+        val secondaryDown = (event.buttonState and MotionEvent.BUTTON_SECONDARY) != 0
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 requestFocus()
-                pointerButtonMask = LEFT_BUTTON
+                pointerButtonMask = if (secondaryDown || pointerMode == "right") RIGHT_BUTTON else LEFT_BUTTON
                 client.sendPointerEvent(fx, fy, pointerButtonMask)
                 return true
             }
@@ -131,17 +196,41 @@ class VncView @JvmOverloads constructor(
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 client.sendPointerEvent(fx, fy, 0)
+                val wasRightMode = pointerMode == "right" && pointerButtonMask == RIGHT_BUTTON
                 pointerButtonMask = 0
+                if (wasRightMode) {
+                    pointerMode = "left"
+                    emitPointerMode("left")
+                }
                 return true
             }
         }
         return super.dispatchTouchEvent(event)
     }
 
+    override fun onHoverEvent(event: MotionEvent): Boolean {
+        val client = rfbClient ?: return super.onHoverEvent(event)
+        when (event.actionMasked) {
+            MotionEvent.ACTION_HOVER_ENTER, MotionEvent.ACTION_HOVER_MOVE -> {
+                val (fx, fy) = viewToFb(event.x, event.y)
+                client.sendPointerEvent(fx, fy, 0)
+                return true
+            }
+        }
+        return super.onHoverEvent(event)
+    }
+
     override fun onGenericMotionEvent(event: MotionEvent): Boolean {
+        val client = rfbClient ?: return super.onGenericMotionEvent(event)
+        val (fx, fy) = viewToFb(event.x, event.y)
+        if (event.actionMasked == MotionEvent.ACTION_SCROLL) {
+            val vScroll = event.getAxisValue(MotionEvent.AXIS_VSCROLL)
+            if (vScroll != 0f) {
+                sendWheelPulse(client, fx, fy, if (vScroll > 0f) WHEEL_UP else WHEEL_DOWN)
+                return true
+            }
+        }
         if (event.isFromSource(InputDevice.SOURCE_MOUSE)) {
-            val client = rfbClient ?: return false
-            val (fx, fy) = viewToFb(event.x, event.y)
             val buttons = event.buttonState
             val mask = ((buttons and MotionEvent.BUTTON_PRIMARY) shr 0) or
                 ((buttons and MotionEvent.BUTTON_TERTIARY) shr 1) or
@@ -289,27 +378,47 @@ class VncView @JvmOverloads constructor(
         }
     }
 
+    fun setPointerMode(mode: String) {
+        pointerMode = when (mode) {
+            "right", "scroll" -> mode
+            else -> "left"
+        }
+        scrollAccum = 0f
+    }
+
+    fun sendEscape() {
+        val client = rfbClient ?: return
+        client.sendKeyEvent(KEYSYM_ESCAPE, true)
+        client.sendKeyEvent(KEYSYM_ESCAPE, false)
+    }
+
+    private fun emitPointerMode(mode: String) {
+        emitEvent("VncPointerModeChange", "mode", mode)
+    }
+
     private fun emitState(state: String) {
+        emitEvent("VncStateChange", "state", state)
+    }
+
+    private fun emitEvent(eventName: String, key: String, value: String) {
         val map = Arguments.createMap().apply {
-            putString("state", state)
+            putString(key, value)
         }
         try {
             val reactContext = context as ReactContext
             reactContext
                 .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-                .emit("VncStateChange", map)
+                .emit(eventName, map)
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to emit state: ${e.message}")
+            Log.w(TAG, "Failed to emit $eventName: ${e.message}")
         }
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val bitmap = frameBitmap ?: return
-        val vw = width.toFloat()
-        val vh = height.toFloat()
-        if (vw <= 0 || vh <= 0) return
-        destRect.set(0f, 0f, vw, vh)
+        updateDestRect(bitmap)
+        if (destRect.width() <= 0f || destRect.height() <= 0f) return
         canvas.drawBitmap(bitmap, null, destRect, paint)
     }
 
