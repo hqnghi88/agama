@@ -101,6 +101,9 @@ class PRootManager(private val context: Context) {
             onProgress?.invoke("updating bridge server")
             overwriteBridgeServer(rootfsDir)
 
+            onProgress?.invoke("installing JOGL natives")
+            installJoglNatives(rootfsDir)
+
             Log.i(TAG, "Rootfs setup complete")
             true
         } catch (e: Exception) {
@@ -422,6 +425,45 @@ class PRootManager(private val context: Context) {
         }
     }
 
+    /**
+     * Install the JOGL 2.6.0 linux-aarch64 native libraries shipped as a raw
+     * resource, overwriting whatever the rootfs archive contains.
+     *
+     * The GAMA product ships gluegen/jogl Java jars 2.6.0 (Aug 2025) but no
+     * aarch64 natives; older rootfs archives contain 2021-era natives whose
+     * JNI ABI does not match (UnsatisfiedLinkError on dladdr_fname, then a
+     * SIGSEGV inside glXChooseFBConfig). Overwriting them on every launch
+     * keeps the guest in sync without re-downloading the whole rootfs.
+     */
+    private fun installJoglNatives(rootfsDir: File) {
+        try {
+            val dst = File(rootfsDir, "opt/gama/natives/linux-aarch64")
+            // Read the JOGL 2.6.0 aarch64 native libraries from assets.
+            // Bundling via raw resources (res/raw) can be stripped by the Android
+            // build shrinker; assets are always included in the final APK.
+            val input = context.assets?.open("jogl_natives_aarch64") ?: return
+            dst.mkdirs()
+            var count = 0
+            // The asset is a zip archive containing the 8 .so files at its root.
+            java.util.zip.ZipInputStream(input.buffered()).use { zip ->
+                while (true) {
+                    val entry = zip.nextEntry ?: break
+                    if (entry.isDirectory) continue
+                    val name = entry.name
+                    if (!name.endsWith(".so")) continue
+                    val out = File(dst, File(name).name)
+                    zip.copyTo(out.outputStream())
+                    out.setReadable(true, false)
+                    out.setExecutable(true, false)
+                    count++
+                }
+            }
+            Log.i(TAG, "Installed $count JOGL native libraries from assets into ${dst.absolutePath}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to install JOGL natives from assets", e)
+        }
+    }
+
     private fun generateStartupScript(vncW: Int = 1920, vncH: Int = 1080): String = """
         |#!/bin/bash
         |
@@ -596,10 +638,10 @@ class PRootManager(private val context: Context) {
         |  -Djogamp.opengl.GLContext.nativeGL2=1 \
         |  -Djava.awt.headless=false"
         |
-        |# JOGL resolves native libs from GAMA_HOME/natives/<os>-<arch>. The natives
-        |# jars are EMBEDDED inside the shipped OpenGL plugin (present from the very
-        |# first boot, unlike the OSGi cache which only appears after GAMA ran).
-        |# Read them out of the plugin and flatten the .so into ${'$'}dst (python3).
+        |# JOGL resolves native libs from GAMA_HOME/natives/<os>-<arch>. The app
+        |# installs the matching 2.6.0 aarch64 natives from assets before PRoot
+        |# starts; this is only a fallback for archives shipped without them
+        |# (reads nested natives jars inside the OpenGL plugin, then flattens).
         |extract_jogl_natives() {
         |  local dst=/opt/gama/natives/linux-aarch64
         |  [ -f "${'$'}dst/libgluegen_rt.so" ] && [ -f "${'$'}dst/libjogl_desktop.so" ] && return 0
@@ -612,7 +654,7 @@ class PRootManager(private val context: Context) {
         |plugin, dst = sys.argv[1], sys.argv[2]
         |with zipfile.ZipFile(plugin) as pz:
         |    nested = [n for n in pz.namelist()
-        |              if n.startswith('lib/') and n.endswith('-natives-linux-aarch64.jar')]
+        |              if n.endswith('-natives-linux-aarch64.jar')]
         |    for nj in nested:
         |        nz = zipfile.ZipFile(io.BytesIO(pz.read(nj)))
         |        for n in nz.namelist():

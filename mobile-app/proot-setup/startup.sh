@@ -172,18 +172,16 @@ JOGL_ARGS="-Djogamp.gluegen.UseTempJarCache=false \
   -Djogamp.opengl.GLContext.nativeGL2=1 \
   -Djava.awt.headless=false"
 
-# JOGL resolves native libs from GAMA_HOME/natives/<os>-<arch>, but the aarch64
-# natives jars only materialize in the OSGi cache at first run. Extract the .so
-# files so the 3D display can initialize under software GL (llvmpipe).
+# JOGL resolves native libs from GAMA_HOME/natives/<os>-<arch>. The app always
+# installs the matching 2.6.0 aarch64 natives from its bundled raw resource
+# (PRootManager.installJoglNatives) before starting PRoot, so normally the files
+# are already present and correct here. This extraction is only a fallback for
+# rootfs archives shipped without them: it looks for nested natives jars
+# (libs/jogl */…-natives-linux-aarch64.jar) inside the OpenGL plugin jar.
 extract_jogl_natives() {
   local dst=/opt/gama/natives/linux-aarch64
   [ -f "$dst/libgluegen_rt.so" ] && [ -f "$dst/libjogl_desktop.so" ] && return 0
   mkdir -p "$dst"
-  # The JOGL natives jars are EMBEDDED inside the shipped OpenGL plugin jar
-  # (present from the very first boot, unlike the OSGi cache which only
-  # materializes after GAMA has run). Read them straight out of the plugin and
-  # flatten their natives/linux-aarch64/*.so into $dst. unzip is not guaranteed
-  # inside the guest, so use python3 (shipped with the rootfs).
   local plugin
   plugin=$(ls /opt/gama/plugins/gama.ui.display.opengl_*.jar 2>/dev/null | head -1)
   if [ -n "$plugin" ]; then
@@ -192,7 +190,7 @@ import sys, zipfile, os, io
 plugin, dst = sys.argv[1], sys.argv[2]
 with zipfile.ZipFile(plugin) as pz:
     nested = [n for n in pz.namelist()
-              if n.startswith('lib/') and n.endswith('-natives-linux-aarch64.jar')]
+              if n.endswith('-natives-linux-aarch64.jar')]
     for nj in nested:
         nz = zipfile.ZipFile(io.BytesIO(pz.read(nj)))
         for n in nz.namelist():
