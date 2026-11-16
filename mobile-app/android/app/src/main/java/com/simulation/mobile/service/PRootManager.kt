@@ -364,26 +364,31 @@ class PRootManager(private val context: Context) {
             // the OLD tightvnc/fluxbox flow, so only trust it if it has the x11vnc -noshm
             // marker; otherwise fall back to the inline generated script below.
             val baked = File(rootfsDir, "startup.sh")
+            val vncW = 1280
+            val vncH = 800
             if (baked.exists() && baked.readText().contains("x11vnc -noshm")) {
-                val bakedText = baked.readText()
+                var bakedText = baked.readText()
+                    .replace(Regex("""VNC_WIDTH=\d+"""), "VNC_WIDTH=$vncW")
+                    .replace(Regex("""VNC_HEIGHT=\d+"""), "VNC_HEIGHT=$vncH")
+                    .replace("960x540", "${vncW}x${vncH}")
                 // Older baked rootfs archives shipped a launch line without the Vector API
                 // module. GAMA's engine uses jdk.incubator.vector, which exists in the guest's
                 // JDK 25 but is NOT in the default module graph — inject it at write time so
                 // GAMA doesn't crash with NoClassDefFoundError while loading gama.core.
-                val text = if (bakedText.contains("--add-modules=jdk.incubator.vector")) bakedText
-                else bakedText.replace(
-                    "-Dorg.eclipse.core.resources.disable.workspace.locking=true \\\n",
-                    "-Dorg.eclipse.core.resources.disable.workspace.locking=true \\\n" +
-                        "      --add-modules=jdk.incubator.vector \\\n"
-                )
-                script.writeText(text)
-                Log.i(TAG, "Startup script copied from rootfs /startup.sh")
+                if (!bakedText.contains("--add-modules=jdk.incubator.vector")) {
+                    bakedText = bakedText.replace(
+                        "-Dorg.eclipse.core.resources.disable.workspace.locking=true \\\n",
+                        "-Dorg.eclipse.core.resources.disable.workspace.locking=true \\\n" +
+                            "      --add-modules=jdk.incubator.vector \\\n"
+                    )
+                }
+                script.writeText(bakedText)
+                Log.i(TAG, "Startup script copied from rootfs /startup.sh (${vncW}x${vncH})")
             } else {
-                val vncW = 960
-                val vncH = 540
                 script.writeText(generateStartupScript(vncW, vncH))
             }
             script.setExecutable(true)
+            configureQuestDisplayAndGama(rootfsDir, vncW, vncH)
 
             Log.i(TAG, "Startup script written to ${script.absolutePath}")
 
@@ -402,6 +407,49 @@ class PRootManager(private val context: Context) {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to write startup script components", e)
+        }
+    }
+
+    private fun configureQuestDisplayAndGama(rootfsDir: File, vncW: Int, vncH: Int) {
+        try {
+            val obConfigDir = File(rootfsDir, "data/.config/openbox")
+            obConfigDir.mkdirs()
+            val targetRc = File(obConfigDir, "rc.xml")
+            val sourceRc = if (targetRc.exists()) targetRc else File(rootfsDir, "etc/xdg/openbox/rc.xml")
+            if (sourceRc.exists()) {
+                var rcXml = sourceRc.readText()
+                if (!rcXml.contains("""<!-- gama-quest-rule -->""") && rcXml.contains("</applications>")) {
+                    val rule = """
+  <!-- gama-quest-rule -->
+  <application type="normal">
+    <decor>no</decor>
+    <position force="yes">
+      <x>0</x>
+      <y>0</y>
+    </position>
+    <maximized>true</maximized>
+  </application>
+</applications>"""
+                    rcXml = rcXml.replace("</applications>", rule)
+                    targetRc.writeText(rcXml)
+                }
+            }
+
+            val workbenchXmi = File(rootfsDir, "data/Gama_Workspace/.metadata/.plugins/org.eclipse.e4.workbench/workbench.xmi")
+            if (workbenchXmi.exists()) {
+                val orig = workbenchXmi.readText()
+                var fixed = orig.replace(Regex(""" y="-\d+""""), """ y="0"""")
+                fixed = fixed.replace(Regex(""" x="-\d+""""), """ x="0"""")
+                fixed = fixed.replace(
+                    Regex("""(<children[^>]*xsi:type="basic:TrimmedWindow"[^>]*?)\swidth="\d+"\sheight="\d+""""),
+                    """$1 width="$vncW" height="$vncH""""
+                )
+                if (fixed != orig) {
+                    workbenchXmi.writeText(fixed)
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to configure Quest display: ${e.message}")
         }
     }
 
