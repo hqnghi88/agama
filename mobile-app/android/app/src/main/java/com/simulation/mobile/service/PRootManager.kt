@@ -37,6 +37,10 @@ class PRootManager(private val context: Context) {
          */
         const val GAMA_SERVER_PORT = 10000
 
+        private const val PROBE_MODEL_NAME = "gama_mobile_probe.gaml"
+        private const val PROBE_MODEL_PATH = "/data/Gama_Workspace/$PROBE_MODEL_NAME"
+        private const val PROBE_EXPERIMENT = "run_probe"
+
         private const val GAMA_GUI_SERVER_JAR_PREFIX = "gama.ui.application_"
         private const val GAMA_GUI_SERVER_CLASS_ENTRY =
             "gama/ui/application/server/GamaGuiWebSocketServer.class"
@@ -155,6 +159,9 @@ class PRootManager(private val context: Context) {
 
             onProgress?.invoke("pinning GAMA server port")
             patchGamaGuiServerClass(rootfsDir)
+
+            onProgress?.invoke("writing WebSocket probe model")
+            writeDefaultProbeModel(rootfsDir)
 
             onProgress?.invoke("updating connector defaults")
             patchConnectorDefaults(rootfsDir)
@@ -755,19 +762,55 @@ class PRootManager(private val context: Context) {
     }
 
     /**
+     * Write a tiny known-good experiment into the GAMA workspace. The connector page is
+     * pre-filled with this model/experiment pair so the user can click `Load` immediately and
+     * watch the simulation status change from UNKNOWN to PAUSED/RUNNING.
+     */
+    private fun writeDefaultProbeModel(rootfsDir: File) {
+        try {
+            val workspace = File(rootfsDir, "data/Gama_Workspace")
+            workspace.mkdirs()
+            val model = File(workspace, PROBE_MODEL_NAME)
+            val text = """
+                |model gama_mobile_probe
+                |
+                |global {
+                |    int counter <- 0;
+                |    reflex tick {
+                |        counter <- counter + 1;
+                |    }
+                |}
+                |
+                |experiment run_probe type: gui {
+                |    float minimum_cycle_duration <- 0.05;
+                |    output {
+                |        monitor "counter" value: counter;
+                |    }
+                |}
+                |""".trimMargin()
+            model.writeText(text)
+            Log.i(TAG, "Wrote WebSocket probe model to ${model.absolutePath}")
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not write WebSocket probe model", e)
+        }
+    }
+
+    /**
      * The built-in GAMA connector page defaults to `localhost:1000`, which cannot work on
      * Android (port 1000 is unprivileged) and may resolve to IPv6 `::1`. Point the bundled
-     * connector at the pinned GUI server instead so it connects out of the box.
+     * connector at the pinned GUI server instead, and pre-fill the model/experiment fields with
+     * the probe model written by [writeDefaultProbeModel] so `Load` works out of the box.
      */
     private fun patchConnectorDefaults(rootfsDir: File) {
         try {
             val osgi = File(rootfsDir, "opt/gama/configuration/org.eclipse.osgi")
             if (!osgi.exists()) return
-            var patched = 0
+            var jsPatched = 0
+            var htmlPatched = 0
             osgi.walkTopDown()
                 .filter { it.isFile && it.name == "connector.js" }
-                .forEach { file ->
-                    val text = file.readText()
+                .forEach { js ->
+                    val text = js.readText()
                     val updated = text
                         .replace(
                             "const DEFAULT_GAMA_WS_PORT = \"1000\"",
@@ -777,13 +820,61 @@ class PRootManager(private val context: Context) {
                             "const DEFAULT_GAMA_IP_ADDRESS = \"localhost\"",
                             "const DEFAULT_GAMA_IP_ADDRESS = \"127.0.0.1\""
                         )
+                        .replace(
+                            "var model_file ",
+                            "var model_file = \"$PROBE_MODEL_PATH\""
+                        )
+                        .replace(
+                            "var experiment_name ",
+                            "var experiment_name = \"$PROBE_EXPERIMENT\""
+                        )
+                        .replace(
+                            "case UNKNOWN: state_html.innerHTML = \"UNKNOWN\";",
+                            "case UNKNOWN: state_html.innerHTML = \"UNKNOWN (no experiment loaded)\";"
+                        )
+                        .replace(
+                            "document.querySelector(\"#ws-port-input\").value = gama_ws_port\n}",
+                            "document.querySelector(\"#ws-port-input\").value = gama_ws_port\n" +
+                                "    document.querySelector(\"#model-file-input\").value = model_file\n" +
+                                "    document.querySelector(\"#experiment-name-input\").value = experiment_name\n}"
+                        )
                     if (updated != text) {
-                        file.writeText(updated)
-                        patched++
+                        js.writeText(updated)
+                        jsPatched++
+                    }
+
+                    val html = File(js.parentFile, "connector.html")
+                    if (html.exists()) {
+                        val htmlText = html.readText()
+                        val htmlUpdated = htmlText
+                            .replace(
+                                "id=\"ip-address-input\" placeholder=\"Enter the ip address\" style=\"width:90%;\">",
+                                "id=\"ip-address-input\" placeholder=\"Enter the ip address\" style=\"width:90%;\" value=\"127.0.0.1\">"
+                            )
+                            .replace(
+                                "id=\"ws-port-input\" placeholder=\"Enter the websocket port\" style=\"width:90%;\">",
+                                "id=\"ws-port-input\" placeholder=\"Enter the websocket port\" style=\"width:90%;\" value=\"$GAMA_SERVER_PORT\">"
+                            )
+                            .replace(
+                                "id=\"model-file-input\" placeholder=\"Enter the model file path\" style=\"width:90%;\">",
+                                "id=\"model-file-input\" placeholder=\"Enter the model file path\" style=\"width:90%;\" value=\"$PROBE_MODEL_PATH\">"
+                            )
+                            .replace(
+                                "id=\"experiment-name-input\" placeholder=\"Enter the experiment name\" style=\"width:90%;\">",
+                                "id=\"experiment-name-input\" placeholder=\"Enter the experiment name\" style=\"width:90%;\" value=\"$PROBE_EXPERIMENT\">"
+                            )
+                        if (htmlUpdated != htmlText) {
+                            html.writeText(htmlUpdated)
+                            htmlPatched++
+                        }
                     }
                 }
-            if (patched > 0) {
-                Log.i(TAG, "Patched $patched connector.js default(s) to 127.0.0.1:$GAMA_SERVER_PORT")
+            if (jsPatched > 0 || htmlPatched > 0) {
+                Log.i(
+                    TAG,
+                    "Patched connector defaults: $jsPatched js, $htmlPatched html " +
+                        "(127.0.0.1:$GAMA_SERVER_PORT, $PROBE_MODEL_PATH / $PROBE_EXPERIMENT)"
+                )
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to patch connector defaults", e)
