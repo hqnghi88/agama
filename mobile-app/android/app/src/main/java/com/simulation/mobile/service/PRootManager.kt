@@ -41,6 +41,9 @@ class PRootManager(private val context: Context) {
         private const val PROBE_MODEL_PATH = "/data/Gama_Workspace/$PROBE_MODEL_NAME"
         private const val PROBE_EXPERIMENT = "run_probe"
 
+        private const val ANT_FORAGING_MODEL_NAME = "Ant Foraging.gaml"
+        private const val ANT_FORAGING_EXPERIMENT = "Classic"
+
         private const val GAMA_GUI_SERVER_JAR_PREFIX = "gama.ui.application_"
         private const val GAMA_GUI_SERVER_CLASS_ENTRY =
             "gama/ui/application/server/GamaGuiWebSocketServer.class"
@@ -796,15 +799,54 @@ class PRootManager(private val context: Context) {
     }
 
     /**
+     * Locate the bundled Ant Foraging model inside the OSGi cache. The cache directory number
+     * (`.../org.eclipse.osgi/<n>/0/.cp/...`) is not stable, so resolve the real path instead of
+     * hard-coding it. Returns the guest path to use in the connector, e.g.
+     * `/opt/gama/configuration/org.eclipse.osgi/40/0/.cp/models/Demos/Ants (Foraging and Sorting)/models/Ant Foraging.gaml`.
+     */
+    private fun findAntForagingModel(rootfsDir: File): String? {
+        try {
+            val osgi = File(rootfsDir, "opt/gama/configuration/org.eclipse.osgi")
+            if (!osgi.exists()) return null
+            val model = osgi.walkTopDown()
+                .firstOrNull {
+                    it.isFile &&
+                        it.name == ANT_FORAGING_MODEL_NAME &&
+                        it.parentFile?.parentFile?.name == "Ants (Foraging and Sorting)"
+                }
+            return model
+                ?.relativeTo(rootfsDir)
+                ?.path
+                ?.replace(File.separatorChar, '/')
+                ?.let { "/$it" }
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not locate Ant Foraging model", e)
+            return null
+        }
+    }
+
+    /**
      * The built-in GAMA connector page defaults to `localhost:1000`, which cannot work on
      * Android (port 1000 is unprivileged) and may resolve to IPv6 `::1`. Point the bundled
      * connector at the pinned GUI server instead, and pre-fill the model/experiment fields with
-     * the probe model written by [writeDefaultProbeModel] so `Load` works out of the box.
+     * the bundled Ant Foraging model (experiment `Classic`) so `Load` works out of the box.
+     * The tiny probe model written by [writeDefaultProbeModel] is kept as a fallback if the
+     * Ant Foraging model cannot be found.
      */
     private fun patchConnectorDefaults(rootfsDir: File) {
         try {
             val osgi = File(rootfsDir, "opt/gama/configuration/org.eclipse.osgi")
             if (!osgi.exists()) return
+
+            val antModelPath = findAntForagingModel(rootfsDir)
+            val modelPath = antModelPath ?: PROBE_MODEL_PATH
+            val experiment = if (antModelPath != null) ANT_FORAGING_EXPERIMENT else PROBE_EXPERIMENT
+            if (antModelPath != null) {
+                Log.i(TAG, "Using bundled Ant Foraging model: $antModelPath ($experiment)")
+            } else {
+                Log.w(TAG, "Ant Foraging model not found; falling back to $PROBE_MODEL_PATH")
+            }
+
             var jsPatched = 0
             var htmlPatched = 0
             osgi.walkTopDown()
@@ -821,12 +863,12 @@ class PRootManager(private val context: Context) {
                             "const DEFAULT_GAMA_IP_ADDRESS = \"127.0.0.1\""
                         )
                         .replace(
-                            "var model_file ",
-                            "var model_file = \"$PROBE_MODEL_PATH\""
+                            Regex("""(?m)^var model_file\b[^\n]*$"""),
+                            "var model_file = \"$modelPath\""
                         )
                         .replace(
-                            "var experiment_name ",
-                            "var experiment_name = \"$PROBE_EXPERIMENT\""
+                            Regex("""(?m)^var experiment_name\b[^\n]*$"""),
+                            "var experiment_name = \"$experiment\""
                         )
                         .replace(
                             "case UNKNOWN: state_html.innerHTML = \"UNKNOWN\";",
@@ -848,20 +890,20 @@ class PRootManager(private val context: Context) {
                         val htmlText = html.readText()
                         val htmlUpdated = htmlText
                             .replace(
-                                "id=\"ip-address-input\" placeholder=\"Enter the ip address\" style=\"width:90%;\">",
-                                "id=\"ip-address-input\" placeholder=\"Enter the ip address\" style=\"width:90%;\" value=\"127.0.0.1\">"
+                                Regex("""<input\b[^>]*\bid="ip-address-input"[^>]*>"""),
+                                "<input type=\"text\" id=\"ip-address-input\" placeholder=\"Enter the ip address\" style=\"width:90%;\" value=\"127.0.0.1\">"
                             )
                             .replace(
-                                "id=\"ws-port-input\" placeholder=\"Enter the websocket port\" style=\"width:90%;\">",
-                                "id=\"ws-port-input\" placeholder=\"Enter the websocket port\" style=\"width:90%;\" value=\"$GAMA_SERVER_PORT\">"
+                                Regex("""<input\b[^>]*\bid="ws-port-input"[^>]*>"""),
+                                "<input type=\"text\" id=\"ws-port-input\" placeholder=\"Enter the websocket port\" style=\"width:90%;\" value=\"$GAMA_SERVER_PORT\">"
                             )
                             .replace(
-                                "id=\"model-file-input\" placeholder=\"Enter the model file path\" style=\"width:90%;\">",
-                                "id=\"model-file-input\" placeholder=\"Enter the model file path\" style=\"width:90%;\" value=\"$PROBE_MODEL_PATH\">"
+                                Regex("""<input\b[^>]*\bid="model-file-input"[^>]*>"""),
+                                "<input type=\"text\" id=\"model-file-input\" placeholder=\"Enter the model file path\" style=\"width:90%;\" value=\"$modelPath\">"
                             )
                             .replace(
-                                "id=\"experiment-name-input\" placeholder=\"Enter the experiment name\" style=\"width:90%;\">",
-                                "id=\"experiment-name-input\" placeholder=\"Enter the experiment name\" style=\"width:90%;\" value=\"$PROBE_EXPERIMENT\">"
+                                Regex("""<input\b[^>]*\bid="experiment-name-input"[^>]*>"""),
+                                "<input type=\"text\" id=\"experiment-name-input\" placeholder=\"Enter the experiment name\" style=\"width:90%;\" value=\"$experiment\">"
                             )
                         if (htmlUpdated != htmlText) {
                             html.writeText(htmlUpdated)
@@ -873,7 +915,7 @@ class PRootManager(private val context: Context) {
                 Log.i(
                     TAG,
                     "Patched connector defaults: $jsPatched js, $htmlPatched html " +
-                        "(127.0.0.1:$GAMA_SERVER_PORT, $PROBE_MODEL_PATH / $PROBE_EXPERIMENT)"
+                        "(127.0.0.1:$GAMA_SERVER_PORT, $modelPath / $experiment)"
                 )
             }
         } catch (e: Exception) {
