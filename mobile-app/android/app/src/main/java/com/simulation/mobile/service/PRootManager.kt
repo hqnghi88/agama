@@ -5,13 +5,19 @@ import android.util.DisplayMetrics
 import android.util.Log
 import android.view.WindowManager
 import java.io.BufferedReader
+import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
+import java.util.zip.ZipOutputStream
 
 class PRootManager(private val context: Context) {
 
@@ -20,6 +26,46 @@ class PRootManager(private val context: Context) {
         const val ROOTFS_ARCHIVE = "rootfs.tar.gz"
         const val PROOT_BINARY = "libproot.so"
         const val ROOTFS_URL = "https://github.com/hqnghi88/agama/releases/download/rootfs/rootfs_tar_gz"
+
+        /**
+         * Port for GAMA's built-in GUI WebSocket server (`GamaGuiWebSocketServer`).
+         *
+         * GAMA defaults to 1000, but Android sets `net.ipv4.ip_unprivileged_port_start = 1024`,
+         * so an app UID cannot bind it: the server dies with
+         * `java.net.BindException: Permission denied` and external clients (connector.html,
+         * another app, a browser) never connect. Keep this above 1024.
+         */
+        const val GAMA_SERVER_PORT = 10000
+
+        private const val GAMA_GUI_SERVER_JAR_PREFIX = "gama.ui.application_"
+        private const val GAMA_GUI_SERVER_CLASS_ENTRY =
+            "gama/ui/application/server/GamaGuiWebSocketServer.class"
+
+        /**
+         * `createGuiServer()` reads `CORE_SERVER_PORT` and validates it. The bytes below are the
+         * compiled sequence `CORE_SERVER_PORT.getValue()` -> `(Integer)` -> `intValue()` ->
+         * `istore_0`. Replacing it with `sipush 10000; istore_0` pins the GUI server port.
+         */
+        private val CREATE_GUI_SERVER_PATTERN = byteArrayOf(
+            0xB2.toByte(), 0x00, 0x62,              // getstatic CORE_SERVER_PORT
+            0xB6.toByte(), 0x00, 0x4D,              // invokevirtual Pref.getValue
+            0xC0.toByte(), 0x00, 0x8A.toByte(),     // checkcast Integer
+            0xB6.toByte(), 0x00, 0x8C.toByte(),     // invokevirtual Integer.intValue
+            0x3B                                    // istore_0
+        )
+
+        /**
+         * `startGuiServer()` subscribes to `CORE_SERVER_PORT` changes and recreates the server on
+         * the new port. The Preferences view can therefore move it to an ephemeral port. These
+         * bytes are the listener registration (`getstatic` + `invokedynamic` + `onChange` + `pop`);
+         * replacing them with NOPs removes the subscription.
+         */
+        private val SERVER_PORT_LISTENER_PATTERN = byteArrayOf(
+            0xB2.toByte(), 0x00, 0x62,              // getstatic CORE_SERVER_PORT
+            0xBA.toByte(), 0x00, 0x65, 0x00, 0x00,  // invokedynamic afterValueChange
+            0xB6.toByte(), 0x00, 0x5E,              // invokevirtual Pref.onChange
+            0x57                                    // pop
+        )
     }
 
     private var prootProcess: Process? = null
@@ -95,6 +141,9 @@ class PRootManager(private val context: Context) {
             File(rootfsDir, "workspace").apply { mkdirs(); setWritable(true, false); setExecutable(true, false) }
             File(rootfsDir, "opt/gama/logs").apply { mkdirs(); setWritable(true, false) }
 
+            onProgress?.invoke("configuring GAMA server")
+            configureGamaPreferences(rootfsDir)
+
             onProgress?.invoke("writing startup script")
             writeFallbackStartup(rootfsDir)
 
@@ -103,6 +152,12 @@ class PRootManager(private val context: Context) {
 
             onProgress?.invoke("installing JOGL natives")
             installJoglNatives(rootfsDir)
+
+            onProgress?.invoke("pinning GAMA server port")
+            patchGamaGuiServerClass(rootfsDir)
+
+            onProgress?.invoke("updating connector defaults")
+            patchConnectorDefaults(rootfsDir)
 
             Log.i(TAG, "Rootfs setup complete")
             true
@@ -349,6 +404,82 @@ class PRootManager(private val context: Context) {
     // Private helpers
 
     /**
+     * Patch GAMA's global preference store before launch.
+     *
+     * The store is `$HOME/.java/.userPrefs/gama/prefs.xml` because the GAMA launcher runs with
+     * `-Duse_global_preference_store=true` (`Gama.ini`) and `HOME=/data` inside PRoot.
+     *
+     * Two problems are fixed here:
+     *  - `pref_server_port` defaults to 1000, which Android forbids for unprivileged app UIDs
+     *    (BindException: Permission denied). Move it above 1024.
+     *  - The workspace sanity dialogs (stale `.lock` / `.snap`, outdated model library) block
+     *    `Application.start()` before `GamaGuiWebSocketServer` is created. Since the mobile app
+     *    kills GAMA without a graceful shutdown, these dialogs appear on every cold boot and
+     *    there is no one to click them unless the VNC view is open. Disable the prompts so the
+     *    workspace is repaired automatically.
+     */
+    private fun configureGamaPreferences(rootfsDir: File) {
+        try {
+            val prefsFile = File(rootfsDir, "data/.java/.userPrefs/gama/prefs.xml")
+            prefsFile.parentFile?.mkdirs()
+
+            val emptyPrefs = buildString {
+                appendLine("""<?xml version="1.0" encoding="UTF-8" standalone="no"?>""")
+                appendLine("""<!DOCTYPE map SYSTEM "http://java.sun.com/dtd/preferences.dtd">""")
+                appendLine("""<map MAP_XML_VERSION="1.0">""")
+                appendLine("</map>")
+            }
+            var xml = if (prefsFile.exists()) prefsFile.readText() else emptyPrefs
+
+            val desired = linkedMapOf(
+                "pref_enable_server" to "true",
+                "pref_server_port" to GAMA_SERVER_PORT.toString(),
+                "pref_ask_rebuild" to "false",
+                "pref_ask_outdated" to "false"
+            )
+            for ((key, value) in desired) {
+                val entry = """<entry key="$key" value="$value"/>"""
+                val pattern = Regex("""<entry\s+key="${Regex.escape(key)}"\s+value="[^"]*"\s*/>""")
+                xml = if (pattern.containsMatchIn(xml)) {
+                    pattern.replace(xml, entry)
+                } else {
+                    xml.replace("</map>", "  $entry\n</map>")
+                }
+            }
+
+            prefsFile.writeText(xml)
+            Log.i(TAG, "GAMA server prefs written: port=$GAMA_SERVER_PORT, enabled=true, async workspace repair")
+
+            clearStaleWorkspaceMarkers(rootfsDir, xml)
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not configure GAMA preferences", e)
+        }
+    }
+
+    /**
+     * Remove crash markers that make GAMA show a blocking confirmation dialog before the
+     * workbench (and therefore the WebSocket server) starts.
+     */
+    private fun clearStaleWorkspaceMarkers(rootfsDir: File, prefsXml: String) {
+        try {
+            val workspacePath = Regex("""<entry\s+key="pref_workspace_path"\s+value="([^"]*)"""")
+                .find(prefsXml)?.groupValues?.get(1)
+                ?.takeIf { it.startsWith("/") }
+                ?: "/data/Gama_Workspace"
+            val workspace = File(rootfsDir, workspacePath.removePrefix("/"))
+
+            File(workspace, ".metadata/.lock").delete()
+
+            val resources = File(workspace, ".metadata/.plugins/org.eclipse.core.resources")
+            resources.listFiles()?.filter { it.name.contains("snap") }?.forEach { it.delete() }
+
+            Log.i(TAG, "Cleared stale workspace markers in ${workspace.absolutePath}")
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not clear stale workspace markers", e)
+        }
+    }
+
+    /**
      * Write a fallback startup script at /opt/gama/startup.sh
      * that first tries to source the rootfs /startup.sh (from build-rootfs),
      * and falls back to a minimal health endpoint.
@@ -509,6 +640,153 @@ class PRootManager(private val context: Context) {
             Log.i(TAG, "Installed $count JOGL native libraries from assets into ${dst.absolutePath}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to install JOGL natives from assets", e)
+        }
+    }
+
+    /**
+     * Keep GAMA's own GUI WebSocket server on [GAMA_SERVER_PORT].
+     *
+     * The shipped GAMA build re-reads `pref_server_port` every time the server is (re)created and
+     * also restarts it whenever that preference changes. Opening the Preferences view was observed
+     * to move the listener from 10000 to an ephemeral port (and to retry the unprivileged default
+     * 1000), which breaks external clients such as `connector.html`.
+     *
+     * Patching the compiled class fixes this at the source: `createGuiServer()` always uses 10000
+     * and the port-change listener is removed, so the server cannot wander off again. The patch is
+     * applied to the rootfs copy on every launch and is idempotent.
+     */
+    private fun patchGamaGuiServerClass(rootfsDir: File) {
+        try {
+            val plugins = File(rootfsDir, "opt/gama/plugins")
+            val jars = plugins.listFiles { f ->
+                f.isFile && f.name.startsWith(GAMA_GUI_SERVER_JAR_PREFIX) && f.name.endsWith(".jar")
+            } ?: emptyArray()
+            if (jars.isEmpty()) {
+                Log.w(TAG, "GAMA GUI server jar not found under ${plugins.absolutePath}")
+                return
+            }
+            for (jar in jars) patchGamaGuiServerJar(jar)
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not patch GAMA GUI server port", e)
+        }
+    }
+
+    private fun patchGamaGuiServerJar(jar: File) {
+        val tmp = File(jar.parentFile, jar.name + ".tmp")
+        var changed = false
+        try {
+            ZipFile(jar).use { zip ->
+                BufferedOutputStream(FileOutputStream(tmp)).use { bos ->
+                    ZipOutputStream(bos).use { out ->
+                        val entries = zip.entries()
+                        while (entries.hasMoreElements()) {
+                            val entry = entries.nextElement()
+                            var data = zip.getInputStream(entry).use { it.readBytes() }
+                            if (entry.name == GAMA_GUI_SERVER_CLASS_ENTRY) {
+                                val patched = patchGuiServerBytes(data)
+                                if (patched !== data) {
+                                    data = patched
+                                    changed = true
+                                }
+                            }
+                            out.putNextEntry(ZipEntry(entry.name))
+                            out.write(data)
+                            out.closeEntry()
+                        }
+                    }
+                }
+            }
+
+            if (changed) {
+                val backup = File(jar.parentFile, jar.name + ".orig")
+                if (!backup.exists()) jar.copyTo(backup, overwrite = false)
+                try {
+                    Files.move(
+                        tmp.toPath(), jar.toPath(), StandardCopyOption.REPLACE_EXISTING
+                    )
+                } catch (_: Exception) {
+                    tmp.copyTo(jar, overwrite = true)
+                    tmp.delete()
+                }
+                Log.i(TAG, "Pinned GAMA GUI server to port $GAMA_SERVER_PORT (${jar.name})")
+            } else {
+                tmp.delete()
+                Log.i(TAG, "GAMA GUI server already pinned or pattern not found (${jar.name})")
+            }
+        } catch (e: Exception) {
+            tmp.delete()
+            Log.w(TAG, "Failed to patch ${jar.name}", e)
+        }
+    }
+
+    private fun patchGuiServerBytes(bytes: ByteArray): ByteArray {
+        val createIndex = indexOfBytes(bytes, CREATE_GUI_SERVER_PATTERN)
+        val listenerIndex = indexOfBytes(bytes, SERVER_PORT_LISTENER_PATTERN)
+        if (createIndex < 0 && listenerIndex < 0) return bytes
+
+        val patched = bytes.copyOf()
+        if (createIndex >= 0) {
+            // sipush 10000; istore_0; pad with NOPs to keep every Code offset stable.
+            patched[createIndex] = 0x11
+            patched[createIndex + 1] = 0x27
+            patched[createIndex + 2] = 0x10
+            patched[createIndex + 3] = 0x3B
+            for (i in 4 until CREATE_GUI_SERVER_PATTERN.size) {
+                patched[createIndex + i] = 0
+            }
+        }
+        if (listenerIndex >= 0) {
+            for (i in SERVER_PORT_LISTENER_PATTERN.indices) {
+                patched[listenerIndex + i] = 0
+            }
+        }
+        return patched
+    }
+
+    private fun indexOfBytes(haystack: ByteArray, needle: ByteArray): Int {
+        if (needle.isEmpty() || haystack.size < needle.size) return -1
+        outer@ for (i in 0..haystack.size - needle.size) {
+            for (j in needle.indices) {
+                if (haystack[i + j] != needle[j]) continue@outer
+            }
+            return i
+        }
+        return -1
+    }
+
+    /**
+     * The built-in GAMA connector page defaults to `localhost:1000`, which cannot work on
+     * Android (port 1000 is unprivileged) and may resolve to IPv6 `::1`. Point the bundled
+     * connector at the pinned GUI server instead so it connects out of the box.
+     */
+    private fun patchConnectorDefaults(rootfsDir: File) {
+        try {
+            val osgi = File(rootfsDir, "opt/gama/configuration/org.eclipse.osgi")
+            if (!osgi.exists()) return
+            var patched = 0
+            osgi.walkTopDown()
+                .filter { it.isFile && it.name == "connector.js" }
+                .forEach { file ->
+                    val text = file.readText()
+                    val updated = text
+                        .replace(
+                            "const DEFAULT_GAMA_WS_PORT = \"1000\"",
+                            "const DEFAULT_GAMA_WS_PORT = \"$GAMA_SERVER_PORT\""
+                        )
+                        .replace(
+                            "const DEFAULT_GAMA_IP_ADDRESS = \"localhost\"",
+                            "const DEFAULT_GAMA_IP_ADDRESS = \"127.0.0.1\""
+                        )
+                    if (updated != text) {
+                        file.writeText(updated)
+                        patched++
+                    }
+                }
+            if (patched > 0) {
+                Log.i(TAG, "Patched $patched connector.js default(s) to 127.0.0.1:$GAMA_SERVER_PORT")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to patch connector defaults", e)
         }
     }
 
