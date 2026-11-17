@@ -371,6 +371,8 @@ class PRootManager(private val context: Context) {
                     .replace(Regex("""VNC_WIDTH=\d+"""), "VNC_WIDTH=$vncW")
                     .replace(Regex("""VNC_HEIGHT=\d+"""), "VNC_HEIGHT=$vncH")
                     .replace("960x540", "${vncW}x${vncH}")
+                    .replace("MESA_GL_VERSION_OVERRIDE=3.3", "MESA_GL_VERSION_OVERRIDE=4.5")
+                    .replace("MESA_GLSL_VERSION_OVERRIDE=330", "MESA_GLSL_VERSION_OVERRIDE=450")
                 // Older baked rootfs archives shipped a launch line without the Vector API
                 // module. GAMA's engine uses jdk.incubator.vector, which exists in the guest's
                 // JDK 25 but is NOT in the default module graph — inject it at write time so
@@ -537,8 +539,8 @@ class PRootManager(private val context: Context) {
         |# OSMesa is also installed as a JOGL fallback (no X server needed).
         |export GALLIUM_DRIVER=llvmpipe
         |export LIBGL_ALWAYS_SOFTWARE=1
-        |export MESA_GL_VERSION_OVERRIDE=3.3
-        |export MESA_GLSL_VERSION_OVERRIDE=330
+        |export MESA_GL_VERSION_OVERRIDE=4.5
+        |export MESA_GLSL_VERSION_OVERRIDE=450
         |
         |# Tell Mesa DRI loader where to find drivers and that /dev/dri may be missing
         |export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe

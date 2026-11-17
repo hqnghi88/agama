@@ -22,8 +22,8 @@ export GDK_BACKEND=x11
 # OSMesa is also installed as a JOGL fallback (no X server needed).
 export GALLIUM_DRIVER=llvmpipe
 export LIBGL_ALWAYS_SOFTWARE=1
-export MESA_GL_VERSION_OVERRIDE=3.3
-export MESA_GLSL_VERSION_OVERRIDE=330
+export MESA_GL_VERSION_OVERRIDE=4.5
+export MESA_GLSL_VERSION_OVERRIDE=450
 
 # Tell Mesa DRI loader where to find drivers and that /dev/dri may be missing
 export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe
